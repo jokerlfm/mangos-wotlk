@@ -42,20 +42,21 @@ Strategy_Group_Normal::Strategy_Group_Normal(RobotAI* pmSourceAI)
 
 void Strategy_Group_Normal::Update(uint32 pmDiff)
 {
-	Player* me = ObjectAccessor::FindPlayer(sourceAI->characterGUID);
+	Player* me = ObjectAccessor::FindPlayer(sourceAI->characterGUID, true);
 	if (!me)
 	{
 		return;
 	}
-	Player* master = ObjectAccessor::FindPlayer(sourceAI->masterGUID);
+	Player* master = ObjectAccessor::FindPlayer(sourceAI->masterGUID, true);
 	if (!master)
 	{
 		// wait for checking to reset
 		return;
 	}
-	if (!master->IsInWorld())
+	if (!me->GetGroup())
 	{
-		// wait for checking to reset
+		sourceAI->ResetStrategy();
+		me->Say("Strategy set to solo", Language::LANG_UNIVERSAL);
 		return;
 	}
 	if (!me->IsInGroup(master))

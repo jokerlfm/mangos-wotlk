@@ -368,15 +368,15 @@ uint32 Group::RemoveMember(ObjectGuid guid, uint8 method)
 #endif
 
 	// EJ robot 
-	if (player)
-	{
-		RobotAI* rai = sRobotManager->GetRobotAI(player->GetSession()->GetAccountId());
-		if (rai)
-		{
-			rai->ResetStrategy();
-			player->Say("Strategy set to solo", Language::LANG_UNIVERSAL);
-		}
-	}
+	//if (player)
+	//{
+	//	RobotAI* rai = sRobotManager->GetRobotAI(player->GetSession()->GetAccountId());
+	//	if (rai)
+	//	{
+	//		rai->ResetStrategy();
+	//		player->Say("Strategy set to solo", Language::LANG_UNIVERSAL);
+	//	}
+	//}
 
     _updateMembersOnRosterChanged(player);
 

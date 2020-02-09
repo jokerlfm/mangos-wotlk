@@ -2242,9 +2242,7 @@ void RobotAI::HandlePacket(WorldPacket const& pmDestPacket)
 			WorldPacket p;
 			uint32 roles_mask = 0;
 			p << roles_mask;
-			me->GetSession()->HandleGroupAcceptOpcode(p);
-			SetStrategy("solo_normal", false);
-			SetStrategy("group_normal", true);
+			me->GetSession()->HandleGroupAcceptOpcode(p);			
 			WhisperTo("Strategy set to group", Language::LANG_UNIVERSAL, inviter);
 			WhisperTo("You are my master", Language::LANG_UNIVERSAL, inviter);
 			std::ostringstream replyStream_Talent;
@@ -2278,6 +2276,8 @@ void RobotAI::HandlePacket(WorldPacket const& pmDestPacket)
 			WhisperTo(replyStream_GroupRole.str(), Language::LANG_UNIVERSAL, inviter);
 			me->GetMotionMaster()->Clear();
 			Prepare();
+			SetStrategy("solo_normal", false);
+			SetStrategy("group_normal", true);
 			break;
 		}
 		else
