@@ -31,6 +31,10 @@
 #include "Entities/Vehicle.h"
 #include "Maps/TransportSystem.h"
 
+ // EJ robot 
+#include "Robot/RobotManager.h"
+#include "Robot/RobotAI.h"
+
 /* differeces from off:
     -you can uninvite yourself - is is useful
     -you can accept invitation even if leader went offline
@@ -128,6 +132,21 @@ void WorldSession::HandleGroupInviteOpcode(WorldPacket& recv_data)
     if (recipient->GetGroupInvite())
     {
         SendPartyResult(PARTY_OP_INVITE, membername, ERR_ALREADY_IN_GROUP_S);
+
+		// EJ robot group recheck
+		if (sRobotManager->IsRobot(recipient->GetSession()->GetAccountId()))
+		{
+			Player* invitedMaster = sRobotManager->GetMaster(recipient->GetGUIDLow());
+			if (!invitedMaster)
+			{
+				recipient->RemoveFromGroup();
+			}
+			else if (!recipient->IsInGroup(invitedMaster))
+			{
+				recipient->RemoveFromGroup();
+			}
+		}
+
         return;
     }
 
@@ -142,6 +161,20 @@ void WorldSession::HandleGroupInviteOpcode(WorldPacket& recv_data)
 
         // tell the player that they were invited but it failed as they were already in a group
         SendGroupInvite(recipient, true);
+
+		// EJ robot group recheck
+		if (sRobotManager->IsRobot(recipient->GetSession()->GetAccountId()))
+		{
+			Player* invitedMaster = sRobotManager->GetMaster(recipient->GetGUIDLow());
+			if (!invitedMaster)
+			{
+				recipient->RemoveFromGroup();
+			}
+			else if (!recipient->IsInGroup(invitedMaster))
+			{
+				recipient->RemoveFromGroup();
+			}
+		}
 
         return;
     }

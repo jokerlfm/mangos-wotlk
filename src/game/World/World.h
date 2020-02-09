@@ -468,6 +468,9 @@ class World
 
         void CleanupsBeforeStop();
 
+		// EJ robot 
+		std::unordered_map<uint32, WorldSession*> GetSessions();
+
         WorldSession* FindSession(uint32 id) const;
         void AddSession(WorldSession* s);
         bool RemoveSession(uint32 id);

@@ -936,6 +936,9 @@ class GameObject : public WorldObject
         void UpdateCollisionState() const;                  // updates state in Map's dynamic collision tree
 
         GridReference<GameObject> m_gridRef;
+
+		// EJ auto fish
+		bool fishing;
 };
 
 #endif

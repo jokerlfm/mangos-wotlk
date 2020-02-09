@@ -51,6 +51,10 @@
 #include "PlayerBot/Base/PlayerbotAI.h"
 #endif
 
+// EJ robot 
+#include "Robot/RobotManager.h"
+#include "Robot/RobotAI.h"
+
 // select opcodes appropriate for processing in Map::Update context for current session state
 static bool MapSessionFilterHelper(WorldSession* session, OpcodeHandler const& opHandle)
 {
@@ -174,6 +178,14 @@ void WorldSession::SetExpansion(uint8 expansion)
 /// Send a packet to the client
 void WorldSession::SendPacket(WorldPacket const& packet) const
 {
+	// EJ robot
+	RobotAI* rai = sRobotManager->GetRobotAI(GetAccountId());
+	if (rai)
+	{
+		rai->HandlePacket(packet);
+		return;
+	}
+
 #ifdef BUILD_PLAYERBOT
     // Send packet to bot AI
     if (GetPlayer())
@@ -255,6 +267,27 @@ void WorldSession::LogUnprocessedTail(WorldPacket& packet) const
 /// Update the WorldSession (triggered by World update)
 bool WorldSession::Update(PacketFilter& updater)
 {
+	// EJ robot    
+	if (sRobotManager->IsRobot(GetAccountId()))
+	{
+		if (_player)
+		{
+			if (_player->IsBeingTeleportedNear())
+			{
+				WorldPacket data(MSG_MOVE_TELEPORT_ACK, 10);
+				data << _player->GetObjectGuid().WriteAsPacked();
+				data << uint32(0) << uint32(0);
+				HandleMoveTeleportAckOpcode(data);
+			}
+			else if (_player->IsBeingTeleportedFar())
+			{
+				HandleMoveWorldportAckOpcode();
+			}
+		}
+
+		return true;
+	}
+
     std::lock_guard<std::mutex> guard(m_recvQueueLock);
 
     ///- Retrieve packets from the receive queue and call the appropriate handlers

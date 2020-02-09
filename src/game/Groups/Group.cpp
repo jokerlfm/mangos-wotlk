@@ -36,6 +36,10 @@
 extern Config botConfig;
 #endif
 
+// EJ robot 
+#include "Robot/RobotManager.h"
+#include "Robot/RobotAI.h"
+
 GroupMemberStatus GetGroupMemberStatus(const Player* member = nullptr)
 {
     if (!member || (!member->IsInWorld() && !member->IsBeingTeleportedFar()))
@@ -106,6 +110,10 @@ bool Group::Create(ObjectGuid guid, const char* name)
         _initRaidSubGroupsCounter();
 
     m_lootMethod = GROUP_LOOT;
+
+	// EJ free loot
+	m_lootMethod = FREE_FOR_ALL;
+
     m_lootThreshold = ITEM_QUALITY_UNCOMMON;
     m_masterLooterGuid = guid;
     m_currentLooterGuid = guid;                                             // used for round robin looter
@@ -358,6 +366,17 @@ uint32 Group::RemoveMember(ObjectGuid guid, uint8 method)
             player->GetPlayerbotMgr()->RemoveAllBotsFromGroup();
     }
 #endif
+
+	// EJ robot 
+	if (player)
+	{
+		RobotAI* rai = sRobotManager->GetRobotAI(player->GetSession()->GetAccountId());
+		if (rai)
+		{
+			rai->ResetStrategy();
+			player->Say("Strategy set to solo", Language::LANG_UNIVERSAL);
+		}
+	}
 
     _updateMembersOnRosterChanged(player);
 

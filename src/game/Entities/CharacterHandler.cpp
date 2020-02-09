@@ -42,6 +42,9 @@
 #include "PlayerBot/Base/PlayerbotMgr.h"
 #endif
 
+ // EJ robot 
+#include "Robot/RobotManager.h"
+
 // config option SkipCinematics supported values
 enum CinematicsSkipMode
 {
@@ -902,6 +905,14 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder* holder)
     pCurrChar->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_ON_LOGIN, 1);
 
     delete holder;
+
+	// EJ robot
+	if (sRobotManager->IsRobot(GetAccountId()))
+	{
+		std::ostringstream loginBroadCastStream;
+		loginBroadCastStream << pCurrChar->GetName() << " logged in";
+		sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, loginBroadCastStream.str().c_str());
+	}
 }
 
 void WorldSession::HandlePlayerReconnect()

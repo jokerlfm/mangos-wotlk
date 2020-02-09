@@ -126,6 +126,10 @@ class MotionMaster : private std::stack<MovementGenerator*>
         void MoveIdle();
         void MoveRandomAroundPoint(float x, float y, float z, float radius, float verticalZ = 0.0f);
         void MoveTargetedHome(bool runHome = true);
+
+		// EJ robot from TC 
+		void MoveCloserAndStop(uint32 id, Unit* target, float distance);
+
         void MoveFollow(Unit* target, float dist, float angle, bool asMain = false);
         void MoveStay(float x, float y, float z, float o = 0, bool asMain = false);
         void MoveChase(Unit* target, float dist = 0.0f, float angle = 0.0f, bool moveFurther = false, bool walk = false, bool combat = true);

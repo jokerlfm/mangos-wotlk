@@ -310,6 +310,21 @@ void MotionMaster::DistanceYourself(float dist)
     }
 }
 
+// EJ robot from TC 
+void MotionMaster::MoveCloserAndStop(uint32 id, Unit* target, float distance)
+{
+	float distanceToTravel = m_owner->GetDistance(target) - distance;
+	if (distanceToTravel > 0.0f)
+	{
+		float angle = m_owner->GetAngle(target);
+		float destx = m_owner->GetPositionX() + distanceToTravel * std::cos(angle);
+		float desty = m_owner->GetPositionY() + distanceToTravel * std::sin(angle);
+		float destz = 0;
+		m_owner->UpdateAllowedPositionZ(destx, desty, destz);
+		MovePoint(id, destx, desty, destz);
+	}
+}
+
 void MotionMaster::MoveFollow(Unit* target, float dist, float angle, bool asMain)
 {
     if (m_owner->hasUnitState(UNIT_STAT_LOST_CONTROL))

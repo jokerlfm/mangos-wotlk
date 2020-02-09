@@ -101,6 +101,9 @@ GameObject::GameObject() : WorldObject(),
     m_despawnTimer = 0;
 
     m_delayedActionTimer = 0;
+
+	// EJ auto fish
+	fishing = false;
 }
 
 GameObject::~GameObject()
@@ -340,6 +343,14 @@ void GameObject::Update(const uint32 diff)
         }
         case GO_READY:
         {
+			// EJ auto fish
+			if (GetGoType() == GAMEOBJECT_TYPE_FISHINGNODE)
+			{
+				Unit* caster = GetOwner();
+				Use(caster);
+				break;
+			}
+
             if (m_respawnTime > 0)                          // timer on
             {
                 if (m_respawnTime <= time(nullptr))            // timer expired
@@ -1630,6 +1641,14 @@ void GameObject::Use(Unit* user)
                             m_loot = new Loot(player, this, success ? LOOT_FISHING : LOOT_FISHING_FAIL);
                             m_loot->ShowContentTo(player);
                         }
+
+						// EJ auto fish						
+						ObjectGuid lguid = player->GetLootGuid();
+						if (lguid.IsGameObject())
+						{
+							m_loot->AutoStore(player);
+						}
+						m_loot->Release(player);
                     }
                     else
                     {
@@ -1639,12 +1658,19 @@ void GameObject::Use(Unit* user)
                         WorldPacket data(SMSG_FISH_ESCAPED, 0);
                         player->GetSession()->SendPacket(data);
                     }
+
+					// EJ auto fish
+					fishing = true;
+
                     break;
                 }
                 case GO_JUST_DEACTIVATED:                   // nothing to do, will be deleted at next update
                     break;
                 default:
                 {
+					// EJ auto fish
+					fishing = true;
+
                     SetLootState(GO_JUST_DEACTIVATED);
 
                     WorldPacket data(SMSG_FISH_NOT_HOOKED, 0);
@@ -1654,6 +1680,14 @@ void GameObject::Use(Unit* user)
             }
 
             player->FinishSpell(CURRENT_CHANNELED_SPELL);
+
+			// EJ auto fish
+			if (fishing)
+			{
+				player->CastSpell(player, 7620, TriggerCastFlags::TRIGGERED_NONE);
+			}
+			fishing = false;
+
             return;
         }
         case GAMEOBJECT_TYPE_SUMMONING_RITUAL:              // 18

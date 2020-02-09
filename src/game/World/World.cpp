@@ -72,6 +72,15 @@
 
 #include <mutex>
 
+// EJ robot
+#include "Robot/RobotConfig.h"
+#include "Robot/RobotManager.h"
+// EJ marketer
+#include "Marketer/MarketerConfig.h"
+#include "Marketer/MarketerManager.h"
+// EJ joker
+#include "Joker/JokerConfig.h"
+
 INSTANTIATE_SINGLETON_1(World);
 
 extern void LoadGameObjectModelList();
@@ -147,6 +156,12 @@ void World::CleanupsBeforeStop()
     UpdateSessions(1);                               // real players unload required UpdateSessions call
     sBattleGroundMgr.DeleteAllBattleGrounds();       // unload battleground templates before different singletons destroyed
     sMapMgr.UnloadAll();                             // unload all grids (including locked in memory)
+}
+
+// EJ robot 
+std::unordered_map<uint32, WorldSession*> World::GetSessions()
+{
+	return m_sessions;
 }
 
 /// Find a session by its id
@@ -890,6 +905,9 @@ void World::SetInitialWorldSettings()
     ///- Initialize config settings
     LoadConfigSettings();
 
+	// EJ joker
+	sJokerConfig.StartJokerSystem();
+
     ///- Check the existence of the map files for all races start areas.
     if (!MapManager::ExistMapAndVMap(0, -6240.32f, 331.033f) ||                     // Dwarf/ Gnome
             !MapManager::ExistMapAndVMap(0, -8949.95f, -132.493f) ||                // Human
@@ -1450,6 +1468,14 @@ void World::SetInitialWorldSettings()
     uint32 uStartInterval = WorldTimer::getMSTimeDiff(uStartTime, WorldTimer::getMSTime());
     sLog.outString("SERVER STARTUP TIME: %i minutes %i seconds", uStartInterval / 60000, (uStartInterval % 60000) / 1000);
     sLog.outString();
+
+	// EJ marketer
+	sMarketerConfig.StartMarketerSystem();
+	sMarketerManager->ResetMarketer();
+
+	// EJ robot
+	sRobotConfig.StartRobotSystem();
+	sRobotManager->InitializeManager();
 }
 
 void World::DetectDBCLang()
@@ -1626,6 +1652,12 @@ void World::Update(uint32 diff)
 
     // cleanup unused GridMap objects as well as VMaps
     sTerrainMgr.Update(diff);
+
+	// EJ marketer
+	sMarketerManager->UpdateMarketer();
+
+	// EJ robot
+	sRobotManager->UpdateManager();
 }
 
 namespace MaNGOS
@@ -1972,6 +2004,9 @@ void World::ShutdownServ(uint32 time, uint32 options, uint8 exitcode)
     // ignore if server shutdown at next tick
     if (m_stopEvent)
         return;
+
+	// EJ robot
+	sRobotManager->LogoutRobots();
 
     m_ShutdownMask = options;
     m_ExitCode = exitcode;

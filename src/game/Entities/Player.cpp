@@ -78,6 +78,9 @@
 
 #include <cmath>
 
+ // EJ robot 
+#include "Robot/RobotManager.h"
+
 #define ZONE_UPDATE_INTERVAL (1*IN_MILLISECONDS)
 
 #define PLAYER_SKILL_INDEX(x)       (PLAYER_SKILL_INFO_1_1 + ((x)*3))
@@ -2663,6 +2666,12 @@ void Player::GiveXP(uint32 xp, Creature* victim, float groupRate)
 
     if (!isAlive())
         return;
+
+	// EJ robot
+	if (sRobotManager->IsRobot(GetSession()->GetAccountId()))
+	{
+		return;
+	}
 
     if (HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_XP_USER_DISABLED))
         return;

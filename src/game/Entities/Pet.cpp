@@ -929,6 +929,9 @@ bool Pet::CreateBaseAtCreature(Creature* creature)
     else
         SetName(creature->GetNameForLocaleIdx(sObjectMgr.GetDBCLocaleIndex()));
 
+	// EJ pet name
+	SetName(cInfo->Name);
+
     SetByteValue(UNIT_FIELD_BYTES_0, 1, CLASS_WARRIOR);
     SetByteValue(UNIT_FIELD_BYTES_0, 2, GENDER_NONE);
     SetByteValue(UNIT_FIELD_BYTES_0, 3, POWER_FOCUS);
