@@ -62,6 +62,7 @@ struct boss_pathaleon_the_calculatorAI : public ScriptedAI
     {
         m_pInstance = static_cast<ScriptedInstance*>(pCreature->GetInstanceData());
         m_bIsRegularMode = pCreature->GetMap()->IsRegularDifficulty();
+        m_creature->GetCombatManager().SetLeashingDisable(true);
         Reset();
     }
 
@@ -117,14 +118,14 @@ struct boss_pathaleon_the_calculatorAI : public ScriptedAI
 
     void JustSummoned(Creature* pSummoned) override
     {
-        if (m_creature->getVictim())
-            pSummoned->AI()->AttackStart(m_creature->getVictim());
+        if (m_creature->GetVictim())
+            pSummoned->AI()->AttackStart(m_creature->GetVictim());
     }
 
     void UpdateAI(const uint32 uiDiff) override
     {
         // Return since we have no target
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_uiManaTapTimer < uiDiff)
@@ -181,8 +182,9 @@ struct boss_pathaleon_the_calculatorAI : public ScriptedAI
                 m_bIsEnraged = true;
             }
         }
+
         // Summon and empower Nether Wraiths only when not enraged
-        else
+        if (!m_bIsEnraged)
         {
             if (m_uiSummonTimer < uiDiff)
             {
@@ -217,7 +219,7 @@ struct mob_nether_wraithAI : public ScriptedAI
 
     void Reset() override
     {
-        m_uiArcaneMissilesTimer = urand(1000, 4000);
+        m_uiArcaneMissilesTimer = urand(2000, 8000);
     }
 
     void JustDied(Unit* killer) override
@@ -227,14 +229,14 @@ struct mob_nether_wraithAI : public ScriptedAI
 
     void UpdateAI(const uint32 uiDiff) override
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_uiArcaneMissilesTimer < uiDiff)
         {
             Unit* pTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 1, nullptr, SELECT_FLAG_PLAYER);
             if (!pTarget)
-                pTarget = m_creature->getVictim();
+                pTarget = m_creature->GetVictim();
 
             if (pTarget)
             {

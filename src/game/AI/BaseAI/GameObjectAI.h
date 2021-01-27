@@ -20,8 +20,11 @@
 
 #include "Platform/Define.h"
 #include "AI/BaseAI/AIDefines.h"
+#include "Entities/GameObjectDefines.h"
 
 class GameObject;
+class Unit;
+struct SpellEntry;
 
 class GameObjectAI
 {
@@ -52,6 +55,11 @@ class GameObjectAI
         virtual void OnLootStateChange() {}
 
         /*
+        * Called when GO state changes.
+        */
+        virtual void OnGoStateChange(GOState /*state*/) {}
+
+        /*
         * Called when a GO appears in the world to normal observers
         */
         virtual void JustSpawned() {}
@@ -64,7 +72,17 @@ class GameObjectAI
         /*
         * Enables generic receiving of events
         */
-        virtual void ReceiveAIEvent(AIEventType /*eventType*/, uint32 miscValue = 0) {}
+        virtual void ReceiveAIEvent(AIEventType /*eventType*/, uint32 /*miscValue*/ = 0) {}
+        
+        /*
+         * Enables handling of GO Use by all units
+         */
+        virtual void OnUse(Unit* /*user*/, SpellEntry const* /*spellInfo*/);
+
+        /*
+        * Enables handling transport
+        */
+        virtual void JustReachedStopPoint() {}
 
     protected:
         GameObject* m_go;

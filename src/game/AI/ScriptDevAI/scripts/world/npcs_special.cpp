@@ -160,7 +160,7 @@ struct npc_air_force_botsAI : public ScriptedAI
     {
         Creature* pCreature = m_creature->GetMap()->GetCreature(m_spawnedGuid);
 
-        if (pCreature && pCreature->isAlive())
+        if (pCreature && pCreature->IsAlive())
             return pCreature;
 
         return nullptr;
@@ -206,7 +206,7 @@ struct npc_air_force_botsAI : public ScriptedAI
 
                         if (pMarkAura->GetAuraDuration() < AURA_DURATION_TIME_LEFT)
                         {
-                            if (!pLastSpawnedGuard->getVictim())
+                            if (!pLastSpawnedGuard->GetVictim())
                                 pLastSpawnedGuard->AI()->AttackStart(pWho);
                         }
                     }
@@ -236,7 +236,7 @@ struct npc_air_force_botsAI : public ScriptedAI
                     // ROOFTOP only triggers if the player is on the ground
                     if (!pPlayerTarget->IsFlying())
                     {
-                        if (!pLastSpawnedGuard->getVictim())
+                        if (!pLastSpawnedGuard->GetVictim())
                             pLastSpawnedGuard->AI()->AttackStart(pWho);
                     }
                     break;
@@ -306,7 +306,7 @@ struct npc_chicken_cluckAI : public ScriptedAI
                 m_uiResetFlagTimer -= uiDiff;
         }
 
-        if (m_creature->SelectHostileTarget() && m_creature->getVictim())
+        if (m_creature->SelectHostileTarget() && m_creature->GetVictim())
             DoMeleeAttackIfReady();
     }
 };
@@ -498,6 +498,12 @@ struct npc_injured_patientAI : public ScriptedAI
     Location* m_pCoord;
     bool isSaved;
 
+    void EnterEvadeMode() override
+    {
+        if (isSaved)
+            ScriptedAI::EnterEvadeMode();
+    }
+
     void Reset() override
     {
         m_doctorGuid.Clear();
@@ -529,7 +535,7 @@ struct npc_injured_patientAI : public ScriptedAI
 
     void SpellHit(Unit* pCaster, const SpellEntry* pSpell) override
     {
-        if (pCaster->GetTypeId() == TYPEID_PLAYER && m_creature->isAlive() && pSpell->Id == 20804)
+        if (pCaster->GetTypeId() == TYPEID_PLAYER && m_creature->IsAlive() && pSpell->Id == 20804)
         {
             // make not selectable
             m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
@@ -583,12 +589,12 @@ struct npc_injured_patientAI : public ScriptedAI
 
         // lower HP on every world tick makes it a useful counter, not officlone though
         uint32 uiHPLose = uint32(0.03f * uiDiff);
-        if (m_creature->isAlive() && m_creature->GetHealth() > 1 + uiHPLose)
+        if (m_creature->IsAlive() && m_creature->GetHealth() > 1 + uiHPLose)
         {
             m_creature->SetHealth(m_creature->GetHealth() - uiHPLose);
         }
 
-        if (m_creature->isAlive() && m_creature->GetHealth() <= 1 + uiHPLose)
+        if (m_creature->IsAlive() && m_creature->GetHealth() <= 1 + uiHPLose)
         {
             m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IN_COMBAT);
             m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
@@ -735,7 +741,7 @@ void npc_doctorAI::UpdateAI(const uint32 uiDiff)
 
             for (GuidList::const_iterator itr = m_lPatientGuids.begin(); itr != m_lPatientGuids.end(); ++itr)
                 if (Creature* pSummoned = m_creature->GetMap()->GetCreature(*itr))
-                    if (pSummoned->isAlive())
+                    if (pSummoned->IsAlive())
                         totalAlive++;
 
             uint32 totalToSpawn = 0;
@@ -882,7 +888,7 @@ struct npc_garments_of_questsAI : public npc_escortAI
         if (pSpell->Id == SPELL_LESSER_HEAL_R2 || pSpell->Id == SPELL_FORTITUDE_R1)
         {
             // not while in combat
-            if (m_creature->isInCombat())
+            if (m_creature->IsInCombat())
                 return;
 
             // nothing to be done now
@@ -991,7 +997,7 @@ struct npc_garments_of_questsAI : public npc_escortAI
 
     void UpdateEscortAI(const uint32 uiDiff) override
     {
-        if (m_bCanRun && !m_creature->isInCombat())
+        if (m_bCanRun && !m_creature->IsInCombat())
         {
             if (m_uiRunAwayTimer <= uiDiff)
             {
@@ -1017,7 +1023,7 @@ struct npc_garments_of_questsAI : public npc_escortAI
                 m_uiRunAwayTimer -= uiDiff;
         }
 
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         DoMeleeAttackIfReady();
@@ -1046,12 +1052,12 @@ struct npc_guardianAI : public ScriptedAI
 
     void UpdateAI(const uint32 /*diff*/) override
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_creature->isAttackReady())
         {
-            m_creature->CastSpell(m_creature->getVictim(), SPELL_DEATHTOUCH, TRIGGERED_OLD_TRIGGERED);
+            m_creature->CastSpell(m_creature->GetVictim(), SPELL_DEATHTOUCH, TRIGGERED_OLD_TRIGGERED);
             m_creature->resetAttackTimer();
         }
     }
@@ -1190,7 +1196,7 @@ struct npc_spring_rabbitAI : public ScriptedPetAI
     // Event Starts when two rabbits see each other
     void MoveInLineOfSight(Unit* pWho) override
     {
-        if (m_creature->getVictim())
+        if (m_creature->GetVictim())
             return;
 
         if (pWho->GetTypeId() == TYPEID_UNIT && pWho->GetEntry() == NPC_SPRING_RABBIT && CanStartWhatRabbitsDo() && m_creature->IsFriend(pWho) && m_creature->IsWithinDistInMap(pWho, DIST_START_EVENT, true))
@@ -1423,6 +1429,7 @@ enum npc_burster_worm
     SPELL_SANDWORM_SUBMERGE_VISUAL      = 33928,
     SPELL_SUBMERGED                     = 37751,
     SPELL_STAND                         = 37752,
+    SPELL_CRUST_BURST                   = 33922,
 
     // combat spells
     SPELL_POISON                        = 31747,
@@ -1453,22 +1460,53 @@ enum npc_burster_worm
     PHASE_CHASE                         = 2,
 };
 
-// TODO: Add random repositioning logic
-struct npc_burster_wormAI : public ScriptedAI
+enum BursterActions
 {
-    npc_burster_wormAI(Creature* pCreature) : ScriptedAI(pCreature), m_uiPhase(0), m_uiChaseTimer(0), m_uiBirthDelayTimer(0), m_uiBoreTimer(0), m_uiEnrageTimer(0), m_uiBorePassive(SetBorePassive()), m_boreDamageSpell(SetBoreDamageSpell())
+    BURSTER_CHASE_DISTANCE,
+    BURSTER_RANGED_ATTACK,
+    BURSTER_ENABLE_ENRAGE,
+    BURSTER_ENRAGE,
+    BURSTER_BORE,
+    BURSTER_SWEEP,
+    BURSTER_ACTION_MAX,
+    BURSTER_BIRTH_DELAY,
+    BURSTER_CHASE_SEQUENCE,
+};
+
+struct npc_burster_wormAI : public CombatAI
+{
+    npc_burster_wormAI(Creature* creature) : CombatAI(creature, BURSTER_ACTION_MAX),
+        m_uiBorePassive(SetBorePassive()), m_boreDamageSpell(SetBoreDamageSpell()), m_rangedSpell(GetRangedSpell())
     {
+        // generic abilities
+        AddCombatAction(BURSTER_CHASE_DISTANCE, 10000u);
+        AddCombatAction(BURSTER_RANGED_ATTACK, 2000u);
+        // per entry abilities
+        if (m_creature->GetEntry() == NPC_TUNNELER || m_creature->GetEntry() == NPC_NETHERMINE_BURSTER)
+        {
+            AddTimerlessCombatAction(BURSTER_ENABLE_ENRAGE, true);
+            AddCombatAction(BURSTER_ENRAGE, true);
+        }
+        if (m_creature->GetEntry() != NPC_MARAUDING_BURSTER && m_creature->GetEntry() != NPC_SAND_WORM && m_creature->GetEntry() != NPC_FULGORGE && m_creature->GetEntry() != NPC_GREATER_CRUST_BURSTER)
+            AddCombatAction(BURSTER_BORE, 5000u);
+        if (m_creature->GetEntry() == NPC_SAND_WORM)
+            AddCombatAction(BURSTER_SWEEP, 5000, 15000);
+        // sequences
+        AddCustomAction(BURSTER_BIRTH_DELAY, true, [&]()
+        {
+            m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            SetMeleeEnabled(true);
+            SetCombatScriptStatus(false);
+        });
+        AddCustomAction(BURSTER_CHASE_SEQUENCE, true, [&]() { HandleChaseSequence(); });
     }
 
-    uint8 m_uiPhase;
-
-    uint32 m_uiChaseTimer;
-    uint32 m_uiBirthDelayTimer;
-    uint32 m_uiBoreTimer;
-    uint32 m_uiEnrageTimer;
+    uint32 m_chaseStage;
+    uint32 m_rangedSpell;
+    int32 m_rangeCheckState;
     uint32 m_uiBorePassive;
     uint32 m_boreDamageSpell;
-    uint32 m_uiWormSweepTimer;
+    Position m_teleport;
 
     inline uint32 SetBorePassive()
     {
@@ -1504,63 +1542,63 @@ struct npc_burster_wormAI : public ScriptedAI
         }
     }
 
-    void Reset() override
+    inline uint32 GetRangedSpell()
     {
-        m_uiPhase           = PHASE_COMBAT;
-        m_uiChaseTimer      = 0;
-        m_uiBoreTimer       = 0;
-        m_uiBirthDelayTimer = 0;
-        m_uiEnrageTimer     = 0;
-        m_uiWormSweepTimer  = urand(5000, 15000);
-
-        SetCombatMovement(false);
-
-        Submerge();
-
-        // only spawned creatures have the submerge visual - TODO: Reconfirm which should actually use it
-        //if (!m_creature->IsTemporarySummon() && !)
-        //    DoCastSpellIfCan(m_creature, SPELL_SANDWORM_SUBMERGE_VISUAL, CAST_AURA_NOT_PRESENT);
+        switch (m_creature->GetEntry())
+        {
+            case NPC_FULGORGE:
+                return SPELL_POISON_SPIT;
+            case NPC_SAND_WORM:
+                return SPELL_WORM_BLAST;
+            default:
+                return SPELL_POISON;
+        }
     }
 
-    void Submerge()
+    void Reset() override
     {
-        m_creature->CastSpell(m_creature, SPELL_SUBMERGED, TRIGGERED_NONE);
-        m_creature->CastSpell(m_creature, m_uiBorePassive, TRIGGERED_NONE);
+        CombatAI::Reset();
+        m_chaseStage = 0;
+        m_rangeCheckState = -1;
+
+        SetCombatMovement(false);
+        SetMeleeEnabled(false);
+
+        Submerge(true);
+    }
+
+    void Submerge(bool passive)
+    {
+        m_creature->CastSpell(nullptr, SPELL_SUBMERGED, TRIGGERED_NONE);
+        if (passive)
+            DoCastSpellIfCan(nullptr, m_uiBorePassive, CAST_TRIGGERED | CAST_AURA_NOT_PRESENT);
         m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
     }
 
-    void SpellHitTarget(Unit* pTarget, const SpellEntry* pSpell) override
+    void SpellHitTarget(Unit* target, const SpellEntry* spellInfo) override
     {
-        if (pSpell->Id == m_boreDamageSpell && pTarget->GetTypeId() == TYPEID_PLAYER)
-            AttackStart(pTarget);
+        if (spellInfo->Id == m_boreDamageSpell && target->GetTypeId() == TYPEID_PLAYER)
+            AttackStart(target);
     }
 
-    void JustRespawned() override
+    void JustReachedHome() override
     {
-        Reset();
+        DoCastSpellIfCan(nullptr, m_uiBorePassive, CAST_TRIGGERED | CAST_AURA_NOT_PRESENT);
     }
 
-    void Aggro(Unit* /*pWho*/) override
+    void Aggro(Unit* /*who*/) override
     {
         // remove the bore bone aura again, for summoned creatures
-        m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
         m_creature->RemoveAurasDueToSpell(SPELL_SANDWORM_SUBMERGE_VISUAL);
         m_creature->RemoveAurasDueToSpell(m_uiBorePassive);
+        SetCombatScriptStatus(true);
+        SetRootSelf(true, true);
 
-        if (DoCastSpellIfCan(m_creature, SPELL_STAND) == CAST_OK)
-            m_uiBirthDelayTimer = 2000;
-    }
-
-    void EnterEvadeMode() override
-    {
-        m_creature->RemoveAllAurasOnEvade();
-        m_creature->CombatStop(true);
-        m_creature->LoadCreatureAddon(true);
-        m_creature->SetLootRecipient(nullptr);
-
-        Reset();
-
-        m_creature->GetMotionMaster()->MoveTargetedHome();
+        if (DoCastSpellIfCan(nullptr, SPELL_STAND) == CAST_OK)
+        {
+            m_creature->CastSpell(nullptr, SPELL_CRUST_BURST, TRIGGERED_OLD_TRIGGERED);
+            ResetTimer(BURSTER_BIRTH_DELAY, 2000);
+        }
     }
 
     // function to check for bone worms
@@ -1569,130 +1607,102 @@ struct npc_burster_wormAI : public ScriptedAI
         return m_creature->GetEntry() == NPC_BONE_CRAWLER || m_creature->GetEntry() == NPC_HAISHULUD || m_creature->GetEntry() == NPC_BONE_SIFTER || m_creature->GetEntry() == NPC_MATURE_BONE_SIFTER;
     }
 
-    void UpdateAI(const uint32 uiDiff) override
+    void HandleChaseSequence()
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
-            return;
-
-        // animation delay
-        if (m_uiBirthDelayTimer)
+        uint32 timer = 0;
+        switch (m_chaseStage)
         {
-            if (m_uiBirthDelayTimer <= uiDiff)
-                m_uiBirthDelayTimer = 0;
-            else
-                m_uiBirthDelayTimer -= uiDiff;
-
-            // no action during birth animaiton
-            return;
-        }
-
-        // combat phase
-        if (m_uiPhase == PHASE_COMBAT)
-        {
-            if (m_uiChaseTimer)
+            case 0: // right after submerge
             {
-                if (m_uiChaseTimer <= uiDiff)
-                {
-                    // sone creatures have bone bore spell
-                    Submerge();
-                    m_uiPhase = PHASE_CHASE;
-                    SetCombatMovement(true);
-                    m_creature->GetMotionMaster()->MoveChase(m_creature->getVictim());
-                    m_uiChaseTimer = 0;
-                }
-                else
-                    m_uiChaseTimer -= uiDiff;
-
-                // return when doing phase change
-                return;
+                // teleport
+                timer = 1000;
+                m_creature->NearTeleportTo(m_teleport.x, m_teleport.y, m_teleport.z, 0.f);
+                break;
             }
-
-            // If we are within range melee the target
-            if (m_creature->CanReachWithMeleeAttack(m_creature->getVictim()))
-                DoMeleeAttackIfReady();
-            else if (!m_creature->IsNonMeleeSpellCasted(false))
+            case 1: // after teleport
             {
-                switch (m_creature->GetEntry())
-                {
-                    case NPC_FULGORGE:
-                        DoCastSpellIfCan(m_creature->getVictim(), SPELL_POISON_SPIT);
-                    case NPC_SAND_WORM:
-                        DoCastSpellIfCan(m_creature->getVictim(), SPELL_WORM_BLAST);
-                    default:
-                        DoCastSpellIfCan(m_creature->getVictim(), SPELL_POISON);
-                }
-
-                // if target not in range, submerge and chase
-                if (!m_creature->IsInRange(m_creature->getVictim(), 0, 50.0f))
-                {
-                    if (DoCastSpellIfCan(m_creature, SPELL_SANDWORM_SUBMERGE_VISUAL, CAST_INTERRUPT_PREVIOUS) == CAST_OK)
-                        m_uiChaseTimer = 1500;
-                }
-            }
-
-            // bore spell
-            if (m_creature->GetEntry() != NPC_MARAUDING_BURSTER && m_creature->GetEntry() != NPC_SAND_WORM && m_creature->GetEntry() != NPC_FULGORGE && m_creature->GetEntry() != NPC_GREATER_CRUST_BURSTER)
-            {
-                if (m_uiBoreTimer < uiDiff)
-                {
-                    if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_BORE) == CAST_OK)
-                        m_uiBoreTimer = 45000;
-                }
-                else
-                    m_uiBoreTimer -= uiDiff;
-            }
-
-            // enrage spell
-            if ((m_creature->GetEntry() == NPC_TUNNELER || m_creature->GetEntry() == NPC_NETHERMINE_BURSTER) && m_creature->GetHealthPercent() < 30.0f)
-            {
-                if (m_uiEnrageTimer < uiDiff)
-                {
-                    if (DoCastSpellIfCan(m_creature, SPELL_ENRAGE) == CAST_OK)
-                        m_uiEnrageTimer = urand(12000, 17000);
-                }
-                else
-                    m_uiEnrageTimer -= uiDiff;
-            }
-
-            // worm sweep spell
-            if (m_creature->GetEntry() == NPC_SAND_WORM)
-            {
-                if (m_uiWormSweepTimer < uiDiff)
-                {
-                    if (DoCastSpellIfCan(m_creature, SPELL_WORM_SWEEP) == CAST_OK)
-                        m_uiWormSweepTimer = urand(15000, 25000);
-                }
-                else
-                    m_uiWormSweepTimer -= uiDiff;
-            }
-        }
-        // chase target
-        else if (m_uiPhase == PHASE_CHASE)
-        {
-            if (m_creature->IsInRange(m_creature->getVictim(), 0, 5.0f))
-            {
-                //m_creature->SetStandState(UNIT_STAND_STATE_STAND);
+                // come up
                 m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
-                m_creature->RemoveAurasDueToSpell(SPELL_TUNNEL_BORE_PASSIVE);
-                m_creature->RemoveAurasDueToSpell(SPELL_TUNNEL_BORE_BONE_PASSIVE);
                 m_creature->RemoveAurasDueToSpell(SPELL_SANDWORM_SUBMERGE_VISUAL);
+                DoCastSpellIfCan(nullptr, SPELL_STAND);
+                timer = 1000;
+                break;
+            }
+            case 2: // after coming up
+            {
+                // start attacking
+                SetMeleeEnabled(true);
+                m_creature->SetTarget(m_creature->GetVictim());
+                SetCombatScriptStatus(false);
+                break;
+            }
+        }
+        ++m_chaseStage;
+        if (timer)
+            ResetTimer(BURSTER_CHASE_SEQUENCE, timer);
+    }
 
-                if (DoCastSpellIfCan(m_creature, SPELL_STAND) == CAST_OK)
+    void ExecuteAction(uint32 action) override
+    {
+        switch (action)
+        {
+            case BURSTER_CHASE_DISTANCE:
+            {
+                // sone creatures have bone bore spell
+                if (!m_creature->GetVictim() || !m_creature->CanReachWithMeleeAttack(m_creature->GetVictim()) || m_creature->GetDistance(m_creature->GetVictim(), true, DIST_CALC_COMBAT_REACH) > 30.f)
                 {
-                    m_creature->GetMotionMaster()->MoveIdle();
-                    SetCombatMovement(false);
-                    m_uiPhase = PHASE_COMBAT;
-                    m_uiBirthDelayTimer = 2000;
+                    ResetCombatAction(action, 10000);
+                    return;
                 }
+                Submerge(false);
+                SetMeleeEnabled(false);
+                SetCombatScriptStatus(true); // TODO: remove on next step
+                m_creature->SetTarget(nullptr);
+                m_creature->GetVictim()->GetClosePoint(m_teleport.x, m_teleport.y, m_teleport.z, 0.f, 12.f, M_PI_F);
+                ResetTimer(BURSTER_CHASE_SEQUENCE, 2000);
+                ResetCombatAction(action, 20000);
+                m_chaseStage = 0;
+                break;
+            }
+            case BURSTER_RANGED_ATTACK:
+            {
+                uint32 timer = 500;
+                // If victim exists we have a target in melee range
+                if (m_creature->GetVictim() && m_creature->CanReachWithMeleeAttack(m_creature->GetVictim()))
+                    m_rangeCheckState = -1;
+                // Spam Waterbolt spell when not tanked
+                else
+                {
+                    ++m_rangeCheckState;
+                    if (m_rangeCheckState > 1)
+                        if (Unit* target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0, m_rangedSpell, SELECT_FLAG_PLAYER))
+                            if (DoCastSpellIfCan(target, m_rangedSpell) == CAST_OK)
+                                timer = 2500;
+                }
+                ResetCombatAction(action, timer);
+                break;
+            }
+            case BURSTER_BORE:
+            {
+                if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_BORE) == CAST_OK)
+                    ResetCombatAction(action, 45000);
+                break;
+            }
+            case BURSTER_ENRAGE:
+            {
+                if (DoCastSpellIfCan(nullptr, SPELL_ENRAGE) == CAST_OK)
+                    ResetCombatAction(action, urand(12000, 17000));
+                break;
+            }
+            case BURSTER_SWEEP:
+            {
+                if (DoCastSpellIfCan(nullptr, SPELL_WORM_SWEEP) == CAST_OK)
+                    ResetCombatAction(action, urand(15000, 25000));
+                break;
             }
         }
     }
 };
-
-UnitAI* GetAI_npc_burster_worm(Creature* pCreature)
-{
-    return new npc_burster_wormAI(pCreature);
-}
 
 /*######
 ## npc_aoe_damage_trigger
@@ -1713,11 +1723,20 @@ enum npc_aoe_damage_trigger
     SPELL_CONSUMPTION_NPC_20570 = 35952,
 };
 
-struct npc_aoe_damage_triggerAI : public Scripted_NoMovementAI
+struct npc_aoe_damage_triggerAI : public ScriptedAI, public TimerManager
 {
-    npc_aoe_damage_triggerAI(Creature* pCreature) : Scripted_NoMovementAI(pCreature), m_uiAuraPassive(SetAuraPassive()) { }
+    npc_aoe_damage_triggerAI(Creature* pCreature) : ScriptedAI(pCreature), m_uiAuraPassive(SetAuraPassive())
+    {
+        AddCustomAction(1, GetTimer(), [&]() {CastConsumption(); });
+        SetReactState(REACT_PASSIVE);
+    }
 
     uint32 m_uiAuraPassive;
+
+    inline uint32 GetTimer()
+    {
+        return 2500; // adjust in future if other void zones are different this is for NPC_VOID_ZONE
+    }
 
     inline uint32 SetAuraPassive()
     {
@@ -1734,14 +1753,17 @@ struct npc_aoe_damage_triggerAI : public Scripted_NoMovementAI
         }
     }
 
-    void Reset() override
+    void CastConsumption()
     {
         DoCastSpellIfCan(m_creature, m_uiAuraPassive, CAST_TRIGGERED | CAST_AURA_NOT_PRESENT);
     }
 
-    void AttackStart(Unit* /*pWho*/) override { }
-    void MoveInLineOfSight(Unit* /*pWho*/) override { }
-    void UpdateAI(const uint32 /*uiDiff*/) override {}
+    void Reset() override {}
+
+    void UpdateAI(const uint32 diff) override
+    {
+        UpdateTimers(diff);
+    }
 };
 
 UnitAI* GetAI_npc_aoe_damage_trigger(Creature* pCreature)
@@ -1792,7 +1814,7 @@ struct npc_the_cleanerAI : public ScriptedAI
         else
             m_uiDespawnTimer -= uiDiff;
 
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         DoMeleeAttackIfReady();
@@ -1845,7 +1867,7 @@ struct npc_shaman_fire_elementalAI : public ScriptedAI
 
     void UpdateAI(const uint32 diff) override
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         for (uint32 i = 0; i < ELEMENTAL_ACTION_MAX; ++i)
@@ -1881,7 +1903,7 @@ struct npc_shaman_fire_elementalAI : public ScriptedAI
         }
         else if (m_actionReadyStatus[ELEMENTAL_ACTION_FIRE_BLAST])
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_FIRE_BLAST) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_FIRE_BLAST) == CAST_OK)
             {
                 m_actionTimers[ELEMENTAL_ACTION_FIRE_BLAST] = 15000;
                 m_actionReadyStatus[ELEMENTAL_ACTION_FIRE_BLAST] = false;
@@ -1912,7 +1934,7 @@ struct npc_shaman_earth_elementalAI : public ScriptedAI
 
     void UpdateAI(const uint32 diff) override
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_angeredEarthTimer <= diff)
@@ -1965,7 +1987,7 @@ struct npc_snakesAI : public ScriptedAI
 
     void UpdateAI(const uint32 diff) override
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_spellTimer <= diff)
@@ -1973,7 +1995,7 @@ struct npc_snakesAI : public ScriptedAI
             if (urand(0, 2) == 0)
             {
                 uint32 spellId = urand(0, 1) ? SPELL_MIND_NUMBING_POISON : SPELL_CRIPPLING_POISON;
-                DoCastSpellIfCan(m_creature->getVictim(), spellId);
+                DoCastSpellIfCan(m_creature->GetVictim(), spellId);
             }
             m_spellTimer = 3000;
         }
@@ -2009,7 +2031,7 @@ struct npc_nether_rayAI : public CombatAI
     npc_nether_rayAI(Creature* creature) : CombatAI(creature, RAY_ACTION_MAX)
     {
         AddCombatAction(RAY_ACTION_DRAIN_MANA, 2000u);
-        AddCombatAction(RAY_ACTION_TAIL_STING, 2000u);
+        AddCombatAction(RAY_ACTION_TAIL_STING, 9000, 11000);
         AddCombatAction(RAY_ACTION_NETHER_SHOCK, 0u);
     }
 
@@ -2018,7 +2040,7 @@ struct npc_nether_rayAI : public CombatAI
         switch (id)
         {
             case RAY_ACTION_DRAIN_MANA: return urand(10000, 15000);
-            case RAY_ACTION_TAIL_STING: return 23000;
+            case RAY_ACTION_TAIL_STING: return urand(16000, 17000);
             case RAY_ACTION_NETHER_SHOCK: return 5000;
             default: return 0;
         }
@@ -2045,28 +2067,21 @@ struct npc_nether_rayAI : public CombatAI
         switch (action)
         {
             case RAY_ACTION_DRAIN_MANA:
-                if (!m_creature->getVictim() || !m_creature->getVictim()->HasMana())
+                if (!m_creature->GetVictim() || !m_creature->GetVictim()->HasMana())
                     return;
-                DoCastSpellIfCan(m_creature->getVictim(), SPELL_DRAIN_MANA);
+                DoCastSpellIfCan(m_creature->GetVictim(), SPELL_DRAIN_MANA);
                 return;
             case RAY_ACTION_TAIL_STING:
-                if (!m_creature->getVictim() || m_creature->getVictim()->HasMana())
+                if (!m_creature->GetVictim() || m_creature->GetVictim()->HasMana())
                     return;
-                DoCastSpellIfCan(m_creature->getVictim(), SPELL_TAIL_STING);
+                DoCastSpellIfCan(m_creature->GetVictim(), SPELL_TAIL_STING);
                 return;
             case RAY_ACTION_NETHER_SHOCK:
-                if (!m_creature->getVictim())
-                    return;
-                DoCastSpellIfCan(m_creature->getVictim(), SPELL_NETHER_SHOCK);
+                DoCastSpellIfCan(m_creature->GetVictim(), SPELL_NETHER_SHOCK);
                 return;
         }
     }
 };
-
-UnitAI* GetAI_npc_nether_ray(Creature* creature)
-{
-    return new npc_nether_rayAI(creature);
-}
 
 /*######
 ## npc_mage_mirror_image
@@ -2109,7 +2124,7 @@ struct npc_mage_mirror_imageAI : public ScriptedAI
         if (m_uiThreatUpdateTimer < uiDiff)
         {
             Player* pOwner = m_creature->GetMap()->GetPlayer(m_creature->GetSpawnerGuid());
-            if (!pOwner || !pOwner->isAlive())
+            if (!pOwner || !pOwner->IsAlive())
             {
                 m_creature->ForcedDespawn();
                 return;
@@ -2121,20 +2136,20 @@ struct npc_mage_mirror_imageAI : public ScriptedAI
         else
             m_uiThreatUpdateTimer -= uiDiff;
 
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         // cast fire blast and frostbolt alternatively
         if (m_uiFireBlastTimer <= uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_MAGE_FIRE_BLAST) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_MAGE_FIRE_BLAST) == CAST_OK)
                 m_uiFireBlastTimer = 6500;
         }
         else
         {
             m_uiFireBlastTimer -= uiDiff;
 
-            DoCastSpellIfCan(m_creature->getVictim(), SPELL_MAGE_FROST_BOLT);
+            DoCastSpellIfCan(m_creature->GetVictim(), SPELL_MAGE_FROST_BOLT);
         }
     }
 };
@@ -2289,6 +2304,7 @@ struct npc_fire_nova_totemAI : public ScriptedAI, public TimerManager
             case SPELL_FIRE_NOVA_TOTEM_1: m_fireNovaSpell = SPELL_FIRE_NOVA_1; m_fireNovaTimer = 4000; break;
             case SPELL_FIRE_NOVA_TOTEM_2: m_fireNovaSpell = SPELL_FIRE_NOVA_2; m_fireNovaTimer = 6000; break;
             case SPELL_FIRE_NOVA_TOTEM_3: m_fireNovaSpell = SPELL_FIRE_NOVA_3; m_fireNovaTimer = 4000; break;
+            default: return;
         }
         ResetTimer(1, m_fireNovaTimer);
     }
@@ -2331,9 +2347,17 @@ enum
     NPC_PHOENIX_MGT                     = 24674,
 };
 
-struct mob_phoenix_tkAI : public ScriptedAI
+enum PhoenixActions
 {
-    mob_phoenix_tkAI(Creature* creature) : ScriptedAI(creature)
+    PHOENIX_ACTION_MAX,
+    PHOENIX_EMBER_BLAST,
+    PHOENIX_REBIRTH,
+    PHOENIX_ATTACK_DELAY,
+};
+
+struct mob_phoenix_tkAI : public CombatAI
+{
+    mob_phoenix_tkAI(Creature* creature) : CombatAI(creature, PHOENIX_ACTION_MAX)
     {
         bool tk = m_creature->GetEntry() == NPC_PHOENIX_TK;
         if (tk)
@@ -2353,7 +2377,10 @@ struct mob_phoenix_tkAI : public ScriptedAI
             m_phoenixEggSpellId = SPELL_PHOENIX_EGG_MGT;
         }
         SetDeathPrevention(true);
-        Reset();
+        SetReactState(REACT_PASSIVE);
+        AddCustomAction(PHOENIX_EMBER_BLAST, true, [&]() { HandleEmberBlast(); });
+        AddCustomAction(PHOENIX_REBIRTH, true, [&]() { HandleRebirth(); });
+        AddCustomAction(PHOENIX_ATTACK_DELAY, 2000u, [&]() { HandleAttackDelay(); });
     }
 
     uint32 m_burnSpellId;
@@ -2362,19 +2389,11 @@ struct mob_phoenix_tkAI : public ScriptedAI
     uint32 m_rebirthRespawnSpellId;
     uint32 m_phoenixEggSpellId;
 
-    uint32 m_emberDelayTimer;
-    uint32 m_phoenixRebirthTimer;
     ObjectGuid m_eggGuid;
-
-    void Reset() override
-    {
-        m_emberDelayTimer = 0;
-        m_phoenixRebirthTimer = 0;
-    }
 
     void Aggro(Unit* /*pWho*/) override
     {
-        DoCastSpellIfCan(nullptr, m_burnSpellId);
+        DoCastSpellIfCan(nullptr, m_burnSpellId, CAST_TRIGGERED);
     }
 
     void JustPreventedDeath(Unit* /*attacker*/) override
@@ -2398,12 +2417,12 @@ struct mob_phoenix_tkAI : public ScriptedAI
         SetMeleeEnabled(false);
         SetCombatScriptStatus(true);
 
-        m_emberDelayTimer = 1000;
+        ResetTimer(PHOENIX_EMBER_BLAST, 1000);
     }
 
     void JustRespawned() override
     {
-        DoCastSpellIfCan(nullptr, m_rebirthSpawnSpellId);
+        // DoCastSpellIfCan(nullptr, m_rebirthSpawnSpellId);
     }
 
     void JustSummoned(Creature* summoned) override
@@ -2416,7 +2435,7 @@ struct mob_phoenix_tkAI : public ScriptedAI
 
     void DoRebirth()
     {
-        if (m_creature->isAlive())
+        if (m_creature->IsAlive())
         {
             // Remove fake death if the egg despawns after 15 secs
             m_creature->RemoveAurasDueToSpell(m_emberBlastSpellId);
@@ -2427,14 +2446,14 @@ struct mob_phoenix_tkAI : public ScriptedAI
         }
     }
 
-    void SpellHit(Unit* /*caster*/, const SpellEntry* spellInfo) override
+    void OnSpellCooldownAdded(SpellEntry const* spellInfo) override
     {
         if (spellInfo->Id == m_rebirthRespawnSpellId)
         {
             m_creature->CastSpell(nullptr, SPELL_FULL_HEAL, TRIGGERED_OLD_TRIGGERED);
             SetCombatMovement(true);
             SetMeleeEnabled(true);
-            DoStartMovement(m_creature->getVictim());
+            DoStartMovement(m_creature->GetVictim());
             SetCombatScriptStatus(false);
             m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
 
@@ -2455,47 +2474,31 @@ struct mob_phoenix_tkAI : public ScriptedAI
                 egg->ForcedDespawn();
     }
 
-    void UpdateAI(const uint32 diff) override
+    void HandleAttackDelay()
     {
-        if (m_emberDelayTimer)
-        {
-            if (m_emberDelayTimer <= diff)
-            {
-                m_emberDelayTimer = 0;
-                // Spawn egg and make invisible
-                DoCastSpellIfCan(nullptr, m_emberBlastSpellId, CAST_TRIGGERED);
-                DoCastSpellIfCan(nullptr, m_phoenixEggSpellId, CAST_TRIGGERED);
-                m_phoenixRebirthTimer = m_creature->GetEntry() == NPC_PHOENIX_TK ? 15000 : 10000;
-            }
-            else
-                m_emberDelayTimer -= diff;
-        }
-
-        if (m_phoenixRebirthTimer)
-        {
-            if (m_phoenixRebirthTimer <= diff)
-            {
-                m_phoenixRebirthTimer = 0;
-                if (Creature* egg = m_creature->GetMap()->GetCreature(m_eggGuid))
-                    egg->ForcedDespawn();
-
-                DoRebirth();
-            }
-            else
-                m_phoenixRebirthTimer -= diff;
-        }
-
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
-            return;
-
-        DoMeleeAttackIfReady();
+        SetReactState(REACT_AGGRESSIVE);
+        m_creature->SetInCombatWithZone();
+        AttackClosestEnemy();
     }
-};
 
-UnitAI* GetAI_mob_phoenix_tk(Creature* pCreature)
-{
-    return new mob_phoenix_tkAI(pCreature);
-}
+    void HandleEmberBlast()
+    {
+        // Spawn egg and make invisible
+        DoCastSpellIfCan(nullptr, m_emberBlastSpellId, CAST_TRIGGERED);
+        DoCastSpellIfCan(nullptr, m_phoenixEggSpellId, CAST_TRIGGERED);
+        ResetTimer(PHOENIX_REBIRTH, m_creature->GetEntry() == NPC_PHOENIX_TK ? 15000 : 10000);
+    }
+
+    void HandleRebirth()
+    {
+        if (Creature* egg = m_creature->GetMap()->GetCreature(m_eggGuid))
+            egg->ForcedDespawn();
+
+        DoRebirth();
+    }
+
+    void ExecuteAction(uint32 action) override { }
+};
 
 void AddSC_npcs_special()
 {
@@ -2554,7 +2557,7 @@ void AddSC_npcs_special()
 
     pNewScript = new Script;
     pNewScript->Name = "npc_burster_worm";
-    pNewScript->GetAI = &GetAI_npc_burster_worm;
+    pNewScript->GetAI = &GetNewAIInstance<npc_burster_wormAI>;
     pNewScript->RegisterSelf();
 
     pNewScript = new Script;
@@ -2579,7 +2582,7 @@ void AddSC_npcs_special()
 
     pNewScript = new Script;
     pNewScript->Name = "npc_nether_ray";
-    pNewScript->GetAI = &GetAI_npc_nether_ray;
+    pNewScript->GetAI = &GetNewAIInstance<npc_nether_rayAI>;
     pNewScript->RegisterSelf();
 
     pNewScript = new Script;
@@ -2604,6 +2607,6 @@ void AddSC_npcs_special()
 
     pNewScript = new Script;
     pNewScript->Name = "mob_phoenix";
-    pNewScript->GetAI = &GetAI_mob_phoenix_tk;
+    pNewScript->GetAI = &GetNewAIInstance<mob_phoenix_tkAI>;
     pNewScript->RegisterSelf();
 }

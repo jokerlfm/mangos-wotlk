@@ -17,7 +17,7 @@
 /* ScriptData
 SDName: Howling_Fjord
 SD%Complete: ?
-SDComment: Quest support: 11154, 11241, 11343, 11344, 11464, 11476.
+SDComment: Quest support: 11154, 11241, 11343, 11344, 11391, 11464, 11476
 SDCategory: Howling Fjord
 EndScriptData */
 
@@ -30,10 +30,13 @@ npc_king_ymiron
 npc_firecrackers_bunny
 npc_apothecary_hanes
 npc_scalawag_frog
+spell_flying_machine_controls
 EndContentData */
 
 #include "AI/ScriptDevAI/include/sc_common.h"
 #include "AI/ScriptDevAI/base/escort_ai.h"
+#include "Spells/Scripts/SpellScript.h"
+#include "Spells/SpellAuras.h"
 
 enum
 {
@@ -131,8 +134,8 @@ UnitAI* GetAI_npc_ancient_male_vrykul(Creature* pCreature)
 
 bool AreaTrigger_at_ancient_male_vrykul(Player* pPlayer, AreaTriggerEntry const* /*pAt*/)
 {
-    if (pPlayer->isAlive() && pPlayer->GetQuestStatus(QUEST_ECHO_OF_YMIRON) == QUEST_STATUS_INCOMPLETE &&
-            pPlayer->HasAura(SPELL_ECHO_OF_YMIRON))
+    if (pPlayer->IsAlive() && pPlayer->GetQuestStatus(QUEST_ECHO_OF_YMIRON) == QUEST_STATUS_INCOMPLETE &&
+        pPlayer->HasAura(SPELL_ECHO_OF_YMIRON))
     {
         if (Creature* pCreature = GetClosestCreatureWithEntry(pPlayer, NPC_MALE_VRYKUL, 20.0f))
         {
@@ -223,12 +226,12 @@ struct npc_silvermoon_harryAI : public ScriptedAI
             return;
         }
 
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_uiScorchTimer < uiDiff)
         {
-            DoCastSpellIfCan(m_creature->getVictim(), SPELL_SCORCH);
+            DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SCORCH);
             m_uiScorchTimer = 10 * IN_MILLISECONDS;
         }
         else
@@ -380,19 +383,11 @@ struct npc_lich_king_villageAI : public ScriptedAI, private DialogueHelper
                 break;
             case SPELL_WRATH_LICH_KING_FIRST:
                 if (Player* pPlayer = m_creature->GetMap()->GetPlayer(m_pHeldPlayer))
-                {
                     DoCastSpellIfCan(pPlayer, SPELL_WRATH_LICH_KING_FIRST);
-                    // handle spell scriptEffect in the script
-                    m_creature->Suicide();
-                }
                 break;
             case SPELL_WRATH_LICH_KING:
                 if (Player* pPlayer = m_creature->GetMap()->GetPlayer(m_pHeldPlayer))
-                {
                     DoCastSpellIfCan(pPlayer, SPELL_WRATH_LICH_KING);
-                    // handle spell scriptEffect in the script
-                    m_creature->Suicide();
-                }
                 break;
             case NPC_LICH_KING_WYRMSKULL:
                 EnterEvadeMode();
@@ -404,7 +399,7 @@ struct npc_lich_king_villageAI : public ScriptedAI, private DialogueHelper
     {
         if (!m_bEventInProgress && pWho->GetTypeId() == TYPEID_PLAYER)
         {
-            if (pWho->isAlive() && m_creature->IsWithinDistInMap(pWho, 15.0) && pWho->HasAura(SPELL_ECHO_OF_YMIRON))
+            if (pWho->IsAlive() && m_creature->IsWithinDistInMap(pWho, 15.0) && pWho->HasAura(SPELL_ECHO_OF_YMIRON))
             {
                 m_pHeldPlayer = pWho->GetObjectGuid();
                 m_bEventInProgress = true;
@@ -518,8 +513,8 @@ struct npc_king_ymironAI : public ScriptedAI, private DialogueHelper
         if (!m_bEventInit && pWho->GetTypeId() == TYPEID_PLAYER)
         {
             // Get all the citizen around the king for future use
-            if (pWho->isAlive() && m_creature->IsWithinDistInMap(pWho, 60.0) && ((Player*)pWho)->GetQuestStatus(QUEST_ID_ANGUISH_OF_NIFFLEVAR) == QUEST_STATUS_INCOMPLETE
-                    && pWho->HasAura(SPELL_ECHO_OF_YMIRON_NIFFLEVAR))
+            if (pWho->IsAlive() && m_creature->IsWithinDistInMap(pWho, 60.0) && ((Player*)pWho)->GetQuestStatus(QUEST_ID_ANGUISH_OF_NIFFLEVAR) == QUEST_STATUS_INCOMPLETE
+                && pWho->HasAura(SPELL_ECHO_OF_YMIRON_NIFFLEVAR))
             {
                 CreatureList lCrowdList;
                 GetCreatureListWithEntryInGrid(lCrowdList, m_creature, NPC_CITIZEN_OF_NIFFLEVAR_MALE, 60.0f);
@@ -609,7 +604,7 @@ UnitAI* GetAI_npc_king_ymiron(Creature* pCreature)
 
 bool AreaTrigger_at_nifflevar(Player* pPlayer, AreaTriggerEntry const* pAt)
 {
-    if (pPlayer->isAlive() && pPlayer->GetQuestStatus(QUEST_ID_ANGUISH_OF_NIFFLEVAR) == QUEST_STATUS_INCOMPLETE && pPlayer->HasAura(SPELL_ECHO_OF_YMIRON_NIFFLEVAR))
+    if (pPlayer->IsAlive() && pPlayer->GetQuestStatus(QUEST_ID_ANGUISH_OF_NIFFLEVAR) == QUEST_STATUS_INCOMPLETE && pPlayer->HasAura(SPELL_ECHO_OF_YMIRON_NIFFLEVAR))
     {
         if (Creature* pCreature = GetClosestCreatureWithEntry(pPlayer, NPC_KING_YMIRON, 30.0f))
             pCreature->AI()->SendAIEvent(AI_EVENT_CUSTOM_A, pPlayer, pCreature);
@@ -685,7 +680,7 @@ struct npc_firecrackers_bunnyAI : public ScriptedAI
                 do
                 {
                     // check for alive and out of combat only
-                    if ((*batItr)->isAlive() && !(*batItr)->getVictim())
+                    if ((*batItr)->IsAlive() && !(*batItr)->GetVictim())
                         pBat = *batItr;
 
                     ++batItr;
@@ -770,16 +765,16 @@ struct npc_apothecary_hanesAI : public npc_escortAI
     {
         switch (uiPointId)
         {
-            case 2:
+            case 3:
                 DoScriptText(SAY_HANES_FIRE_1, m_creature);
                 break;
-            case 3:
+            case 4:
                 DoScriptText(SAY_HANES_FIRE_2, m_creature);
                 break;
-            case 14:
-            case 20:
+            case 15:
             case 21:
-            case 29:
+            case 22:
+            case 30:
             {
                 m_creature->HandleEmote(EMOTE_ONESHOT_ATTACK1H);
 
@@ -794,25 +789,25 @@ struct npc_apothecary_hanesAI : public npc_escortAI
                 }
                 break;
             }
-            case 15:
+            case 16:
                 DoScriptText(SAY_HANES_SUPPLIES_1, m_creature);
                 break;
-            case 22:
+            case 23:
                 DoScriptText(SAY_HANES_SUPPLIES_2, m_creature);
                 break;
-            case 30:
+            case 31:
                 m_creature->HandleEmote(EMOTE_ONESHOT_LAUGH_NOSHEATHE);
                 break;
-            case 31:
+            case 32:
                 DoScriptText(SAY_HANES_SUPPLIES_COMPLETE, m_creature);
                 break;
-            case 32:
+            case 33:
                 DoScriptText(SAY_HANES_SUPPLIES_ESCAPE, m_creature);
                 break;
-            case 40:
+            case 41:
                 DoScriptText(SAY_HANES_ARRIVE_BASE, m_creature);
                 break;
-            case 44:
+            case 45:
                 if (Player* pPlayer = GetPlayerForEscort())
                     pPlayer->RewardPlayerAndGroupAtEventExplored(QUEST_ID_TRIAL_OF_FIRE, m_creature);
                 break;
@@ -821,7 +816,7 @@ struct npc_apothecary_hanesAI : public npc_escortAI
 
     void UpdateEscortAI(const uint32 uiDiff) override
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_creature->GetHealthPercent() < 75.0f)
@@ -882,6 +877,53 @@ bool NpcSpellClick_npc_scalawag_frog(Player* pPlayer, Creature* pClickedCreature
     return true;
 }
 
+/*######
+## spell_flying_machine_controls
+######*/
+
+struct FlyingMachineControls : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (aura->GetEffIndex() != EFFECT_INDEX_1 || !apply || !aura->GetTarget()->IsUnit())
+            return;
+
+        Unit* caster = aura->GetCaster();
+        if (!caster || !caster->IsPlayer() || static_cast<Player*>(caster)->GetQuestStatus(11391) != QUEST_STATUS_INCOMPLETE)
+            return;
+
+        static_cast<Creature*>(aura->GetTarget())->UpdateSpellSet(1);
+    }
+};
+
+enum
+{
+    SPELL_GRAPPLING_BEAM = 43789,
+};
+
+struct GrapplingHook : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (!spell->GetUnitTarget())
+            return;
+
+        spell->GetCaster()->CastSpell(spell->GetUnitTarget(), SPELL_GRAPPLING_BEAM, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+struct GrapplingBeam : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_1 || !spell->GetUnitTarget())
+            return;
+
+        int32 seatId = 2;
+        spell->GetUnitTarget()->CastCustomSpell(spell->GetCaster(), SPELL_RIDE_VEHICLE_HARDCODED, &seatId, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
 void AddSC_howling_fjord()
 {
     Script* pNewScript = new Script;
@@ -931,4 +973,8 @@ void AddSC_howling_fjord()
     pNewScript->Name = "npc_scalawag_frog";
     pNewScript->pNpcSpellClick = &NpcSpellClick_npc_scalawag_frog;
     pNewScript->RegisterSelf();
+
+    RegisterAuraScript<FlyingMachineControls>("spell_flying_machine_controls");
+    RegisterSpellScript<GrapplingHook>("spell_grappling_hook");
+    RegisterSpellScript<GrapplingBeam>("spell_grappling_beam");
 }

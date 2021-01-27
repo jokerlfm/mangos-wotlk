@@ -543,7 +543,7 @@ enum Opcodes
     CMSG_GM_NUKE                                    = 0x1FA,
     MSG_RANDOM_ROLL                                 = 0x1FB,
     SMSG_ENVIRONMENTALDAMAGELOG                     = 0x1FC,
-    CMSG_CHANGEPLAYER_DIFFICULTY                    = 0x1FD,
+    CMSG_CHANGEPLAYER_DIFFICULTY                    = 0x1FD, // TODO: Implement dynamic difficulty persistent state
     SMSG_RWHOIS                                     = 0x1FE,
     SMSG_LFG_PLAYER_REWARD                          = 0x1FF,
     SMSG_LFG_TELEPORT_DENIED                        = 0x200,
@@ -1185,7 +1185,7 @@ enum Opcodes
     SMSG_SET_PHASE_SHIFT                            = 0x47C,
     SMSG_ALL_ACHIEVEMENT_DATA                       = 0x47D,
     CMSG_FORCE_SAY_CHEAT                            = 0x47E,
-    SMSG_HEALTH_UPDATE                              = 0x47F,
+    SMSG_HEALTH_UPDATE                              = 0x47F, // TODO: Implement
     SMSG_POWER_UPDATE                               = 0x480,
     CMSG_GAMEOBJ_REPORT_USE                         = 0x481,
     SMSG_HIGHEST_THREAT_UPDATE                      = 0x482,
@@ -1275,7 +1275,7 @@ enum Opcodes
     SMSG_USE_EQUIPMENT_SET_RESULT                   = 0x4D6,
     CMSG_FORCE_ANIM                                 = 0x4D7,
     SMSG_FORCE_ANIM                                 = 0x4D8,
-    CMSG_CHAR_FACTION_CHANGE                        = 0x4D9,
+    CMSG_CHAR_FACTION_CHANGE                        = 0x4D9, // TODO: Implement from TC
     SMSG_CHAR_FACTION_CHANGE                        = 0x4DA,
     CMSG_PVP_QUEUE_STATS_REQUEST                    = 0x4DB,
     SMSG_PVP_QUEUE_STATS                            = 0x4DC,
@@ -1306,7 +1306,7 @@ enum Opcodes
     SMSG_SERVERINFO                                 = 0x4F5,
     CMSG_UI_TIME_REQUEST                            = 0x4F6,
     SMSG_UI_TIME                                    = 0x4F7,
-    CMSG_CHAR_RACE_CHANGE                           = 0x4F8,
+    CMSG_CHAR_RACE_CHANGE                           = 0x4F8, // TODO: Implement from TC
     MSG_VIEW_PHASE_SHIFT                            = 0x4F9,
     SMSG_TALENTS_INVOLUNTARILY_RESET                = 0x4FA,
     CMSG_DEBUG_SERVER_GEO                           = 0x4FB,
@@ -1325,7 +1325,7 @@ enum Opcodes
     CMSG_LOW_LEVEL_RAID                             = 0x508,
     CMSG_LOW_LEVEL_RAID_USER                        = 0x509,
     SMSG_CAMERA_SHAKE                               = 0x50A,
-    SMSG_SOCKET_GEMS                                = 0x50B,
+    SMSG_SOCKET_GEMS_RESULT                         = 0x50B,
     CMSG_SET_CHARACTER_MODEL                        = 0x50C,
     SMSG_CONNECT_TO                                 = 0x50D,
     CMSG_CONNECT_TO_FAILED                          = 0x50E,
@@ -1344,26 +1344,28 @@ enum Opcodes
     CMSG_COMMENTATOR_SKIRMISH_QUEUE_COMMAND         = 0x51B,// lua: CommentatorSetSkirmishMatchmakingMode/CommentatorRequestSkirmishQueueData/CommentatorRequestSkirmishMode/CommentatorStartSkirmishMatch
     SMSG_COMMENTATOR_SKIRMISH_QUEUE_RESULT1         = 0x51C,// event EVENT_COMMENTATOR_SKIRMISH_QUEUE_REQUEST, CGCommentator::QueueNode
     SMSG_COMMENTATOR_SKIRMISH_QUEUE_RESULT2         = 0x51D,// event EVENT_COMMENTATOR_SKIRMISH_QUEUE_REQUEST
-    SMSG_COMPRESSED_UNKNOWN_1310                    = 0x51E,// some compressed packet
+    SMSG_MULTIPLE_MOVES                             = 0x51E,// TODO: Implement from TC
     NUM_MSG_TYPES                                   = 0x51F
 };
 
 /// Player state
 enum SessionStatus
 {
-    STATUS_AUTHED = 0,                                      ///< Player authenticated (_player==nullptr, m_playerRecentlyLogout = false or will be reset before handler call, m_GUID have garbage)
-    STATUS_LOGGEDIN,                                        ///< Player in game (_player!=nullptr, m_GUID == _player->GetGUID(), inWorld())
-    STATUS_TRANSFER,                                        ///< Player transferring to another map (_player!=nullptr, m_GUID == _player->GetGUID(), !inWorld())
-    STATUS_LOGGEDIN_OR_RECENTLY_LOGGEDOUT,                  ///< _player!= nullptr or _player==nullptr && m_playerRecentlyLogout, m_GUID store last _player guid)
-    STATUS_NEVER,                                           ///< Opcode not accepted from client (deprecated or server side only)
-    STATUS_UNHANDLED                                        ///< We don' handle this opcode yet
+    STATUS_AUTHED = 0,                                      // Player authenticated (_player==nullptr, m_playerRecentlyLogout = false or will be reset before handler call)
+    STATUS_LOGGEDIN,                                        // Player in game (_player!=nullptr, inWorld())
+    STATUS_TRANSFER,                                        // Player transferring to another map (_player!=nullptr, !inWorld())
+    STATUS_LOGGEDIN_OR_RECENTLY_LOGGEDOUT,                  // _player!= nullptr or _player==nullptr && m_playerRecentlyLogout)
+    STATUS_NEVER,                                           // Opcode not accepted from client (deprecated or server side only)
+    STATUS_UNHANDLED                                        // We don' handle this opcode yet
 };
 
 enum PacketProcessing
 {
     PROCESS_INPLACE = 0,                                    // process packet whenever we receive it - mostly for non-handled or non-implemented packets
     PROCESS_THREADUNSAFE,                                   // packet is not thread-safe - process it in World::UpdateSessions()
-    PROCESS_THREADSAFE                                      // packet is thread-safe - process it in Map::Update()
+    PROCESS_THREADSAFE,                                     // packet is thread-safe - process it in Map::Update()
+    PROCESS_MAP_THREAD,                                     // packet is map thread safe
+    PROCESS_IMMEDIATE,                                      // packet is network thread safe
 };
 
 class WorldPacket;

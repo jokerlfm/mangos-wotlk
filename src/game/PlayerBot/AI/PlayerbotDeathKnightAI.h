@@ -83,12 +83,13 @@ enum DeathKnightSpells
 class PlayerbotDeathKnightAI : PlayerbotClassAI
 {
     public:
-        PlayerbotDeathKnightAI(Player* const master, Player* const bot, PlayerbotAI* const ai);
+        PlayerbotDeathKnightAI(Player& master, Player& bot, PlayerbotAI& ai);
         virtual ~PlayerbotDeathKnightAI();
 
         // all combat actions go here
         CombatManeuverReturns DoFirstCombatManeuver(Unit* pTarget);
         CombatManeuverReturns DoNextCombatManeuver(Unit* pTarget);
+        bool CanPull();
         bool Pull();
 
         // all non combat actions go here, ex buffs, heals, rezzes
@@ -96,9 +97,6 @@ class PlayerbotDeathKnightAI : PlayerbotClassAI
 
         // buff a specific player, usually a real PC who is not in group
         //void BuffPlayer(Player *target);
-
-        // Utility Functions
-        bool CanPull();
 
     private:
         CombatManeuverReturns DoFirstCombatManeuverPVE(Unit* pTarget);

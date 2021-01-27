@@ -54,9 +54,9 @@ enum
     SPELL_PHANTOM_BLAST         = 68982,
     SPELL_PHANTOM_BLAST_H       = 70322,
     SPELL_WELL_OF_SOULS         = 68820,                    // spawns 36536, this one should cast 68854 (triggers normal dmg spell 68863 ) - 68855(visual) - 72630 (visual)
-    SPELL_WELL_OF_SOULS_TRIGGER = 68854,
-    SPELL_WELL_OF_SOULS_VISUAL1 = 68855,
-    SPELL_WELL_OF_SOULS_VISUAL2 = 72630,
+    SPELL_WELL_OF_SOULS_TRIGGER = 68854,                    // damage aura
+    SPELL_WELL_OF_SOULS_VISUAL1 = 68855,                    // visual aura
+    SPELL_WELL_OF_SOULS_VISUAL2 = 72630,                    // use unk
 
     SPELL_MIRRORED_SOUL         = 69048,                    // selecting target, applying aura 69023 to pass on dmg, dmg triggers 69034 with right amount
     SPELL_UNLEASHED_SOULS       = 68939,                    // trigger (68967, select nearby target trigger 68979(summon 36595)), transform, root
@@ -86,7 +86,7 @@ struct boss_devourer_of_soulsAI : public ScriptedAI
 {
     boss_devourer_of_soulsAI(Creature* pCreature) : ScriptedAI(pCreature)
     {
-        m_pInstance = (instance_forge_of_souls*)pCreature->GetInstanceData();
+        m_pInstance = static_cast<instance_forge_of_souls*>(pCreature->GetInstanceData());
         m_bIsRegularMode = pCreature->GetMap()->IsRegularDifficulty();
         Reset();
     }
@@ -101,8 +101,6 @@ struct boss_devourer_of_soulsAI : public ScriptedAI
     uint32 m_uiUnleashTimer;
     uint32 m_uiWailingTimer;
     uint32 m_uiEndPhaseTimer;
-
-    GuidList m_lWellGuids;
 
     void Reset() override
     {
@@ -138,13 +136,6 @@ struct boss_devourer_of_soulsAI : public ScriptedAI
 
         if (m_pInstance)
             m_pInstance->SetData(TYPE_DEVOURER_OF_SOULS, DONE);
-
-        for (GuidList::const_iterator itr = m_lWellGuids.begin(); itr != m_lWellGuids.end(); ++itr)
-        {
-            if (Creature* pWell = m_creature->GetMap()->GetCreature(*itr))
-                pWell->ForcedDespawn();
-        }
-        m_lWellGuids.clear();
     }
 
     void JustReachedHome() override
@@ -155,24 +146,16 @@ struct boss_devourer_of_soulsAI : public ScriptedAI
             // If we previously failed, set such that possible to try again
             m_pInstance->SetData(TYPE_ACHIEV_PHANTOM_BLAST, IN_PROGRESS);
         }
-
-        for (GuidList::const_iterator itr = m_lWellGuids.begin(); itr != m_lWellGuids.end(); ++itr)
-        {
-            if (Creature* pWell = m_creature->GetMap()->GetCreature(*itr))
-                pWell->ForcedDespawn();
-        }
-        m_lWellGuids.clear();
     }
 
     void JustSummoned(Creature* pSummoned) override
     {
         if (pSummoned->GetEntry() == NPC_WELL_OF_SOULS)
         {
-            m_lWellGuids.push_back(pSummoned->GetObjectGuid());
-            pSummoned->CastSpell(pSummoned, SPELL_WELL_OF_SOULS_TRIGGER, TRIGGERED_OLD_TRIGGERED, nullptr, nullptr, m_creature->GetObjectGuid());
-            // Commented as of not stacking auras
-            // pSummoned->CastSpell(pSummoned, SPELL_WELL_OF_SOULS_VISUAL1, TRIGGERED_OLD_TRIGGERED);
-            // pSummoned->CastSpell(pSummoned, SPELL_WELL_OF_SOULS_VISUAL2, TRIGGERED_OLD_TRIGGERED);
+            pSummoned->AI()->SetReactState(REACT_PASSIVE);
+            pSummoned->SetCanEnterCombat(false);
+            pSummoned->CastSpell(pSummoned, SPELL_WELL_OF_SOULS_TRIGGER, TRIGGERED_OLD_TRIGGERED);
+            pSummoned->CastSpell(pSummoned, SPELL_WELL_OF_SOULS_VISUAL1, TRIGGERED_OLD_TRIGGERED);
         }
         else if (pSummoned->GetEntry() == NPC_UNLEASHED_SOUL)
         {
@@ -205,7 +188,7 @@ struct boss_devourer_of_soulsAI : public ScriptedAI
 
     void UpdateAI(const uint32 uiDiff) override
     {
-        if (!m_creature->isInCombat())
+        if (!m_creature->IsInCombat())
             return;
 
         // Ending a phase
@@ -237,7 +220,7 @@ struct boss_devourer_of_soulsAI : public ScriptedAI
         }
 
         // Update Target and do Combat Spells
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         // No additional abilities while unleashing
@@ -315,15 +298,110 @@ struct boss_devourer_of_soulsAI : public ScriptedAI
     }
 };
 
-UnitAI* GetAI_boss_devourer_of_souls(Creature* pCreature)
+/*######
+## spell_wailing_souls - 68871
+######*/
+
+struct spell_wailing_souls : public SpellScript
 {
-    return new boss_devourer_of_soulsAI(pCreature);
-}
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* target = spell->GetUnitTarget();
+        if (!target)
+            return;
+
+        // Left or Right direction?
+        target->CastSpell(target, urand(0, 1) ? 68875 : 68876, TRIGGERED_NONE);
+        // Clear TargetGuid for sweeping
+        target->SetTarget(nullptr);
+    }
+};
+
+/*######
+## spell_mirrored_soul - 69048
+######*/
+
+struct spell_mirrored_soul : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* caster = spell->GetAffectiveCaster();
+        Unit* target = spell->GetUnitTarget();
+        if (!target || !caster)
+            return;
+
+        // This is extremely strange!
+        // The spell should send MSG_CHANNEL_START, SMSG_SPELL_START
+        // However it has cast time 2s, but should send SMSG_SPELL_GO instantly.
+        caster->CastSpell(target, 69051, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+/*######
+## spell_mirrored_soul_proc - 69051
+######*/
+
+struct spell_mirrored_soul_proc : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* caster = spell->GetAffectiveCaster();
+        Unit* target = spell->GetUnitTarget();
+        if (!target || !caster)
+            return;
+
+        // Actually this spell should be sent with SMSG_SPELL_START
+        target->CastSpell(caster, 69023, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+/*######
+## spell_wailing_souls_aura - 68875, 68876
+######*/
+
+struct spell_wailing_souls_aura : public AuraScript
+{
+    void OnPeriodicDummy(Aura* aura) const override
+    {
+        Unit* target = aura->GetTarget();
+        Unit* caster = aura->GetCaster();
+        if (!caster || !target)
+            return;
+
+        // Sweep around
+        float newAngle = target->GetOrientation();
+        if (aura->GetId() == 68875)
+            newAngle += 0.09f;
+        else
+            newAngle -= 0.09f;
+
+        newAngle = MapManager::NormalizeOrientation(newAngle);
+
+        target->SetFacingTo(newAngle);
+
+        // Should actually be SMSG_SPELL_START, too
+        target->CastSpell(target, 68873, TRIGGERED_OLD_TRIGGERED);
+    }
+};
 
 void AddSC_boss_devourer_of_souls()
 {
     Script* pNewScript = new Script;
     pNewScript->Name = "boss_devourer_of_souls";
-    pNewScript->GetAI = &GetAI_boss_devourer_of_souls;
+    pNewScript->GetAI = &GetNewAIInstance<boss_devourer_of_soulsAI>;
     pNewScript->RegisterSelf();
+
+    RegisterSpellScript<spell_wailing_souls>("spell_wailing_souls");
+    RegisterSpellScript<spell_mirrored_soul>("spell_mirrored_soul");
+    RegisterSpellScript<spell_mirrored_soul_proc>("spell_mirrored_soul_proc");
+    RegisterAuraScript<spell_wailing_souls_aura>("spell_wailing_souls_aura");
 }

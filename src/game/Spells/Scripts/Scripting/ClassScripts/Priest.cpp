@@ -19,48 +19,32 @@
 #include "Spells/Scripts/SpellScript.h"
 #include "Spells/SpellAuras.h"
 
-enum
+struct SpiritOfRedemptionHeal : public SpellScript
 {
-    SPELL_PLAYER_CONSUME_MAGIC = 32676,
-};
-
-struct ConsumeMagicSpellScript : public SpellScript
-{
-    SpellCastResult OnCheckCast(Spell* spell, bool strict) const override
-    {
-        if (strict)
-        {
-            auto holderMap = spell->GetCaster()->GetSpellAuraHolderMap();
-            for (auto holderPair : holderMap)
-            {
-                if (holderPair.second->GetSpellProto())
-                {
-                    if (holderPair.second->GetSpellProto()->SpellFamilyName == SPELLFAMILY_PRIEST)
-                    {
-                        if (holderPair.second->IsPositive() && !holderPair.second->IsPassive())
-                        {
-                            spell->SetScriptValue(holderPair.second->GetId());
-                            return SPELL_CAST_OK;
-                        }
-                    }
-                }
-            }
-
-            return SPELL_FAILED_NOTHING_TO_DISPEL;
-        }
-        else
-            return SPELL_CAST_OK;
-    }
-
     void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
     {
-        spell->GetCaster()->RemoveAurasDueToSpell(spell->GetScriptValue());
+        if (effIdx == EFFECT_INDEX_0)
+            spell->SetDamage(spell->GetCaster()->GetMaxHealth());
+    }
+};
+
+struct PowerInfusion : public SpellScript
+{
+    SpellCastResult OnCheckCast(Spell* spell, bool/* strict*/) const override
+    {
+        // Patch 1.10.2 (2006-05-02):
+        // Power Infusion: This aura will no longer stack with Arcane Power. If you attempt to cast it on someone with Arcane Power, the spell will fail.
+        if (Unit* target = spell->m_targets.getUnitTarget())
+            if (target->GetAuraCount(12042))
+                return SPELL_FAILED_AURA_BOUNCED;
+
+        return SPELL_CAST_OK;
     }
 };
 
 struct ShadowWordDeath : public SpellScript
 {
-    void OnHit(Spell* spell) const override
+    void OnHit(Spell* spell, SpellMissInfo /*missInfo*/) const override
     {
         int32 swdDamage = spell->GetTotalTargetDamage();
         spell->GetCaster()->CastCustomSpell(nullptr, 32409, &swdDamage, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
@@ -69,6 +53,7 @@ struct ShadowWordDeath : public SpellScript
 
 void LoadPriestScripts()
 {
-    RegisterSpellScript<ConsumeMagicSpellScript>("spell_consume_magic");
+    RegisterSpellScript<PowerInfusion>("spell_power_infusion");
     RegisterSpellScript<ShadowWordDeath>("spell_shadow_word_death");
+    RegisterSpellScript<SpiritOfRedemptionHeal>("spell_spirit_of_redemption_heal");
 }

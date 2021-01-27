@@ -45,6 +45,10 @@ enum
     NPC_VALKYR_STALKER_DARK     = 34704,                    // summons 34628 using 66107
     NPC_VALKYR_STALKER_LIGHT    = 34720,                    // summons 34630 using 66078
 
+    NPC_NERUBIAN_BURROW         = 34862,                    // visual target for Nerubian Borrower; has aura 66324 in c_t_a
+    NPC_NERUBIAN_BURROWER       = 34607,
+    NPC_SCARAB                  = 34605,
+
     NPC_GORMOK                  = 34796,
     NPC_ACIDMAW                 = 35144,
     NPC_DREADSCALE              = 34799,
@@ -285,8 +289,9 @@ class instance_trial_of_the_crusader : public ScriptedInstance, private Dialogue
 
         void OnCreatureCreate(Creature* pCreature) override;
         void OnObjectCreate(GameObject* pGo) override;
-
+        void OnCreatureRespawn(Creature* pCreature) override;
         void OnCreatureDeath(Creature* pCreature) override;
+        void OnCreatureEvade(Creature* pCreature) override;
 
         void OnPlayerEnter(Player* pPlayer) override;
         void OnPlayerDeath(Player* pPlayer) override;

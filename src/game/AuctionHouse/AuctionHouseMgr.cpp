@@ -110,7 +110,7 @@ void AuctionHouseMgr::SendAuctionWonMail(AuctionEntry* auction)
             if (bidder_security > SEC_PLAYER)               // not do redundant DB requests
             {
                 if (!sObjectMgr.GetPlayerNameByGUID(bidder_guid, bidder_name))
-                    bidder_name = sObjectMgr.GetMangosStringForDBCLocale(LANG_UNKNOWN);
+                    bidder_name = sObjectMgr.GetMangosStringForDbcLocale(LANG_UNKNOWN);
             }
         }
 
@@ -120,7 +120,7 @@ void AuctionHouseMgr::SendAuctionWonMail(AuctionEntry* auction)
             if (auction_owner)
                 owner_name = auction_owner->GetName();
             else if (ownerGuid && !sObjectMgr.GetPlayerNameByGUID(ownerGuid, owner_name))
-                owner_name = sObjectMgr.GetMangosStringForDBCLocale(LANG_UNKNOWN);
+                owner_name = sObjectMgr.GetMangosStringForDbcLocale(LANG_UNKNOWN);
 
             uint32 owner_accid = sObjectMgr.GetPlayerAccountIdByGUID(ownerGuid);
 
@@ -263,8 +263,8 @@ void AuctionHouseMgr::SendAuctionExpiredMail(AuctionEntry* auction)
 
 void AuctionHouseMgr::LoadAuctionItems()
 {
-    // data needs to be at first place for Item::LoadFromDB 0   1    2        3
-    QueryResult* result = CharacterDatabase.Query("SELECT data,text,itemguid,item_template FROM auction JOIN item_instance ON itemguid = guid");
+    // data needs to be at first place for Item::LoadFromDB 0        1            2                3      4         5        6      7             8                 9           10          11    12        13
+    QueryResult* result = CharacterDatabase.Query("SELECT itemEntry, creatorGuid, giftCreatorGuid, count, duration, charges, flags, enchantments, randomPropertyId, durability, playedTime, text, itemguid, item_template FROM auction JOIN item_instance ON itemguid = guid");
 
     if (!result)
     {
@@ -283,8 +283,8 @@ void AuctionHouseMgr::LoadAuctionItems()
         bar.step();
 
         Field* fields = result->Fetch();
-        uint32 item_guid        = fields[2].GetUInt32();
-        uint32 item_template    = fields[3].GetUInt32();
+        uint32 item_guid        = fields[12].GetUInt32();
+        uint32 item_template    = fields[13].GetUInt32();
 
         ItemPrototype const* proto = ObjectMgr::GetItemPrototype(item_template);
 
@@ -372,7 +372,7 @@ void AuctionHouseMgr::LoadAuctions()
             {
                 std::string plName;
                 if (!sObjectMgr.GetPlayerNameByGUID(ObjectGuid(HIGHGUID_PLAYER, auction->owner), plName))
-                    plName = sObjectMgr.GetMangosStringForDBCLocale(LANG_UNKNOWN);
+                    plName = sObjectMgr.GetMangosStringForDbcLocale(LANG_UNKNOWN);
 
                 Utf8toWStr(plName, plWName);
             }
@@ -603,7 +603,7 @@ void AuctionHouseObject::Update()
     }
 }
 
-void AuctionHouseObject::BuildListBidderItems(WorldPacket& data, Player* player, uint32& count, uint32& totalcount)
+void AuctionHouseObject::BuildListBidderItems(WorldPacket& data, Player* player, uint32 listfrom, uint32& count, uint32& totalcount)
 {
     for (AuctionEntryMap::const_iterator itr = AuctionsMap.begin(); itr != AuctionsMap.end(); ++itr)
     {
@@ -612,14 +612,18 @@ void AuctionHouseObject::BuildListBidderItems(WorldPacket& data, Player* player,
             continue;
         if (Aentry->bidder == player->GetGUIDLow())
         {
-            if (itr->second->BuildAuctionInfo(data))
+            if (count < MAX_AUCTION_ITEMS_CLIENT_UI_PAGE && totalcount >= listfrom)
+            {
+                if (!Aentry->BuildAuctionInfo(data))
+                    continue;
                 ++count;
+            }
             ++totalcount;
         }
     }
 }
 
-void AuctionHouseObject::BuildListOwnerItems(WorldPacket& data, Player* player, uint32& count, uint32& totalcount)
+void AuctionHouseObject::BuildListOwnerItems(WorldPacket& data, Player* player, uint32 listfrom, uint32& count, uint32& totalcount)
 {
     for (AuctionEntryMap::const_iterator itr = AuctionsMap.begin(); itr != AuctionsMap.end(); ++itr)
     {
@@ -628,8 +632,12 @@ void AuctionHouseObject::BuildListOwnerItems(WorldPacket& data, Player* player, 
             continue;
         if (Aentry->owner == player->GetGUIDLow())
         {
-            if (Aentry->BuildAuctionInfo(data))
+            if (count < MAX_AUCTION_ITEMS_CLIENT_UI_PAGE && totalcount >= listfrom)
+            {
+                if (!Aentry->BuildAuctionInfo(data))
+                    continue;
                 ++count;
+            }
             ++totalcount;
         }
     }
@@ -853,7 +861,7 @@ void WorldSession::BuildListAuctionItems(std::vector<AuctionEntry*> const& aucti
             if (!wsearchedname.empty() && !Utf8FitTo(name, wsearchedname))
                 continue;
 
-            if (count < 50 && totalcount >= listfrom)
+            if (count < MAX_AUCTION_ITEMS_CLIENT_UI_PAGE && totalcount >= listfrom)
             {
                 ++count;
                 Aentry->BuildAuctionInfo(data);
@@ -1034,7 +1042,7 @@ bool AuctionEntry::UpdateBid(uint32 newbid, Player* newbidder /*=nullptr*/)
 
     if ((newbid < buyout) || (buyout == 0))                 // bid
     {
-        if (auction_owner)
+        if (auction_owner && newbidder) // don't send notification unless newbidder is set (AHBot bidding), otherwise player will be told auction was sold when it was just a bid
             auction_owner->GetSession()->SendAuctionOwnerNotification(this);
 
         // after this update we should save player's money ...

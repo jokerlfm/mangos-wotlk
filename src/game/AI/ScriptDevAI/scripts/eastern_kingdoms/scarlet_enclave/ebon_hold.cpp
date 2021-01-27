@@ -17,21 +17,27 @@
 /* ScriptData
 SDName: Ebon_Hold
 SD%Complete: 95
-SDComment: Quest support: 12641, 12687, 12698, 12733, 12739(and 12742 to 12750), 12754, 12801, 12848
+SDComment: Quest support: 12619, 12641, 12687, 12698, 12733, 12739(and 12742 to 12750), 12754, 12801
 SDCategory: Ebon Hold
 EndScriptData */
 
 /* ContentData
 npc_a_special_surprise
 npc_death_knight_initiate
-npc_unworthy_initiate_anchor
-npc_unworthy_initiate
-go_acherus_soul_prison
 npc_eye_of_acherus
 npc_scarlet_ghoul
 npc_highlord_darion_mograine
 npc_fellow_death_knight
 npc_scarlet_courier
+spell_emblazon_runeblade
+spell_death_knight_initiate_visual
+spell_siphon_of_acherus
+spell_recall_eye_of_acherus
+spell_summon_ghouls_scarlet_crusade
+go_plague_cauldron
+spell_devour_humanoid
+spell_portal_to_capital_city
+spell_acherus_deathcharger
 EndContentData */
 
 #include "AI/ScriptDevAI/include/sc_common.h"
@@ -39,6 +45,8 @@ EndContentData */
 #include "world_map_ebon_hold.h"
 #include "AI/ScriptDevAI/base/pet_ai.h"
 #include "Entities/TemporarySpawn.h"
+#include "Spells/Scripts/SpellScript.h"
+#include "Spells/SpellAuras.h"
 
 /*######
 ## npc_a_special_surprise
@@ -49,6 +57,7 @@ enum SpecialSurprise
     SAY_EXEC_START_1            = -1609025,                 // speech for all
     SAY_EXEC_START_2            = -1609026,
     SAY_EXEC_START_3            = -1609027,
+
     SAY_EXEC_PROG_1             = -1609028,
     SAY_EXEC_PROG_2             = -1609029,
     SAY_EXEC_PROG_3             = -1609030,
@@ -56,14 +65,17 @@ enum SpecialSurprise
     SAY_EXEC_PROG_5             = -1609032,
     SAY_EXEC_PROG_6             = -1609033,
     SAY_EXEC_PROG_7             = -1609034,
+
     SAY_EXEC_NAME_1             = -1609035,
     SAY_EXEC_NAME_2             = -1609036,
+
     SAY_EXEC_RECOG_1            = -1609037,
     SAY_EXEC_RECOG_2            = -1609038,
     SAY_EXEC_RECOG_3            = -1609039,
     SAY_EXEC_RECOG_4            = -1609040,
     SAY_EXEC_RECOG_5            = -1609041,
     SAY_EXEC_RECOG_6            = -1609042,
+
     SAY_EXEC_NOREM_1            = -1609043,
     SAY_EXEC_NOREM_2            = -1609044,
     SAY_EXEC_NOREM_3            = -1609045,
@@ -73,6 +85,8 @@ enum SpecialSurprise
     SAY_EXEC_NOREM_7            = -1609049,
     SAY_EXEC_NOREM_8            = -1609050,
     SAY_EXEC_NOREM_9            = -1609051,
+    SAY_EXEC_NOREM_10           = -1609015,
+
     SAY_EXEC_THINK_1            = -1609052,
     SAY_EXEC_THINK_2            = -1609053,
     SAY_EXEC_THINK_3            = -1609054,
@@ -83,11 +97,14 @@ enum SpecialSurprise
     SAY_EXEC_THINK_8            = -1609059,
     SAY_EXEC_THINK_9            = -1609060,
     SAY_EXEC_THINK_10           = -1609061,
+
     SAY_EXEC_LISTEN_1           = -1609062,
     SAY_EXEC_LISTEN_2           = -1609063,
     SAY_EXEC_LISTEN_3           = -1609064,
     SAY_EXEC_LISTEN_4           = -1609065,
+
     SAY_PLAGUEFIST              = -1609066,
+
     SAY_EXEC_TIME_1             = -1609067,
     SAY_EXEC_TIME_2             = -1609068,
     SAY_EXEC_TIME_3             = -1609069,
@@ -98,402 +115,367 @@ enum SpecialSurprise
     SAY_EXEC_TIME_8             = -1609074,
     SAY_EXEC_TIME_9             = -1609075,
     SAY_EXEC_TIME_10            = -1609076,
+
     SAY_EXEC_WAITING            = -1609077,
     EMOTE_DIES                  = -1609078,
 
-    NPC_PLAGUEFIST              = 29053
+    // creature entries
+    NPC_PRISONER_TAUREN         = 29032,
+    NPC_PRISONER_HUMAN          = 29061,
+    NPC_PRISONER_NIGHT_ELF      = 29065,
+    NPC_PRISONER_DWARF          = 29067,
+    NPC_PRISONER_GNOME          = 29068,
+    NPC_PRISONER_DRAENEI        = 29070,
+    NPC_PRISONER_UNDEAD         = 29071,
+    NPC_PRISONER_ORC            = 29072,
+    NPC_PRISONER_TROLL          = 29073,
+    NPC_PRISONER_BLOOD_ELF      = 29074,
+
+    NPC_PLAGUEFIST              = 29053,
+
+    // event data
+    DATA_NPC_STAND              = 1,
+    DATA_NPC_TALK               = 2,
+    DATA_NPC_EMOTE              = 3,
+    DATA_NPC_EXCLAMATION        = 4,
+    DATA_NPC_CRY                = 5,
+    DATA_NPC_EXECUTION          = 6,
 };
 
-struct npc_a_special_surpriseAI : public ScriptedAI
+static const DialogueEntry aSurpriseDialogue[] =
 {
-    npc_a_special_surpriseAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
+    // Human
+    {NPC_PRISONER_TAUREN,   0,                      2000},
+    {SAY_EXEC_START_1,      NPC_PRISONER_TAUREN,    4000},
+    {DATA_NPC_STAND,        0,                      1000},
+    {SAY_EXEC_PROG_1,       NPC_PRISONER_TAUREN,    2000},
+    {SAY_EXEC_NAME_1,       NPC_PRISONER_TAUREN,    4000},
+    {SAY_EXEC_RECOG_5,      NPC_PRISONER_TAUREN,    6000},
+    {SAY_EXEC_NOREM_8,      NPC_PRISONER_TAUREN,    5000},
+    {DATA_NPC_TALK,         0,                      3000},
+    {SAY_EXEC_THINK_9,      NPC_PRISONER_TAUREN,    5000},
+    {DATA_NPC_EMOTE,        0,                      5000},
+    {SAY_EXEC_LISTEN_1,     NPC_PRISONER_TAUREN,    5000},
+    {DATA_NPC_TALK,         0,                      5000},
+    {DATA_NPC_EXCLAMATION,  0,                      4000},
+    {SAY_PLAGUEFIST,        NPC_PLAGUEFIST,         4000},
+    {SAY_EXEC_TIME_9,       NPC_PRISONER_TAUREN,    3000},
+    {DATA_NPC_CRY,          0,                      3000},
+    {DATA_NPC_EXECUTION,    0,                      1000},
+    {SAY_EXEC_WAITING,      NPC_PRISONER_TAUREN,    0},
 
-    uint32 m_uiExecuteSpeech_Timer;
-    uint32 m_uiExecuteSpeech_Counter;
+    // Human
+    {NPC_PRISONER_HUMAN,    0,                      2000},
+    {SAY_EXEC_START_1,      NPC_PRISONER_HUMAN,     4000},
+    {DATA_NPC_STAND,        0,                      1000},
+    {SAY_EXEC_PROG_5,       NPC_PRISONER_HUMAN,     2000},
+    {SAY_EXEC_NAME_1,       NPC_PRISONER_HUMAN,     4000},
+    {SAY_EXEC_RECOG_1,      NPC_PRISONER_HUMAN,     6000},
+    {SAY_EXEC_NOREM_5,      NPC_PRISONER_HUMAN,     5000},
+    {DATA_NPC_TALK,         0,                      3000},
+    {SAY_EXEC_THINK_7,      NPC_PRISONER_HUMAN,     5000},
+    {DATA_NPC_EMOTE,        0,                      5000},
+    {SAY_EXEC_LISTEN_1,     NPC_PRISONER_HUMAN,     5000},
+    {DATA_NPC_TALK,         0,                      5000},
+    {DATA_NPC_EXCLAMATION,  0,                      4000},
+    {SAY_PLAGUEFIST,        NPC_PLAGUEFIST,         4000},
+    {SAY_EXEC_TIME_6,       NPC_PRISONER_HUMAN,     3000},
+    {DATA_NPC_CRY,          0,                      3000},
+    {DATA_NPC_EXECUTION,    0,                      1000},
+    {SAY_EXEC_WAITING,      NPC_PRISONER_HUMAN,     0},
+
+    // Night Elf
+    {NPC_PRISONER_NIGHT_ELF, 0,                     2000},
+    {SAY_EXEC_START_1,      NPC_PRISONER_NIGHT_ELF, 4000},
+    {DATA_NPC_STAND,        0,                      1000},
+    {SAY_EXEC_PROG_1,       NPC_PRISONER_NIGHT_ELF, 2000},
+    {SAY_EXEC_NAME_1,       NPC_PRISONER_NIGHT_ELF, 4000},
+    {SAY_EXEC_RECOG_1,      NPC_PRISONER_NIGHT_ELF, 6000},
+    {SAY_EXEC_NOREM_6,      NPC_PRISONER_NIGHT_ELF, 5000},
+    {DATA_NPC_TALK,         0,                      3000},
+    {SAY_EXEC_THINK_2,      NPC_PRISONER_NIGHT_ELF, 5000},
+    {DATA_NPC_EMOTE,        0,                      5000},
+    {SAY_EXEC_LISTEN_1,     NPC_PRISONER_NIGHT_ELF, 5000},
+    {DATA_NPC_TALK,         0,                      5000},
+    {DATA_NPC_EXCLAMATION,  0,                      4000},
+    {SAY_PLAGUEFIST,        NPC_PLAGUEFIST,         4000},
+    {SAY_EXEC_TIME_7,       NPC_PRISONER_NIGHT_ELF, 3000},
+    {DATA_NPC_CRY,          0,                      3000},
+    {DATA_NPC_EXECUTION,    0,                      1000},
+    {SAY_EXEC_WAITING,      NPC_PRISONER_NIGHT_ELF, 0},
+
+    // Dwarf
+    {NPC_PRISONER_DWARF,    0,                      2000},
+    {SAY_EXEC_START_2,      NPC_PRISONER_DWARF,     4000},
+    {DATA_NPC_STAND,        0,                      1000},
+    {SAY_EXEC_PROG_2,       NPC_PRISONER_DWARF,     2000},
+    {SAY_EXEC_NAME_1,       NPC_PRISONER_DWARF,     4000},
+    {SAY_EXEC_RECOG_3,      NPC_PRISONER_DWARF,     6000},
+    {SAY_EXEC_NOREM_2,      NPC_PRISONER_DWARF,     5000},
+    {DATA_NPC_TALK,         0,                      3000},
+    {SAY_EXEC_THINK_5,      NPC_PRISONER_DWARF,     5000},
+    {DATA_NPC_EMOTE,        0,                      5000},
+    {SAY_EXEC_LISTEN_2,     NPC_PRISONER_DWARF,     5000},
+    {DATA_NPC_TALK,         0,                      5000},
+    {DATA_NPC_EXCLAMATION,  0,                      4000},
+    {SAY_PLAGUEFIST,        NPC_PLAGUEFIST,         4000},
+    {SAY_EXEC_TIME_3,       NPC_PRISONER_DWARF,     3000},
+    {DATA_NPC_CRY,          0,                      3000},
+    {DATA_NPC_EXECUTION,    0,                      1000},
+    {SAY_EXEC_WAITING,      NPC_PRISONER_DWARF,     0},
+
+    // Gnome
+    {NPC_PRISONER_GNOME,    0,                      2000},
+    {SAY_EXEC_START_1,      NPC_PRISONER_GNOME,     4000},
+    {DATA_NPC_STAND,        0,                      1000},
+    {SAY_EXEC_PROG_4,       NPC_PRISONER_GNOME,     2000},
+    {SAY_EXEC_NAME_1,       NPC_PRISONER_GNOME,     4000},
+    {SAY_EXEC_RECOG_1,      NPC_PRISONER_GNOME,     6000},
+    {SAY_EXEC_NOREM_4,      NPC_PRISONER_GNOME,     5000},
+    {DATA_NPC_TALK,         0,                      3000},
+    {SAY_EXEC_THINK_6,      NPC_PRISONER_GNOME,     5000},
+    {DATA_NPC_EMOTE,        0,                      5000},
+    {SAY_EXEC_LISTEN_1,     NPC_PRISONER_GNOME,     5000},
+    {DATA_NPC_TALK,         0,                      5000},
+    {DATA_NPC_EXCLAMATION,  0,                      4000},
+    {SAY_PLAGUEFIST,        NPC_PLAGUEFIST,         4000},
+    {SAY_EXEC_TIME_5,       NPC_PRISONER_GNOME,     3000},
+    {DATA_NPC_CRY,          0,                      3000},
+    {DATA_NPC_EXECUTION,    0,                      1000},
+    {SAY_EXEC_WAITING,      NPC_PRISONER_GNOME,     0},
+
+    // Draenei
+    {NPC_PRISONER_DRAENEI,  0,                      2000},
+    {SAY_EXEC_START_1,      NPC_PRISONER_DRAENEI,   4000},
+    {DATA_NPC_STAND,        0,                      1000},
+    {SAY_EXEC_PROG_1,       NPC_PRISONER_DRAENEI,   2000},
+    {SAY_EXEC_NAME_1,       NPC_PRISONER_DRAENEI,   4000},
+    {SAY_EXEC_RECOG_2,      NPC_PRISONER_DRAENEI,   6000},
+    {SAY_EXEC_NOREM_1,      NPC_PRISONER_DRAENEI,   5000},
+    {DATA_NPC_TALK,         0,                      3000},
+    {SAY_EXEC_THINK_4,      NPC_PRISONER_DRAENEI,   5000},
+    {DATA_NPC_EMOTE,        0,                      5000},
+    {SAY_EXEC_LISTEN_1,     NPC_PRISONER_DRAENEI,   5000},
+    {DATA_NPC_TALK,         0,                      5000},
+    {DATA_NPC_EXCLAMATION,  0,                      4000},
+    {SAY_PLAGUEFIST,        NPC_PLAGUEFIST,         4000},
+    {SAY_EXEC_TIME_2,       NPC_PRISONER_DRAENEI,   3000},
+    {DATA_NPC_CRY,          0,                      3000},
+    {DATA_NPC_EXECUTION,    0,                      1000},
+    {SAY_EXEC_WAITING,      NPC_PRISONER_DRAENEI,   0},
+
+    // Undead
+    {NPC_PRISONER_UNDEAD,   0,                      2000},
+    {SAY_EXEC_START_1,      NPC_PRISONER_UNDEAD,    4000},
+    {DATA_NPC_STAND,        0,                      1000},
+    {SAY_EXEC_PROG_3,       NPC_PRISONER_UNDEAD,    2000},
+    {SAY_EXEC_NAME_1,       NPC_PRISONER_UNDEAD,    4000},
+    {SAY_EXEC_RECOG_4,      NPC_PRISONER_UNDEAD,    6000},
+    {SAY_EXEC_NOREM_3,      NPC_PRISONER_UNDEAD,    5000},
+    {DATA_NPC_TALK,         0,                      3000},
+    {SAY_EXEC_THINK_1,      NPC_PRISONER_UNDEAD,    5000},
+    {DATA_NPC_EMOTE,        0,                      5000},
+    {SAY_EXEC_LISTEN_3,     NPC_PRISONER_UNDEAD,    5000},
+    {DATA_NPC_TALK,         0,                      5000},
+    {DATA_NPC_EXCLAMATION,  0,                      4000},
+    {SAY_PLAGUEFIST,        NPC_PLAGUEFIST,         4000},
+    {SAY_EXEC_TIME_4,       NPC_PRISONER_UNDEAD,    3000},
+    {DATA_NPC_CRY,          0,                      3000},
+    {DATA_NPC_EXECUTION,    0,                      1000},
+    {SAY_EXEC_WAITING,      NPC_PRISONER_UNDEAD,    0},
+
+    // Orc
+    {NPC_PRISONER_ORC,      0,                      2000},
+    {SAY_EXEC_START_1,      NPC_PRISONER_ORC,       4000},
+    {DATA_NPC_STAND,        0,                      1000},
+    {SAY_EXEC_PROG_6,       NPC_PRISONER_ORC,       2000},
+    {SAY_EXEC_NAME_1,       NPC_PRISONER_ORC,       4000},
+    {SAY_EXEC_RECOG_1,      NPC_PRISONER_ORC,       6000},
+    {SAY_EXEC_NOREM_7,      NPC_PRISONER_ORC,       5000},
+    {DATA_NPC_TALK,         0,                      3000},
+    {SAY_EXEC_THINK_8,      NPC_PRISONER_ORC,       5000},
+    {DATA_NPC_EMOTE,        0,                      5000},
+    {SAY_EXEC_LISTEN_1,     NPC_PRISONER_ORC,       5000},
+    {DATA_NPC_TALK,         0,                      5000},
+    {DATA_NPC_EXCLAMATION,  0,                      4000},
+    {SAY_PLAGUEFIST,        NPC_PLAGUEFIST,         4000},
+    {SAY_EXEC_TIME_8,       NPC_PRISONER_ORC,       3000},
+    {DATA_NPC_CRY,          0,                      3000},
+    {DATA_NPC_EXECUTION,    0,                      1000},
+    {SAY_EXEC_WAITING,      NPC_PRISONER_ORC,       0},
+
+    // Troll
+    {NPC_PRISONER_TROLL,    0,                      2000},
+    {SAY_EXEC_START_3,      NPC_PRISONER_TROLL,     4000},
+    {DATA_NPC_STAND,        0,                      1000},
+    {SAY_EXEC_PROG_7,       NPC_PRISONER_TROLL,     2000},
+    {SAY_EXEC_NAME_2,       NPC_PRISONER_TROLL,     4000},
+    {SAY_EXEC_RECOG_6,      NPC_PRISONER_TROLL,     6000},
+    {SAY_EXEC_NOREM_9,      NPC_PRISONER_TROLL,     5000},
+    {DATA_NPC_TALK,         0,                      3000},
+    {SAY_EXEC_THINK_10,     NPC_PRISONER_TROLL,     5000},
+    {DATA_NPC_EMOTE,        0,                      5000},
+    {SAY_EXEC_LISTEN_4,     NPC_PRISONER_TROLL,     5000},
+    {DATA_NPC_TALK,         0,                      5000},
+    {DATA_NPC_EXCLAMATION,  0,                      4000},
+    {SAY_PLAGUEFIST,        NPC_PLAGUEFIST,         4000},
+    {SAY_EXEC_TIME_10,      NPC_PRISONER_TROLL,     3000},
+    {DATA_NPC_CRY,          0,                      3000},
+    {DATA_NPC_EXECUTION,    0,                      1000},
+    {SAY_EXEC_WAITING,      NPC_PRISONER_TROLL,     0},
+
+    // Blood Elf
+    {NPC_PRISONER_BLOOD_ELF, 0,                     2000},
+    {SAY_EXEC_START_1,      NPC_PRISONER_BLOOD_ELF, 4000},
+    {DATA_NPC_STAND,        0,                      1000},
+    {SAY_EXEC_PROG_1,       NPC_PRISONER_BLOOD_ELF, 2000},
+    {SAY_EXEC_NAME_1,       NPC_PRISONER_BLOOD_ELF, 4000},
+    {SAY_EXEC_RECOG_1,      NPC_PRISONER_BLOOD_ELF, 6000},
+    {SAY_EXEC_NOREM_10,     NPC_PRISONER_BLOOD_ELF, 5000},
+    {DATA_NPC_TALK,         0,                      3000},
+    {SAY_EXEC_THINK_3,      NPC_PRISONER_BLOOD_ELF, 5000},
+    {DATA_NPC_EMOTE,        0,                      5000},
+    {SAY_EXEC_LISTEN_1,     NPC_PRISONER_BLOOD_ELF, 5000},
+    {DATA_NPC_TALK,         0,                      5000},
+    {DATA_NPC_EXCLAMATION,  0,                      4000},
+    {SAY_PLAGUEFIST,        NPC_PLAGUEFIST,         4000},
+    {SAY_EXEC_TIME_1,       NPC_PRISONER_BLOOD_ELF, 3000},
+    {DATA_NPC_CRY,          0,                      3000},
+    {DATA_NPC_EXECUTION,    0,                      1000},
+    {SAY_EXEC_WAITING,      NPC_PRISONER_BLOOD_ELF, 0},
+
+    {0, 0, 0},
+};
+
+struct npc_a_special_surpriseAI : public ScriptedAI, private DialogueHelper
+{
+    npc_a_special_surpriseAI(Creature* pCreature) : ScriptedAI(pCreature),
+        DialogueHelper(aSurpriseDialogue)
+    {
+        SetReactState(REACT_PASSIVE);
+        Reset();
+    }
+
+    uint32 m_uiCryTimer;
     ObjectGuid m_playerGuid;
 
     void Reset() override
     {
-        m_uiExecuteSpeech_Timer = 0;
-        m_uiExecuteSpeech_Counter = 0;
+        m_uiCryTimer = urand(15000, 30000);
         m_playerGuid.Clear();
     }
 
+    // Helper function to check if quest is available
     bool MeetQuestCondition(Player* pPlayer) const
     {
         switch (m_creature->GetEntry())
         {
-            case 29061:                                     // Ellen Stanbridge
-                if (pPlayer->GetQuestStatus(12742) == QUEST_STATUS_INCOMPLETE)
-                    return true;
-                break;
-            case 29072:                                     // Kug Ironjaw
-                if (pPlayer->GetQuestStatus(12748) == QUEST_STATUS_INCOMPLETE)
-                    return true;
-                break;
-            case 29067:                                     // Donovan Pulfrost
-                if (pPlayer->GetQuestStatus(12744) == QUEST_STATUS_INCOMPLETE)
-                    return true;
-                break;
-            case 29065:                                     // Yazmina Oakenthorn
-                if (pPlayer->GetQuestStatus(12743) == QUEST_STATUS_INCOMPLETE)
-                    return true;
-                break;
-            case 29071:                                     // Antoine Brack
-                if (pPlayer->GetQuestStatus(12750) == QUEST_STATUS_INCOMPLETE)
-                    return true;
-                break;
-            case 29032:                                     // Malar Bravehorn
-                if (pPlayer->GetQuestStatus(12739) == QUEST_STATUS_INCOMPLETE)
-                    return true;
-                break;
-            case 29068:                                     // Goby Blastenheimer
-                if (pPlayer->GetQuestStatus(12745) == QUEST_STATUS_INCOMPLETE)
-                    return true;
-                break;
-            case 29073:                                     // Iggy Darktusk
-                if (pPlayer->GetQuestStatus(12749) == QUEST_STATUS_INCOMPLETE)
-                    return true;
-                break;
-            case 29074:                                     // Lady Eonys
-                if (pPlayer->GetQuestStatus(12747) == QUEST_STATUS_INCOMPLETE)
-                    return true;
-                break;
-            case 29070:                                     // Valok the Righteous
-                if (pPlayer->GetQuestStatus(12746) == QUEST_STATUS_INCOMPLETE)
-                    return true;
-                break;
+            case NPC_PRISONER_HUMAN:     return pPlayer->GetQuestStatus(12742) == QUEST_STATUS_INCOMPLETE;       // Ellen Stanbridge
+            case NPC_PRISONER_ORC:       return pPlayer->GetQuestStatus(12748) == QUEST_STATUS_INCOMPLETE;       // Kug Ironjaw
+            case NPC_PRISONER_DWARF:     return pPlayer->GetQuestStatus(12744) == QUEST_STATUS_INCOMPLETE;       // Donovan Pulfrost
+            case NPC_PRISONER_NIGHT_ELF: return pPlayer->GetQuestStatus(12743) == QUEST_STATUS_INCOMPLETE;       // Yazmina Oakenthorn
+            case NPC_PRISONER_UNDEAD:    return pPlayer->GetQuestStatus(12750) == QUEST_STATUS_INCOMPLETE;       // Antoine Brack
+            case NPC_PRISONER_TAUREN:    return pPlayer->GetQuestStatus(12739) == QUEST_STATUS_INCOMPLETE;       // Malar Bravehorn
+            case NPC_PRISONER_GNOME:     return pPlayer->GetQuestStatus(12745) == QUEST_STATUS_INCOMPLETE;       // Goby Blastenheimer
+            case NPC_PRISONER_TROLL:     return pPlayer->GetQuestStatus(12749) == QUEST_STATUS_INCOMPLETE;       // Iggy Darktusk
+            case NPC_PRISONER_BLOOD_ELF: return pPlayer->GetQuestStatus(12747) == QUEST_STATUS_INCOMPLETE;       // Lady Eonys
+            case NPC_PRISONER_DRAENEI:   return pPlayer->GetQuestStatus(12746) == QUEST_STATUS_INCOMPLETE;       // Valok the Righteous
         }
 
         return false;
     }
 
-    void MoveInLineOfSight(Unit* pWho) override
+    void MoveInLineOfSight(Unit* who) override
     {
-        if (m_playerGuid || pWho->GetTypeId() != TYPEID_PLAYER || !pWho->IsWithinDist(m_creature, INTERACTION_DISTANCE))
+        if (m_playerGuid || !who->IsPlayer() || !who->IsWithinDist(m_creature, INTERACTION_DISTANCE))
             return;
 
-        if (MeetQuestCondition((Player*)pWho))
-            m_playerGuid = pWho->GetObjectGuid();
+        // start dialogue on approach
+        if (MeetQuestCondition(static_cast<Player*>(who)))
+        {
+            StartNextDialogueText(m_creature->GetEntry());
+            m_playerGuid = who->GetObjectGuid();
+        }
+    }
+
+    void JustDidDialogueStep(int32 iEntry) override
+    {
+        switch (iEntry)
+        {
+            case DATA_NPC_STAND:
+                m_creature->SetStandState(UNIT_STAND_STATE_STAND);
+                break;
+            case DATA_NPC_TALK:
+                m_creature->HandleEmote(EMOTE_ONESHOT_TALK);
+                break;
+            case DATA_NPC_EMOTE:
+                m_creature->HandleEmote(EMOTE_ONESHOT_NO);
+                break;
+            case DATA_NPC_EXCLAMATION:
+                m_creature->HandleEmote(EMOTE_ONESHOT_EXCLAMATION);
+                break;
+            case DATA_NPC_CRY:
+                m_creature->HandleEmote(EMOTE_ONESHOT_CRY);
+                break;
+            case DATA_NPC_EXECUTION:
+                m_creature->SetStandState(UNIT_STAND_STATE_KNEEL);
+                m_creature->SetImmuneToPlayer(false);
+                break;
+        }
+    }
+
+    Creature* GetSpeakerByEntry(uint32 uiEntry) override
+    {
+        switch (uiEntry)
+        {
+            case NPC_PRISONER_TAUREN:
+            case NPC_PRISONER_HUMAN:
+            case NPC_PRISONER_NIGHT_ELF:
+            case NPC_PRISONER_DWARF:
+            case NPC_PRISONER_GNOME:
+            case NPC_PRISONER_DRAENEI:
+            case NPC_PRISONER_UNDEAD:
+            case NPC_PRISONER_ORC:
+            case NPC_PRISONER_TROLL:
+            case NPC_PRISONER_BLOOD_ELF:
+                return m_creature;
+            case NPC_PLAGUEFIST:
+                return GetClosestCreatureWithEntry(m_creature, NPC_PLAGUEFIST, 85.0f);
+        }
+
+        return nullptr;
+    }
+
+    Unit* GetDialogueTarget() override
+    {
+        return m_creature->GetMap()->GetPlayer(m_playerGuid);
+    }
+
+    void JustDied(Unit* killer) override
+    {
+        DoScriptText(EMOTE_DIES, m_creature);
+
+        // despawn in 2 seconds; respawn after 30 seconds
+        m_creature->ForcedDespawn(2000);
+        m_creature->SetRespawnDelay(30);
     }
 
     void UpdateAI(const uint32 uiDiff) override
     {
-        if (m_playerGuid && !m_creature->getVictim() && m_creature->isAlive())
+        DialogueUpdate(uiDiff);
+
+        if (m_uiCryTimer)
         {
-            if (m_uiExecuteSpeech_Timer < uiDiff)
+            if (m_uiCryTimer <= uiDiff)
             {
-                Player* pPlayer = m_creature->GetMap()->GetPlayer(m_playerGuid);
-
-                if (!pPlayer)
-                {
-                    Reset();
-                    return;
-                }
-
-                // TODO: simplify text's selection
-
-                switch (pPlayer->getRace())
-                {
-                    case RACE_HUMAN:
-                        switch (m_uiExecuteSpeech_Counter)
-                        {
-                            case 0: DoScriptText(SAY_EXEC_START_1, m_creature, pPlayer); break;
-                            case 1: m_creature->SetStandState(UNIT_STAND_STATE_STAND); break;
-                            case 2: DoScriptText(SAY_EXEC_PROG_5, m_creature, pPlayer); break;
-                            case 3: DoScriptText(SAY_EXEC_NAME_1, m_creature, pPlayer); break;
-                            case 4: DoScriptText(SAY_EXEC_RECOG_1, m_creature, pPlayer); break;
-                            case 5: DoScriptText(SAY_EXEC_NOREM_5, m_creature, pPlayer); break;
-                            case 6: DoScriptText(SAY_EXEC_THINK_7, m_creature, pPlayer); break;
-                            case 7: DoScriptText(SAY_EXEC_LISTEN_1, m_creature, pPlayer); break;
-                            case 8:
-                                if (Creature* pPlaguefist = GetClosestCreatureWithEntry(m_creature, NPC_PLAGUEFIST, 85.0f))
-                                    DoScriptText(SAY_PLAGUEFIST, pPlaguefist, pPlayer);
-                                break;
-                            case 9:
-                                DoScriptText(SAY_EXEC_TIME_6, m_creature, pPlayer);
-                                m_creature->SetStandState(UNIT_STAND_STATE_KNEEL);
-                                m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
-                                break;
-                            case 10: DoScriptText(SAY_EXEC_WAITING, m_creature, pPlayer); break;
-                            case 11:
-                                DoScriptText(EMOTE_DIES, m_creature);
-                                m_creature->SetDeathState(JUST_DIED);
-                                m_creature->SetHealth(0);
-                                return;
-                        }
-                        break;
-                    case RACE_ORC:
-                        switch (m_uiExecuteSpeech_Counter)
-                        {
-                            case 0: DoScriptText(SAY_EXEC_START_1, m_creature, pPlayer); break;
-                            case 1: m_creature->SetStandState(UNIT_STAND_STATE_STAND); break;
-                            case 2: DoScriptText(SAY_EXEC_PROG_6, m_creature, pPlayer); break;
-                            case 3: DoScriptText(SAY_EXEC_NAME_1, m_creature, pPlayer); break;
-                            case 4: DoScriptText(SAY_EXEC_RECOG_1, m_creature, pPlayer); break;
-                            case 5: DoScriptText(SAY_EXEC_NOREM_7, m_creature, pPlayer); break;
-                            case 6: DoScriptText(SAY_EXEC_THINK_8, m_creature, pPlayer); break;
-                            case 7: DoScriptText(SAY_EXEC_LISTEN_1, m_creature, pPlayer); break;
-                            case 8:
-                                if (Creature* pPlaguefist = GetClosestCreatureWithEntry(m_creature, NPC_PLAGUEFIST, 85.0f))
-                                    DoScriptText(SAY_PLAGUEFIST, pPlaguefist, pPlayer);
-                                break;
-                            case 9:
-                                DoScriptText(SAY_EXEC_TIME_8, m_creature, pPlayer);
-                                m_creature->SetStandState(UNIT_STAND_STATE_KNEEL);
-                                m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
-                                break;
-                            case 10: DoScriptText(SAY_EXEC_WAITING, m_creature, pPlayer); break;
-                            case 11:
-                                DoScriptText(EMOTE_DIES, m_creature);
-                                m_creature->SetDeathState(JUST_DIED);
-                                m_creature->SetHealth(0);
-                                return;
-                        }
-                        break;
-                    case RACE_DWARF:
-                        switch (m_uiExecuteSpeech_Counter)
-                        {
-                            case 0: DoScriptText(SAY_EXEC_START_2, m_creature, pPlayer); break;
-                            case 1: m_creature->SetStandState(UNIT_STAND_STATE_STAND); break;
-                            case 2: DoScriptText(SAY_EXEC_PROG_2, m_creature, pPlayer); break;
-                            case 3: DoScriptText(SAY_EXEC_NAME_1, m_creature, pPlayer); break;
-                            case 4: DoScriptText(SAY_EXEC_RECOG_3, m_creature, pPlayer); break;
-                            case 5: DoScriptText(SAY_EXEC_NOREM_2, m_creature, pPlayer); break;
-                            case 6: DoScriptText(SAY_EXEC_THINK_5, m_creature, pPlayer); break;
-                            case 7: DoScriptText(SAY_EXEC_LISTEN_2, m_creature, pPlayer); break;
-                            case 8:
-                                if (Creature* pPlaguefist = GetClosestCreatureWithEntry(m_creature, NPC_PLAGUEFIST, 85.0f))
-                                    DoScriptText(SAY_PLAGUEFIST, pPlaguefist, pPlayer);
-                                break;
-                            case 9:
-                                DoScriptText(SAY_EXEC_TIME_3, m_creature, pPlayer);
-                                m_creature->SetStandState(UNIT_STAND_STATE_KNEEL);
-                                m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
-                                break;
-                            case 10: DoScriptText(SAY_EXEC_WAITING, m_creature, pPlayer); break;
-                            case 11:
-                                DoScriptText(EMOTE_DIES, m_creature);
-                                m_creature->SetDeathState(JUST_DIED);
-                                m_creature->SetHealth(0);
-                                return;
-                        }
-                        break;
-                    case RACE_NIGHTELF:
-                        switch (m_uiExecuteSpeech_Counter)
-                        {
-                            case 0: DoScriptText(SAY_EXEC_START_1, m_creature, pPlayer); break;
-                            case 1: m_creature->SetStandState(UNIT_STAND_STATE_STAND); break;
-                            case 2: DoScriptText(SAY_EXEC_PROG_5, m_creature, pPlayer); break;
-                            case 3: DoScriptText(SAY_EXEC_NAME_1, m_creature, pPlayer); break;
-                            case 4: DoScriptText(SAY_EXEC_RECOG_1, m_creature, pPlayer); break;
-                            case 5: DoScriptText(SAY_EXEC_NOREM_6, m_creature, pPlayer); break;
-                            case 6: DoScriptText(SAY_EXEC_THINK_2, m_creature, pPlayer); break;
-                            case 7: DoScriptText(SAY_EXEC_LISTEN_1, m_creature, pPlayer); break;
-                            case 8:
-                                if (Creature* pPlaguefist = GetClosestCreatureWithEntry(m_creature, NPC_PLAGUEFIST, 85.0f))
-                                    DoScriptText(SAY_PLAGUEFIST, pPlaguefist, pPlayer);
-                                break;
-                            case 9:
-                                DoScriptText(SAY_EXEC_TIME_7, m_creature, pPlayer);
-                                m_creature->SetStandState(UNIT_STAND_STATE_KNEEL);
-                                m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
-                                break;
-                            case 10: DoScriptText(SAY_EXEC_WAITING, m_creature, pPlayer); break;
-                            case 11:
-                                DoScriptText(EMOTE_DIES, m_creature);
-                                m_creature->SetDeathState(JUST_DIED);
-                                m_creature->SetHealth(0);
-                                return;
-                        }
-                        break;
-                    case RACE_UNDEAD:
-                        switch (m_uiExecuteSpeech_Counter)
-                        {
-                            case 0: DoScriptText(SAY_EXEC_START_1, m_creature, pPlayer); break;
-                            case 1: m_creature->SetStandState(UNIT_STAND_STATE_STAND); break;
-                            case 2: DoScriptText(SAY_EXEC_PROG_3, m_creature, pPlayer); break;
-                            case 3: DoScriptText(SAY_EXEC_NAME_1, m_creature, pPlayer); break;
-                            case 4: DoScriptText(SAY_EXEC_RECOG_4, m_creature, pPlayer); break;
-                            case 5: DoScriptText(SAY_EXEC_NOREM_3, m_creature, pPlayer); break;
-                            case 6: DoScriptText(SAY_EXEC_THINK_1, m_creature, pPlayer); break;
-                            case 7: DoScriptText(SAY_EXEC_LISTEN_3, m_creature, pPlayer); break;
-                            case 8:
-                                if (Creature* pPlaguefist = GetClosestCreatureWithEntry(m_creature, NPC_PLAGUEFIST, 85.0f))
-                                    DoScriptText(SAY_PLAGUEFIST, pPlaguefist, pPlayer);
-                                break;
-                            case 9:
-                                DoScriptText(SAY_EXEC_TIME_4, m_creature, pPlayer);
-                                m_creature->SetStandState(UNIT_STAND_STATE_KNEEL);
-                                m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
-                                break;
-                            case 10: DoScriptText(SAY_EXEC_WAITING, m_creature, pPlayer); break;
-                            case 11:
-                                DoScriptText(EMOTE_DIES, m_creature);
-                                m_creature->SetDeathState(JUST_DIED);
-                                m_creature->SetHealth(0);
-                                return;
-                        }
-                        break;
-                    case RACE_TAUREN:
-                        switch (m_uiExecuteSpeech_Counter)
-                        {
-                            case 0: DoScriptText(SAY_EXEC_START_1, m_creature, pPlayer); break;
-                            case 1: m_creature->SetStandState(UNIT_STAND_STATE_STAND); break;
-                            case 2: DoScriptText(SAY_EXEC_PROG_1, m_creature, pPlayer); break;
-                            case 3: DoScriptText(SAY_EXEC_NAME_1, m_creature, pPlayer); break;
-                            case 4: DoScriptText(SAY_EXEC_RECOG_5, m_creature, pPlayer); break;
-                            case 5: DoScriptText(SAY_EXEC_NOREM_8, m_creature, pPlayer); break;
-                            case 6: DoScriptText(SAY_EXEC_THINK_9, m_creature, pPlayer); break;
-                            case 7: DoScriptText(SAY_EXEC_LISTEN_1, m_creature, pPlayer); break;
-                            case 8:
-                                if (Creature* pPlaguefist = GetClosestCreatureWithEntry(m_creature, NPC_PLAGUEFIST, 85.0f))
-                                    DoScriptText(SAY_PLAGUEFIST, pPlaguefist, pPlayer);
-                                break;
-                            case 9:
-                                DoScriptText(SAY_EXEC_TIME_9, m_creature, pPlayer);
-                                m_creature->SetStandState(UNIT_STAND_STATE_KNEEL);
-                                m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
-                                break;
-                            case 10: DoScriptText(SAY_EXEC_WAITING, m_creature, pPlayer); break;
-                            case 11:
-                                DoScriptText(EMOTE_DIES, m_creature);
-                                m_creature->SetDeathState(JUST_DIED);
-                                m_creature->SetHealth(0);
-                                return;
-                        }
-                        break;
-                    case RACE_GNOME:
-                        switch (m_uiExecuteSpeech_Counter)
-                        {
-                            case 0: DoScriptText(SAY_EXEC_START_1, m_creature, pPlayer); break;
-                            case 1: m_creature->SetStandState(UNIT_STAND_STATE_STAND); break;
-                            case 2: DoScriptText(SAY_EXEC_PROG_4, m_creature, pPlayer); break;
-                            case 3: DoScriptText(SAY_EXEC_NAME_1, m_creature, pPlayer); break;
-                            case 4: DoScriptText(SAY_EXEC_RECOG_1, m_creature, pPlayer); break;
-                            case 5: DoScriptText(SAY_EXEC_NOREM_4, m_creature, pPlayer); break;
-                            case 6: DoScriptText(SAY_EXEC_THINK_6, m_creature, pPlayer); break;
-                            case 7: DoScriptText(SAY_EXEC_LISTEN_1, m_creature, pPlayer); break;
-                            case 8:
-                                if (Creature* pPlaguefist = GetClosestCreatureWithEntry(m_creature, NPC_PLAGUEFIST, 85.0f))
-                                    DoScriptText(SAY_PLAGUEFIST, pPlaguefist, pPlayer);
-                                break;
-                            case 9:
-                                DoScriptText(SAY_EXEC_TIME_5, m_creature, pPlayer);
-                                m_creature->SetStandState(UNIT_STAND_STATE_KNEEL);
-                                m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
-                                break;
-                            case 10: DoScriptText(SAY_EXEC_WAITING, m_creature, pPlayer); break;
-                            case 11:
-                                DoScriptText(EMOTE_DIES, m_creature);
-                                m_creature->SetDeathState(JUST_DIED);
-                                m_creature->SetHealth(0);
-                                return;
-                        }
-                        break;
-                    case RACE_TROLL:
-                        switch (m_uiExecuteSpeech_Counter)
-                        {
-                            case 0: DoScriptText(SAY_EXEC_START_3, m_creature, pPlayer); break;
-                            case 1: m_creature->SetStandState(UNIT_STAND_STATE_STAND); break;
-                            case 2: DoScriptText(SAY_EXEC_PROG_7, m_creature, pPlayer); break;
-                            case 3: DoScriptText(SAY_EXEC_NAME_2, m_creature, pPlayer); break;
-                            case 4: DoScriptText(SAY_EXEC_RECOG_6, m_creature, pPlayer); break;
-                            case 5: DoScriptText(SAY_EXEC_NOREM_9, m_creature, pPlayer); break;
-                            case 6: DoScriptText(SAY_EXEC_THINK_10, m_creature, pPlayer); break;
-                            case 7: DoScriptText(SAY_EXEC_LISTEN_4, m_creature, pPlayer); break;
-                            case 8:
-                                if (Creature* pPlaguefist = GetClosestCreatureWithEntry(m_creature, NPC_PLAGUEFIST, 85.0f))
-                                    DoScriptText(SAY_PLAGUEFIST, pPlaguefist, pPlayer);
-                                break;
-                            case 9:
-                                DoScriptText(SAY_EXEC_TIME_10, m_creature, pPlayer);
-                                m_creature->SetStandState(UNIT_STAND_STATE_KNEEL);
-                                m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
-                                break;
-                            case 10: DoScriptText(SAY_EXEC_WAITING, m_creature, pPlayer); break;
-                            case 11:
-                                DoScriptText(EMOTE_DIES, m_creature);
-                                m_creature->SetDeathState(JUST_DIED);
-                                m_creature->SetHealth(0);
-                                return;
-                        }
-                        break;
-                    case RACE_BLOODELF:
-                        switch (m_uiExecuteSpeech_Counter)
-                        {
-                            case 0: DoScriptText(SAY_EXEC_START_1, m_creature, pPlayer); break;
-                            case 1: m_creature->SetStandState(UNIT_STAND_STATE_STAND); break;
-                            case 2: DoScriptText(SAY_EXEC_PROG_1, m_creature, pPlayer); break;
-                            case 3: DoScriptText(SAY_EXEC_NAME_1, m_creature, pPlayer); break;
-                            case 4: DoScriptText(SAY_EXEC_RECOG_1, m_creature, pPlayer); break;
-                            // case 5: // unknown
-                            case 6: DoScriptText(SAY_EXEC_THINK_3, m_creature, pPlayer); break;
-                            case 7: DoScriptText(SAY_EXEC_LISTEN_1, m_creature, pPlayer); break;
-                            case 8:
-                                if (Creature* pPlaguefist = GetClosestCreatureWithEntry(m_creature, NPC_PLAGUEFIST, 85.0f))
-                                    DoScriptText(SAY_PLAGUEFIST, pPlaguefist, pPlayer);
-                                break;
-                            case 9:
-                                DoScriptText(SAY_EXEC_TIME_1, m_creature, pPlayer);
-                                m_creature->SetStandState(UNIT_STAND_STATE_KNEEL);
-                                m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
-                                break;
-                            case 10: DoScriptText(SAY_EXEC_WAITING, m_creature, pPlayer); break;
-                            case 11:
-                                DoScriptText(EMOTE_DIES, m_creature);
-                                m_creature->SetDeathState(JUST_DIED);
-                                m_creature->SetHealth(0);
-                                return;
-                        }
-                        break;
-                    case RACE_DRAENEI:
-                        switch (m_uiExecuteSpeech_Counter)
-                        {
-                            case 0: DoScriptText(SAY_EXEC_START_1, m_creature, pPlayer); break;
-                            case 1: m_creature->SetStandState(UNIT_STAND_STATE_STAND); break;
-                            case 2: DoScriptText(SAY_EXEC_PROG_1, m_creature, pPlayer); break;
-                            case 3: DoScriptText(SAY_EXEC_NAME_1, m_creature, pPlayer); break;
-                            case 4: DoScriptText(SAY_EXEC_RECOG_2, m_creature, pPlayer); break;
-                            case 5: DoScriptText(SAY_EXEC_NOREM_1, m_creature, pPlayer); break;
-                            case 6: DoScriptText(SAY_EXEC_THINK_4, m_creature, pPlayer); break;
-                            case 7: DoScriptText(SAY_EXEC_LISTEN_1, m_creature, pPlayer); break;
-                            case 8:
-                                if (Creature* pPlaguefist = GetClosestCreatureWithEntry(m_creature, NPC_PLAGUEFIST, 85.0f))
-                                    DoScriptText(SAY_PLAGUEFIST, pPlaguefist, pPlayer);
-                                break;
-                            case 9:
-                                DoScriptText(SAY_EXEC_TIME_2, m_creature, pPlayer);
-                                m_creature->SetStandState(UNIT_STAND_STATE_KNEEL);
-                                m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
-                                break;
-                            case 10: DoScriptText(SAY_EXEC_WAITING, m_creature, pPlayer); break;
-                            case 11:
-                                DoScriptText(EMOTE_DIES, m_creature);
-                                m_creature->SetDeathState(JUST_DIED);
-                                m_creature->SetHealth(0);
-                                return;
-                        }
-                        break;
-                }
-
-                if (m_uiExecuteSpeech_Counter >= 9)
-                    m_uiExecuteSpeech_Timer = 15000;
-                else
-                    m_uiExecuteSpeech_Timer = 7000;
-
-                ++m_uiExecuteSpeech_Counter;
+                m_creature->HandleEmote(EMOTE_ONESHOT_CRY);
+                m_uiCryTimer = urand(15000, 30000);
             }
             else
-                m_uiExecuteSpeech_Timer -= uiDiff;
+                m_uiCryTimer -= uiDiff;
         }
     }
 };
-
-UnitAI* GetAI_npc_a_special_surprise(Creature* pCreature)
-{
-    return new npc_a_special_surpriseAI(pCreature);
-}
 
 /*######
 ## npc_death_knight_initiate
@@ -599,6 +581,10 @@ struct npc_death_knight_initiateAI : public ScriptedAI
 
     void DamageTaken(Unit* /*pDoneBy*/, uint32& uiDamage, DamageEffectType /*damagetype*/, SpellEntry const* spellInfo) override
     {
+        // no damage check unless in duel with a player
+        if (m_duelerGuid.IsEmpty())
+            return;
+
         if (uiDamage >= m_creature->GetHealth())
         {
             uiDamage = 0;
@@ -668,12 +654,12 @@ struct npc_death_knight_initiateAI : public ScriptedAI
                 m_uiDuelTimer -= uiDiff;
         }
 
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_uiBloodStrikeTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_BLOOD_STRIKE) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_BLOOD_STRIKE) == CAST_OK)
                 m_uiBloodStrikeTimer = 9000;
         }
         else
@@ -681,7 +667,7 @@ struct npc_death_knight_initiateAI : public ScriptedAI
 
         if (m_uiDeathCoilTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_DEATH_COIL) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_DEATH_COIL) == CAST_OK)
                 m_uiDeathCoilTimer = 8000;
         }
         else
@@ -689,7 +675,7 @@ struct npc_death_knight_initiateAI : public ScriptedAI
 
         if (m_uiIcyTouchTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_ICY_TOUCH) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_ICY_TOUCH) == CAST_OK)
                 m_uiIcyTouchTimer = 8000;
         }
         else
@@ -697,7 +683,7 @@ struct npc_death_knight_initiateAI : public ScriptedAI
 
         if (m_uiPlagueStrikeTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_PLAGUE_STRIKE) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_PLAGUE_STRIKE) == CAST_OK)
                 m_uiPlagueStrikeTimer = 8000;
         }
         else
@@ -706,11 +692,6 @@ struct npc_death_knight_initiateAI : public ScriptedAI
         DoMeleeAttackIfReady();
     }
 };
-
-UnitAI* GetAI_npc_death_knight_initiate(Creature* pCreature)
-{
-    return new npc_death_knight_initiateAI(pCreature);
-}
 
 bool GossipHello_npc_death_knight_initiate(Player* pPlayer, Creature* pCreature)
 {
@@ -753,277 +734,16 @@ bool EffectDummyCreature_npc_death_knight_initiate(Unit* pCaster, uint32 uiSpell
 }
 
 /*######
-## npc_unworthy_initiate_anchor
-######*/
-
-enum
-{
-    SAY_START                       = -1609000,             // 8 texts in total, GetTextId() generates random with this as base
-    SAY_AGGRO                       = -1609008,             // 8 texts in total, GetTextId() generates random with this as base
-
-    // SPELL_CHAINED_PESANT_LH         = 54602,             // not used. possible it determine side, where to go get "weapon"
-    // SPELL_CHAINED_PESANT_RH         = 54610,
-    SPELL_CHAINED_PESANT_CHEST      = 54612,
-    SPELL_CHAINED_PESANT_BREATH     = 54613,
-    SPELL_INITIATE_VISUAL           = 51519,
-
-    NPC_ANCHOR                      = 29521,
-    FACTION_MONSTER                 = 16,
-
-    PHASE_INACTIVE_OR_COMBAT        = 0,
-    PHASE_DRESSUP                   = 1,
-    PHASE_ACTIVATE                  = 2
-};
-
-struct npc_unworthy_initiate_anchorAI : public ScriptedAI
-{
-    npc_unworthy_initiate_anchorAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
-
-    ObjectGuid m_myInitiateGuid;
-    ObjectGuid m_myPrisonGuid;
-
-    void Reset() override {}
-
-    void NotifyMe(Unit* pSource, GameObject* pGo)
-    {
-        m_myPrisonGuid = pGo->GetObjectGuid();
-        Creature* pInitiate = m_creature->GetMap()->GetCreature(m_myInitiateGuid);
-
-        if (pInitiate && pSource)
-        {
-            pInitiate->SetLootRecipient(pSource);
-            m_creature->InterruptNonMeleeSpells(false);
-            m_creature->CastSpell(pInitiate, SPELL_CHAINED_PESANT_BREATH, TRIGGERED_NONE);
-        }
-    }
-
-    void RegisterCloseInitiate(Creature* pCreature)
-    {
-        m_myInitiateGuid = pCreature->GetObjectGuid();
-    }
-
-    void ResetPrison()
-    {
-        if (GameObject* pPrison = m_creature->GetMap()->GetGameObject(m_myPrisonGuid))
-            pPrison->ResetDoorOrButton();
-    }
-};
-
-UnitAI* GetAI_npc_unworthy_initiate_anchor(Creature* pCreature)
-{
-    return new npc_unworthy_initiate_anchorAI(pCreature);
-}
-
-/*######
-## npc_unworthy_initiate
-######*/
-
-struct npc_unworthy_initiateAI : public ScriptedAI
-{
-    npc_unworthy_initiateAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        Reset();
-    }
-
-    ObjectGuid m_myAnchorGuid;
-    uint32 m_uiAnchorCheckTimer;
-    uint32 m_uiPhase;
-    uint32 m_uiPhaseTimer;
-    uint32 m_uiBloodStrike_Timer;
-    uint32 m_uiDeathCoil_Timer;
-    uint32 m_uiIcyTouch_Timer;
-    uint32 m_uiPlagueStrike_Timer;
-
-    void Reset() override
-    {
-        m_uiAnchorCheckTimer = 5000;
-        m_uiPhase = PHASE_INACTIVE_OR_COMBAT;
-        m_uiPhaseTimer = 7500;
-        m_uiBloodStrike_Timer = 4000;
-        m_uiDeathCoil_Timer = 6000;
-        m_uiIcyTouch_Timer = 2000;
-        m_uiPlagueStrike_Timer = 5000;
-
-        m_creature->SetImmuneToPlayer(true);
-    }
-
-    void JustReachedHome() override
-    {
-        SetAnchor();
-
-        if (Creature* pAnchor = GetAnchor())
-        {
-            if (npc_unworthy_initiate_anchorAI* pAnchorAI = dynamic_cast<npc_unworthy_initiate_anchorAI*>(pAnchor->AI()))
-                pAnchorAI->ResetPrison();
-        }
-    }
-
-    void JustRespawned() override
-    {
-        if (Creature* pAnchor = GetAnchor())
-        {
-            if (npc_unworthy_initiate_anchorAI* pAnchorAI = dynamic_cast<npc_unworthy_initiate_anchorAI*>(pAnchor->AI()))
-                pAnchorAI->ResetPrison();
-        }
-
-        Reset();
-    }
-
-    int32 GetTextId() const
-    {
-        return m_uiPhase == PHASE_DRESSUP ? SAY_START - urand(0, 7) : SAY_AGGRO - urand(0, 7);
-    }
-
-    Creature* GetAnchor() const
-    {
-        if (m_myAnchorGuid)
-            return m_creature->GetMap()->GetCreature(m_myAnchorGuid);
-        return GetClosestCreatureWithEntry(m_creature, NPC_ANCHOR, INTERACTION_DISTANCE * 2);
-    }
-
-    void SetAnchor()
-    {
-        if (Creature* pAnchor = GetAnchor())
-        {
-            if (npc_unworthy_initiate_anchorAI* pAnchorAI = dynamic_cast<npc_unworthy_initiate_anchorAI*>(pAnchor->AI()))
-                pAnchorAI->RegisterCloseInitiate(m_creature);
-
-            pAnchor->CastSpell(m_creature, SPELL_CHAINED_PESANT_CHEST, TRIGGERED_NONE);
-            m_myAnchorGuid = pAnchor->GetObjectGuid();
-
-            m_uiAnchorCheckTimer = 0;
-            return;
-        }
-
-        m_uiAnchorCheckTimer = 5000;
-    }
-
-    void SpellHit(Unit* pCaster, const SpellEntry* pSpell) override
-    {
-        if (pSpell->Id == SPELL_CHAINED_PESANT_BREATH)
-        {
-            pCaster->InterruptNonMeleeSpells(true);
-            m_creature->SetStandState(UNIT_STAND_STATE_STAND);
-
-            m_uiPhase = PHASE_DRESSUP;
-
-            if (Player* pSource = m_creature->GetLootRecipient())
-                DoScriptText(GetTextId(), m_creature, pSource);
-        }
-    }
-
-    void UpdateAI(const uint32 uiDiff) override
-    {
-        if (m_uiAnchorCheckTimer)
-        {
-            if (m_uiAnchorCheckTimer <= uiDiff)
-                SetAnchor();
-            else
-                m_uiAnchorCheckTimer -= uiDiff;
-        }
-
-        if (m_uiPhase == PHASE_INACTIVE_OR_COMBAT)
-        {
-            if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
-                return;
-
-            if (m_uiBloodStrike_Timer < uiDiff)
-            {
-                DoCastSpellIfCan(m_creature->getVictim(), SPELL_BLOOD_STRIKE);
-                m_uiBloodStrike_Timer = 9000;
-            }
-            else
-                m_uiBloodStrike_Timer -= uiDiff;
-
-            if (m_uiDeathCoil_Timer < uiDiff)
-            {
-                DoCastSpellIfCan(m_creature->getVictim(), SPELL_DEATH_COIL);
-                m_uiDeathCoil_Timer = 8000;
-            }
-            else
-                m_uiDeathCoil_Timer -= uiDiff;
-
-            if (m_uiIcyTouch_Timer < uiDiff)
-            {
-                DoCastSpellIfCan(m_creature->getVictim(), SPELL_ICY_TOUCH);
-                m_uiIcyTouch_Timer = 8000;
-            }
-            else
-                m_uiIcyTouch_Timer -= uiDiff;
-
-            if (m_uiPlagueStrike_Timer < uiDiff)
-            {
-                DoCastSpellIfCan(m_creature->getVictim(), SPELL_PLAGUE_STRIKE);
-                m_uiPlagueStrike_Timer = 8000;
-            }
-            else
-                m_uiPlagueStrike_Timer -= uiDiff;
-
-            DoMeleeAttackIfReady();
-        }
-        else
-        {
-            if (m_uiPhaseTimer < uiDiff)
-            {
-                if (m_uiPhase == PHASE_DRESSUP)
-                {
-                    // ToDo: send the creature to the left / right in order to grab a weapon
-                    m_creature->CastSpell(m_creature, SPELL_INITIATE_VISUAL, TRIGGERED_NONE);
-
-                    m_uiPhase = PHASE_ACTIVATE;
-                }
-                else
-                {
-                    m_creature->SetFactionTemporary(FACTION_MONSTER, TEMPFACTION_RESTORE_COMBAT_STOP | TEMPFACTION_RESTORE_RESPAWN);
-
-                    m_uiPhase = PHASE_INACTIVE_OR_COMBAT;
-
-                    if (Player* pTarget = m_creature->GetLootRecipient())
-                    {
-                        DoScriptText(GetTextId(), m_creature, pTarget);
-                        m_creature->SetImmuneToPlayer(false);
-                        AttackStart(pTarget);
-                    }
-                }
-
-                m_uiPhaseTimer = 5000;
-            }
-            else
-                m_uiPhaseTimer -= uiDiff;
-        }
-    }
-};
-
-UnitAI* GetAI_npc_unworthy_initiate(Creature* pCreature)
-{
-    return new npc_unworthy_initiateAI(pCreature);
-}
-
-/*######
-## go_acherus_soul_prison
-######*/
-
-bool GOUse_go_acherus_soul_prison(Player* pPlayer, GameObject* pGo)
-{
-    if (Creature* pAnchor = GetClosestCreatureWithEntry(pGo, NPC_ANCHOR, INTERACTION_DISTANCE))
-    {
-        if (npc_unworthy_initiate_anchorAI* pAnchorAI = dynamic_cast<npc_unworthy_initiate_anchorAI*>(pAnchor->AI()))
-            pAnchorAI->NotifyMe(pPlayer, pGo);
-    }
-
-    return false;
-}
-
-/*######
 ## npc_eye_of_acherus
 ######*/
 
 enum
 {
-    SPELL_EYE_CONTROL       = 51852,                        // player control aura
-    SPELL_EYE_VISUAL        = 51892,
-    SPELL_EYE_FLIGHT        = 51890,                        // player flight control
-    SPELL_EYE_FLIGHT_BOOST  = 51923,                        // flight boost to reach new avalon
+    // SPELL_EYE_CONTROL    = 51852,                        // apply phase aura: 2; summon creature 28511 and apply player control aura
+    SPELL_EYE_VISUAL        = 51892,                        // apply visual aura
+    SPELL_EYE_FLIGHT        = 51890,                        // apply fly aura and change mounted speed; cast by the eye of acherus
+    SPELL_EYE_FLIGHT_BOOST  = 51923,                        // apply fly aura and increase speed aura
+    SPELL_RECALL_EYE        = 52694,
 
     EMOTE_DESTIANTION       = -1609089,
     EMOTE_CONTROL           = -1609090,
@@ -1042,23 +762,26 @@ struct npc_eye_of_acherusAI : public ScriptedAI
 {
     npc_eye_of_acherusAI(Creature* pCreature) : ScriptedAI(pCreature)
     {
+        m_creature->SetDisplayId(26320);                // HACK remove when correct modelid will be taken by core
+
         m_isFinished = false;
         m_reachPoint = false;
-        m_timer = START_POINT_PAUSE_TIME;
+        m_flightTimer = START_POINT_PAUSE_TIME;
         m_phase = 0;
         Reset();
     }
 
     bool m_isFinished;
     bool m_reachPoint;
-    uint32 m_timer;
+    uint32 m_flightTimer;
     uint32 m_phase;
 
     void Reset() override {}
 
     void JustDied(Unit* /*pKiller*/) override
     {
-        m_creature->CastSpell(m_creature, 52694, TRIGGERED_OLD_TRIGGERED);     // HACK - Remove this when mangos supports proper spell casting
+        // recall the eye when it dies - need to remove phase and control aura from player
+        DoCastSpellIfCan(m_creature, SPELL_RECALL_EYE, CAST_TRIGGERED);
     }
 
     void MovementInform(uint32 uiType, uint32 uiPointId) override
@@ -1072,22 +795,8 @@ struct npc_eye_of_acherusAI : public ScriptedAI
             case POINT_EYE_DESTINATION:
                 m_reachPoint = true;
                 break;
-
-            default:
-                return;
         }
     }
-
-    void SummonedCreatureDespawn(Creature* pCreature) override
-    {
-        if (Unit* unit = pCreature->GetCharmer())
-        {
-            // this aura is applied to the master instead to the creature
-            unit->RemoveAurasDueToSpell(SPELL_EYE_FLIGHT_BOOST);
-        }
-    }
-
-    void AttackStart(Unit* /*pWho*/) override {}
 
     void UpdateAI(const uint32 uiDiff) override
     {
@@ -1096,80 +805,70 @@ struct npc_eye_of_acherusAI : public ScriptedAI
 
         switch (m_phase)
         {
-            case 0: // initialization > move to start position
+            case 0:         // initialization and move to start position
+            {
                 if (m_creature->GetBeneficiaryPlayer())
                 {
-                    m_creature->SetPhaseMask(2, true);              // HACK remove when summon spells and auras are implemented properly in mangos
-                    m_creature->SetDisplayId(26320);                // HACK remove when correct modelid will be taken by core
-
-                    DoCastSpellIfCan(m_creature, SPELL_EYE_VISUAL, CAST_TRIGGERED);
-                    m_creature->SetImmobilizedState(true);
-                    m_creature->GetMotionMaster()->MovePoint(POINT_EYE_DESTINATION, aEyeStartPos[0], aEyeStartPos[1], aEyeStartPos[2]);
+                    if (DoCastSpellIfCan(m_creature, SPELL_EYE_VISUAL) == CAST_OK)
+                        m_creature->GetMotionMaster()->MovePoint(POINT_EYE_DESTINATION, aEyeStartPos[0], aEyeStartPos[1], aEyeStartPos[2]);
                 }
                 else
                 {
+                    // Failsafe: creature isn't controlled -> despawn
                     m_creature->ForcedDespawn();
                     m_isFinished = true;
                 }
+
                 ++m_phase;
                 break;
-
-            case 1: // wait start position reached then wait 5 sec before the journey to the end point
+            }
+            case 1:         // wait for start position reached, then wait 5 sec before the journey to the end point
+            {
                 if (!m_reachPoint)
                     return;
 
-                if (m_timer < uiDiff)
+                if (m_flightTimer < uiDiff)
                 {
-                    Player* player = m_creature->GetBeneficiaryPlayer();
-                    if (!player)
-                        return;
+                    // Apply flight aura and start moving to position
+                    if (DoCastSpellIfCan(m_creature, SPELL_EYE_FLIGHT_BOOST) == CAST_OK)
+                    {
+                        if (Player* player = m_creature->GetBeneficiaryPlayer())
+                            DoScriptText(EMOTE_DESTIANTION, m_creature, player);
 
-                    // Update Speed for Eye
-                    DoScriptText(EMOTE_DESTIANTION, m_creature, player);
-                    DoCastSpellIfCan(m_creature, SPELL_EYE_FLIGHT_BOOST, CAST_FORCE_TARGET_SELF);
-                    m_creature->SetImmobilizedState(false);
-                    ++m_phase;
+                        // move to the destination position
+                        Position tgtPos = Position(aEyeDestination[0], aEyeDestination[1], aEyeDestination[2], 0);
+                        m_creature->GetMotionMaster()->MovePoint(POINT_EYE_DESTINATION, tgtPos, FORCED_MOVEMENT_NONE, m_creature->GetSpawner()->GetSpeed(MOVE_RUN));
+
+                        m_reachPoint = false;
+                        ++m_phase;
+                    }
                 }
                 else
-                    m_timer -= uiDiff;
-                break;
+                    m_flightTimer -= uiDiff;
 
-            case 2: // go to the end point
-                m_creature->GetMotionMaster()->MovePoint(POINT_EYE_DESTINATION, aEyeDestination[0], aEyeDestination[1], aEyeDestination[2]);
-                m_reachPoint = false;
-                ++m_phase;
                 break;
-
-            case 3: // wait to reach end point then set fly mode by applying SPELL_EYE_FLIGHT
+            }
+            case 2:         // wait to reach end point then set fly mode by applying SPELL_EYE_FLIGHT
+            {
                 if (!m_reachPoint)
                     return;
 
-                if (Player* pPlayer = m_creature->GetBeneficiaryPlayer())
-                    DoScriptText(EMOTE_CONTROL, m_creature, pPlayer);
-
-                if (m_creature->m_movementInfo.HasMovementFlag(MOVEFLAG_LEVITATING))
-                    m_creature->SetLevitate(false);             // HACK to remove levitating flag and thus permit fly.
-
-                if (Unit* unit = m_creature->GetCharmer())
+                if (DoCastSpellIfCan(m_creature, SPELL_EYE_FLIGHT) == CAST_OK)
                 {
-                    // this aura is applied to the master instead to the creature
-                    unit->RemoveAurasDueToSpell(SPELL_EYE_FLIGHT_BOOST);
-                }
-                DoCastSpellIfCan(m_creature, SPELL_EYE_FLIGHT, CAST_TRIGGERED);
-                ++m_phase;
-                break;
+                    if (Player* pPlayer = m_creature->GetBeneficiaryPlayer())
+                        DoScriptText(EMOTE_CONTROL, m_creature, pPlayer);
 
+                    m_isFinished = true;
+                    ++m_phase;
+                }
+                break;
+            }
             default:
                 m_isFinished = true;
                 break;
         }
     }
 };
-
-UnitAI* GetAI_npc_eye_of_acherus(Creature* pCreature)
-{
-    return new npc_eye_of_acherusAI(pCreature);
-}
 
 /*######
 ## npc_scarlet_ghoul
@@ -1182,37 +881,40 @@ enum
     SAY_GHUL_SPAWN_3            = -1609093,
     SAY_GHUL_SPAWN_4            = -1609094,
     SAY_GHUL_SPAWN_5            = -1609095,
-    SAY_GOTHIK_THROW_IN_PIT     = -1609096,                 // TODO: Unclear if there exist more texts
+    SAY_GOTHIK_THROW_IN_PIT_1   = -1609096,
+    SAY_GOTHIK_THROW_IN_PIT_2   = -1609097,
 
-    SPELL_GHOUL_SUMMONED        = 52500,
-    SPELL_GOTHIK_GHOUL_PING     = 52514,
-    SPELL_QUEST_CREDIT          = 52517,
-    SPELL_GHOUL_UNSUMMON        = 52555,
+    SPELL_GHOUL_SUMMONED        = 52500,                    // dummy aura applied on owner player
+    SPELL_GOTHIK_GHOUL_PING     = 52514,                    // aoe ping cast by Gothik using spell 52513; targets creature 28845
+    SPELL_GHOUL_CREDIT          = 52517,                    // kill credit id: 28845
+    SPELL_GHOULPLOSION          = 52519,                    // cast by Gothik on the Scarlet Ghoul before destroying the creature; triggers 52555 from ghoul target to ghoul master
 
     NPC_GOTHIK                  = 28658,
 };
 
-static const float aPitPosition[3] = {2380.13f, -5783.06f, 151.367f};
+static const float aPitPosition[3] = { 2369.276f, -5778.689f, 151.367f};
 
 struct npc_scarlet_ghoulAI : public ScriptedPetAI
 {
     npc_scarlet_ghoulAI(Creature* pCreature) : ScriptedPetAI(pCreature)
     {
-        m_bGotHit = false;
-        m_bIsJumping = false;
-        m_bDidInitText = false;
-        m_uiUnsummonTimer = 0;
-        DoCastSpellIfCan(m_creature, SPELL_GHOUL_SUMMONED);
+        // apply aura on the player master
+        if (DoCastSpellIfCan(m_creature, SPELL_GHOUL_SUMMONED) == CAST_OK)
+        {
+            m_bGotHit       = false;
+            m_bIsJumping    = false;
+            m_bDidInitText  = false;
 
-        SetReactState(REACT_DEFENSIVE);
-
+            SetReactState(REACT_DEFENSIVE);
+        }
         Reset();
     }
+
+    ObjectGuid m_gothikGuid;
 
     bool m_bGotHit;
     bool m_bIsJumping;
     bool m_bDidInitText;
-    uint32 m_uiUnsummonTimer;
 
     void Reset() override {}
 
@@ -1220,15 +922,40 @@ struct npc_scarlet_ghoulAI : public ScriptedPetAI
     {
         if (uiMotionType == EFFECT_MOTION_TYPE && uiPointId == 1)
         {
-            m_uiUnsummonTimer = 1000;
-            DoCastSpellIfCan(m_creature, SPELL_GHOUL_UNSUMMON);
-            m_creature->GetMotionMaster()->MoveIdle();
+            // make Gothik despawn the ghoul; notification to player follows in spell chain
+            if (Creature* pGothik = m_creature->GetMap()->GetCreature(m_gothikGuid))
+                pGothik->CastSpell(m_creature, SPELL_GHOULPLOSION, TRIGGERED_OLD_TRIGGERED);
         }
     }
 
-    void JustDied(Unit* /*pKiller*/) override
+    void ReceiveAIEvent(AIEventType eventType, Unit* /*pSender*/, Unit* pInvoker, uint32 /*uiMiscValue*/) override
     {
-        DoCastSpellIfCan(m_creature, SPELL_GHOUL_UNSUMMON, CAST_TRIGGERED);
+        if (eventType == AI_EVENT_CUSTOM_A)
+        {
+            // first spell hit - apply kill credit
+            if (!m_bGotHit)
+            {
+                if (DoCastSpellIfCan(m_creature, SPELL_GHOUL_CREDIT) == CAST_OK)
+                    m_bGotHit = true;
+            }
+            // following spell hit - jump and despawn
+            else
+            {
+                m_gothikGuid = pInvoker->GetObjectGuid();
+
+                // make caster yell if possible
+                world_map_ebon_hold* pInstance = static_cast<world_map_ebon_hold*>(m_creature->GetInstanceData());
+                if (pInstance && pInstance->CanAndToggleGothikYell())
+                    DoScriptText(urand(0, 1) ? SAY_GOTHIK_THROW_IN_PIT_1 : SAY_GOTHIK_THROW_IN_PIT_2, pInvoker);
+
+                // jump to the pit
+                float fX, fY, fZ;
+                m_creature->GetRandomPoint(aPitPosition[0], aPitPosition[1], aPitPosition[2], 10.0f, fX, fY, fZ);
+                m_creature->GetMotionMaster()->MoveJump(fX, fY, fZ, 24.21229f, 6.0f, 1);
+
+                m_bIsJumping = true;
+            }
+        }
     }
 
     void UpdateAI(const uint32 uiDiff) override
@@ -1239,18 +966,6 @@ struct npc_scarlet_ghoulAI : public ScriptedPetAI
             DoScriptText(SAY_GHUL_SPAWN_1 - urand(0, 4), m_creature, pOwner);
 
             m_bDidInitText = true;
-        }
-
-        if (m_uiUnsummonTimer)
-        {
-            if (m_uiUnsummonTimer <= uiDiff)
-            {
-                m_creature->Suicide();
-                if (m_creature->IsPet())
-                    ((Pet*)m_creature)->Unsummon(PET_SAVE_AS_DELETED);
-                return;
-            }
-            m_uiUnsummonTimer -= uiDiff;
         }
 
         if (m_bIsJumping)
@@ -1264,34 +979,12 @@ bool EffectDummyCreature_npc_scarlet_ghoul(Unit* pCaster, uint32 uiSpellId, Spel
 {
     if (uiSpellId == SPELL_GOTHIK_GHOUL_PING && uiEffIndex == EFFECT_INDEX_0)
     {
-        if (npc_scarlet_ghoulAI* pGhoulAi = dynamic_cast<npc_scarlet_ghoulAI*>(pCreatureTarget->AI()))
-        {
-            if (!pGhoulAi->m_bGotHit)                       // First hit
-            {
-                pCreatureTarget->CastSpell(pCreatureTarget, 52517, TRIGGERED_NONE);
-                pGhoulAi->m_bGotHit = true;
-            }
-            else                                            // Second hit
-            {
-                world_map_ebon_hold* pInstance = static_cast<world_map_ebon_hold*>(pCreatureTarget->GetInstanceData());
-                if (pCaster && pInstance && pInstance->CanAndToggleGothikYell())
-                    DoScriptText(SAY_GOTHIK_THROW_IN_PIT, pCaster);
-
-                float fX, fY, fZ;
-                pCreatureTarget->GetRandomPoint(aPitPosition[0], aPitPosition[1], aPitPosition[2], 10.0f, fX, fY, fZ);
-                pGhoulAi->m_bIsJumping = true;
-                pCreatureTarget->GetMotionMaster()->MoveJump(fX, fY, fZ, 24.21229f, 6.0f, 1);
-            }
-        }
+        // inform creature AI that was hit by spell
+        pCaster->AI()->SendAIEvent(AI_EVENT_CUSTOM_A, pCaster, pCreatureTarget);
         return true;
     }
 
     return false;
-}
-
-UnitAI* GetAI_npc_scarlet_ghoul(Creature* pCreature)
-{
-    return new npc_scarlet_ghoulAI(pCreature);
 }
 
 /*######
@@ -1535,7 +1228,7 @@ struct npc_highlord_darion_mograineAI : public npc_escortAI
             case NPC_WARRIOR_OF_THE_FROZEN_WASTES:
                 m_lAttackersGUIDs.push_back(pSummoned->GetObjectGuid());
                 // make the scourge attack only during the battle
-                if (m_creature->isInCombat())
+                if (m_creature->IsInCombat())
                 {
                     if (Unit* pTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0))
                         pSummoned->AI()->AttackStart(pTarget);
@@ -1678,7 +1371,7 @@ struct npc_highlord_darion_mograineAI : public npc_escortAI
                     if (Creature* pTemp = m_pInstance->GetSingleCreatureFromStorage(i.m_uiEntry))
                     {
                         // normally it shouldn't happen
-                        if (!pTemp->isAlive())
+                        if (!pTemp->IsAlive())
                             pTemp->Respawn();
                         else
                             pTemp->AI()->EnterEvadeMode();
@@ -1720,7 +1413,7 @@ struct npc_highlord_darion_mograineAI : public npc_escortAI
         if (uiMotionType == POINT_MOTION_TYPE && uiPointId == POINT_MOVE_RETURN_BATTLE)
         {
             SetCombatMovement(false);
-            DoStartMovement(m_creature->getVictim());
+            DoStartMovement(m_creature->GetVictim());
         }
     }
 
@@ -1741,7 +1434,7 @@ struct npc_highlord_darion_mograineAI : public npc_escortAI
 
         switch (uiPoint)
         {
-            case 0:
+            case 1:
                 // summon light champions
                 for (auto& i : aLightArmySpawnLoc)
                     m_creature->SummonCreature(i.m_uiEntry, i.m_fX, i.m_fY, i.m_fZ, i.m_fO, TEMPSPAWN_CORPSE_TIMED_DESPAWN, 5 * MINUTE * IN_MILLISECONDS);
@@ -1754,12 +1447,12 @@ struct npc_highlord_darion_mograineAI : public npc_escortAI
                     m_creature->SummonCreature(NPC_DEFENDER_OF_THE_LIGHT, fX, fY, fZ, 0.0f, TEMPSPAWN_CORPSE_DESPAWN, 5000);
                 }
                 break;
-            case 2:
+            case 3:
                 // yell dawn 1
                 if (Creature* pKorfax = m_pInstance->GetSingleCreatureFromStorage(NPC_KORFAX_CHAMPION_OF_THE_LIGHT))
                     DoScriptText(SAY_LIGHT_OF_DAWN_STAND_1, pKorfax);
                 break;
-            case 3:
+            case 4:
                 // yell dawn 2
                 if (Creature* pMaxwell = m_pInstance->GetSingleCreatureFromStorage(NPC_LORD_MAXWELL_TYROSUS))
                     DoScriptText(SAY_LIGHT_OF_DAWN_STAND_2, pMaxwell);
@@ -1780,7 +1473,7 @@ struct npc_highlord_darion_mograineAI : public npc_escortAI
                 // max fight timer
                 m_uiFightTimer = 5 * MINUTE * IN_MILLISECONDS;
                 break;
-            case 4:
+            case 5:
                 // start the battle
                 SetEscortPaused(true);
 
@@ -1804,7 +1497,7 @@ struct npc_highlord_darion_mograineAI : public npc_escortAI
                         pDefender->AI()->AttackStart(m_creature);
                 }
                 break;
-            case 5:
+            case 6:
                 m_creature->Unmount();
 
                 // battle finished - remove light of dawn aura
@@ -1857,7 +1550,7 @@ struct npc_highlord_darion_mograineAI : public npc_escortAI
         for (const auto& itr : PlayerList)
         {
             Player* pPlayer = itr.getSource();
-            if (pPlayer && pPlayer->GetQuestStatus(QUEST_ID_LIGHT_OF_DAWN) == QUEST_STATUS_INCOMPLETE && pPlayer->isAlive() && m_creature->IsWithinDistInMap(pPlayer, 50.0f))
+            if (pPlayer && pPlayer->GetQuestStatus(QUEST_ID_LIGHT_OF_DAWN) == QUEST_STATUS_INCOMPLETE && pPlayer->IsAlive() && m_creature->IsWithinDistInMap(pPlayer, 50.0f))
                 pPlayer->CastSpell(pPlayer, SPELL_THE_LIGHT_OF_DAWN_CREDIT, TRIGGERED_OLD_TRIGGERED);
         }
     }
@@ -2514,7 +2207,7 @@ struct npc_highlord_darion_mograineAI : public npc_escortAI
                 else
                     m_uiFightTimer -= uiDiff;
 
-                if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+                if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
                     return;
 
                 // battle sounds
@@ -2555,7 +2248,7 @@ struct npc_highlord_darion_mograineAI : public npc_escortAI
 
                 if (m_uiDeathStrikeTimer < uiDiff)
                 {
-                    if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_DEATH_STRIKE) == CAST_OK)
+                    if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_DEATH_STRIKE) == CAST_OK)
                         m_uiDeathStrikeTimer = urand(5000, 10000);
                 }
                 else
@@ -2563,7 +2256,7 @@ struct npc_highlord_darion_mograineAI : public npc_escortAI
 
                 if (m_uiDeathEmbraceTimer < uiDiff)
                 {
-                    if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_DEATH_EMBRACE) == CAST_OK)
+                    if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_DEATH_EMBRACE) == CAST_OK)
                         m_uiDeathEmbraceTimer = urand(5000, 10000);
                 }
                 else
@@ -2571,7 +2264,7 @@ struct npc_highlord_darion_mograineAI : public npc_escortAI
 
                 if (m_uiIcyTouchTimer < uiDiff)
                 {
-                    if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_ICY_TOUCH_DARION) == CAST_OK)
+                    if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_ICY_TOUCH_DARION) == CAST_OK)
                         m_uiIcyTouchTimer = urand(5000, 10000);
                 }
                 else
@@ -2579,7 +2272,7 @@ struct npc_highlord_darion_mograineAI : public npc_escortAI
 
                 if (m_uiUnholyBlightTimer < uiDiff)
                 {
-                    if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_UNHOLY_BLIGHT) == CAST_OK)
+                    if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_UNHOLY_BLIGHT) == CAST_OK)
                         m_uiUnholyBlightTimer = urand(5000, 10000);
                 }
                 else
@@ -2674,7 +2367,7 @@ struct npc_fellow_death_knightAI : public ScriptedAI
 
     void EnterEvadeMode() override
     {
-        if (!m_creature->isAlive())
+        if (!m_creature->IsAlive())
             return;
 
         if (!m_pInstance)
@@ -2728,12 +2421,12 @@ struct npc_fellow_death_knightAI : public ScriptedAI
 
     void UpdateAI(const uint32 uiDiff) override
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_uiPlagueStrikeTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_PLAGUE_STRIKE_KNIGHTS) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_PLAGUE_STRIKE_KNIGHTS) == CAST_OK)
                 m_uiPlagueStrikeTimer = urand(5000, 10000);
         }
         else
@@ -2741,7 +2434,7 @@ struct npc_fellow_death_knightAI : public ScriptedAI
 
         if (m_uiIcyTouchTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_ICY_TOUCH_DARION) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_ICY_TOUCH_DARION) == CAST_OK)
                 m_uiIcyTouchTimer = urand(5000, 10000);
         }
         else
@@ -2749,7 +2442,7 @@ struct npc_fellow_death_knightAI : public ScriptedAI
 
         if (m_uiBloodStrikeTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_BLOOD_STRIKE) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_BLOOD_STRIKE) == CAST_OK)
                 m_uiBloodStrikeTimer = urand(5000, 10000);
         }
         else
@@ -2890,56 +2583,398 @@ struct npc_scarlet_courierAI : public ScriptedAI
                 m_uiCombatTimer -= uiDiff;
         }
 
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         DoMeleeAttackIfReady();
     }
 };
 
-UnitAI* GetAI_npc_scarlet_courier(Creature* pCreature)
+/*######
+## spell_emblazon_runeblade - 51770
+######*/
+
+struct spell_emblazon_runeblade : public SpellScript
 {
-    return new npc_scarlet_courierAI(pCreature);
-}
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* caster = spell->GetAffectiveCaster();
+        if (!caster)
+            return;
+
+        uint32 uiSpell = spell->m_spellInfo->CalculateSimpleValue(effIdx);
+
+        caster->CastSpell(caster, uiSpell, TRIGGERED_NONE);
+    }
+};
+
+/*######
+## spell_emblazon_runeblade_aura - 51769
+######*/
+
+struct spell_emblazon_runeblade_aura : public AuraScript
+{
+    void OnPeriodicTrigger(Aura* aura, PeriodicTriggerData& data) const override
+    {
+        // override target; the real caster of the triggered spell is the player
+        data.caster = aura->GetCaster();
+        data.target = nullptr;
+    }
+};
+
+/*######
+## spell_death_knight_initiate_visual - 51519
+######*/
+
+struct spell_death_knight_initiate_visual : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* unitTarget = spell->GetUnitTarget();
+        if (!unitTarget)
+            return;
+
+        uint32 spellId;
+
+        bool isMale = unitTarget->getGender() == GENDER_MALE;
+        switch (unitTarget->getRace())
+        {
+            case RACE_HUMAN:    spellId = isMale ? 51520 : 51534; break;
+            case RACE_DWARF:    spellId = isMale ? 51538 : 51537; break;
+            case RACE_NIGHTELF: spellId = isMale ? 51535 : 51536; break;
+            case RACE_GNOME:    spellId = isMale ? 51539 : 51540; break;
+            case RACE_DRAENEI:  spellId = isMale ? 51541 : 51542; break;
+            case RACE_ORC:      spellId = isMale ? 51543 : 51544; break;
+            case RACE_UNDEAD:   spellId = isMale ? 51549 : 51550; break;
+            case RACE_TAUREN:   spellId = isMale ? 51547 : 51548; break;
+            case RACE_TROLL:    spellId = isMale ? 51546 : 51545; break;
+            case RACE_BLOODELF: spellId = isMale ? 51551 : 51552; break;
+            default:
+                return;
+        }
+
+        unitTarget->CastSpell(unitTarget, spellId, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+/*######
+## spell_siphon_of_acherus_aura - 51859
+######*/
+
+struct spell_siphon_of_acherus_aura : public AuraScript
+{
+    void OnPeriodicTrigger(Aura* aura, PeriodicTriggerData& data) const override
+    {
+        // override target; the real caster of the triggered spell is the player
+        data.caster = aura->GetCaster();
+        data.target = nullptr;
+    }
+};
+
+/*######
+## spell_siphon_of_acherus - 51858
+######*/
+
+struct spell_siphon_of_acherus : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* caster = spell->GetAffectiveCaster();
+        Unit* target = spell->GetUnitTarget();
+        if (!caster || !target)
+            return;
+
+        uint32 spellId;
+
+        switch (target->GetEntry())
+        {
+            case 28525: spellId = 51973; break;     // New Avalon Forge
+            case 28542: spellId = 51979; break;     // Scarlet Hold
+            case 28543: spellId = 51976; break;     // New Avalon Town Hall
+            case 28544: spellId = 51981; break;     // Chapel of the Crimson Flame
+            default:
+                return;
+        }
+
+        target->CastSpell(caster, spellId, TRIGGERED_NONE);
+    }
+};
+
+/*######
+## spell_siphon_of_acherus_credit - 51973, 51976, 51979, 51981
+######*/
+
+struct spell_siphon_of_acherus_credit : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* target = spell->GetUnitTarget();
+        if (!target)
+            return;
+
+        uint32 triggerSpellId;
+
+        switch (spell->m_spellInfo->Id)
+        {
+            case 51973: triggerSpellId = 51974; break;  // New Avalon Forge
+            case 51979: triggerSpellId = 51980; break;  // Scarlet Hold
+            case 51976: triggerSpellId = 51977; break;  // New Avalon Town Hall
+            case 51981: triggerSpellId = 51982; break;  // Chapel of the Crimson Flame
+            default:
+                return;
+        }
+
+        target->CastSpell(target, triggerSpellId, TRIGGERED_NONE);
+    }
+};
+
+/*######
+## spell_recall_eye_of_acherus - 52694
+######*/
+
+struct spell_recall_eye_of_acherus : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* caster = spell->GetAffectiveCaster();
+        if (!caster)
+            return;
+
+        Unit* charmer = caster->GetCharmer();
+        if (!charmer || charmer->GetTypeId() != TYPEID_PLAYER)
+            return;
+
+        charmer->RemoveAurasDueToSpell(51852);
+        charmer->RemoveAurasDueToSpell(51923);
+    }
+};
+
+/*######
+## spell_summon_ghouls_scarlet_crusade - 51904
+######*/
+
+struct spell_summon_ghouls_scarlet_crusade : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* target = spell->GetUnitTarget();
+        if (!target)
+            return;
+
+        // cast Summon Ghouls On Scarlet Crusade
+        target->CastSpell(target, 51900, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+/*######
+## spell_ghoulplosion - 52519
+######*/
+
+struct spell_ghoulplosion : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        // action handled by effect 2; effect 0 is for visual
+        if (effIdx != EFFECT_INDEX_2)
+            return;
+
+        Unit* target = spell->GetUnitTarget();
+        if (!target)
+            return;
+
+        // cast Dispel Scarlet Ghoul Credit Counter on ghoul owner
+        target->CastSpell(target, 52555, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+/*######
+## spell_dispel_scarlet_ghoul_credit - 52555
+######*/
+
+struct spell_dispel_scarlet_ghoul_credit : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* caster = spell->GetCaster();
+        Unit* target = spell->GetUnitTarget();
+        if (!target || !caster || !caster->IsCreature())
+            return;
+
+        uint32 spellId = spell->m_spellInfo->CalculateSimpleValue(effIdx);
+
+        // remove ghoul counter aura - 52500
+        target->RemoveAurasByCasterSpell(spellId, caster->GetObjectGuid());
+
+        // unsummon pet
+        Creature* ghoul = static_cast<Creature*>(caster);
+        if (ghoul->IsPet())
+            (static_cast<Pet*>(caster))->Unsummon(PET_SAVE_AS_DELETED);
+    }
+};
+
+/*######
+## spell_gift_of_the_harvester - 52479
+######*/
+
+struct spell_gift_of_the_harvester : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* caster = spell->GetCaster();
+        Unit* target = spell->GetUnitTarget();
+        if (!target || !caster || !caster->IsPlayer())
+            return;
+
+        // summon ghoul using spell 52490
+        uint32 spellId = spell->m_spellInfo->CalculateSimpleValue(effIdx);
+
+        // Each ghoul casts 52500 onto player, so use number of auras as check
+        Unit::SpellAuraHolderConstBounds bounds = caster->GetSpellAuraHolderBounds(52500);
+        uint32 summonedGhouls = std::distance(bounds.first, bounds.second);
+
+        // randomly summon a ghoul pet (creature id 28845) or a hostile ghost (creature id 28846)
+        caster->CastSpell(target->GetPositionX(), target->GetPositionY(), target->GetPositionZ(), urand(0, 2) || summonedGhouls >= 5 ? 52505 : spellId, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+/*######
+## go_plague_cauldron
+######*/
+
+struct go_plague_cauldron : public GameObjectAI
+{
+    go_plague_cauldron(GameObject* go) : GameObjectAI(go)
+    {
+        go->GetVisibilityData().SetInvisibilityMask(10, true);
+        go->GetVisibilityData().AddInvisibilityValue(10, 1000);
+    }
+};
+
+/*######
+## spell_devour_humanoid - 53110
+######*/
+
+struct spell_devour_humanoid : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* caster = spell->GetAffectiveCaster();
+        Unit* target = spell->GetUnitTarget();
+        if (!caster || !target || !target->IsCreature())
+            return;
+
+        uint32 spellId = spell->m_spellInfo->CalculateSimpleValue(effIdx);
+        target->CastSpell(caster, spellId, TRIGGERED_OLD_TRIGGERED);
+
+        Creature* creatureTarget = static_cast<Creature*>(target);
+        creatureTarget->ForcedDespawn(8000);
+    }
+};
+
+/*######
+## spell_portal_to_capital_city - 58418, 58420
+######*/
+
+struct spell_portal_to_capital_city : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* target = spell->GetUnitTarget();
+        if (!target || !target->IsPlayer())
+            return;
+
+        Player* playerTarget = static_cast<Player*>(target);
+
+        // get quest id and spell id
+        uint32 spellId = spell->m_spellInfo->CalculateSimpleValue(EFFECT_INDEX_0);
+        uint32 questId = spell->m_spellInfo->CalculateSimpleValue(EFFECT_INDEX_1);
+
+        // check for quest complete, but not rewarded
+        if (playerTarget->GetQuestStatus(questId) == QUEST_STATUS_COMPLETE && !playerTarget->GetQuestRewardStatus(questId))
+            target->CastSpell(target, spellId, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+/*######
+## spell_acherus_deathcharger - 48778
+######*/
+
+struct spell_acherus_deathcharger : public SpellScript
+{
+    void OnCast(Spell* spell) const override
+    {
+        if (Unit* caster = spell->GetCaster())
+        {
+            if (caster->HasAura(53081))
+            {
+                auto& list = spell->GetTargetList();
+                for (auto& target : list)
+                    if (target.targetGUID == caster->GetObjectGuid())
+                        target.effectHitMask &= ~((1 << EFFECT_INDEX_1) | (1 << EFFECT_INDEX_0));
+            }
+        }
+    }
+
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx == EFFECT_INDEX_2 && spell->GetCaster()->HasAura(53081))
+            spell->GetCaster()->CastSpell(nullptr, 58819, TRIGGERED_INSTANT_CAST);
+    }
+};
 
 void AddSC_ebon_hold()
 {
     Script* pNewScript = new Script;
     pNewScript->Name = "npc_a_special_surprise";
-    pNewScript->GetAI = &GetAI_npc_a_special_surprise;
+    pNewScript->GetAI = &GetNewAIInstance<npc_a_special_surpriseAI>;
     pNewScript->RegisterSelf();
 
     pNewScript = new Script;
     pNewScript->Name = "npc_death_knight_initiate";
-    pNewScript->GetAI = &GetAI_npc_death_knight_initiate;
+    pNewScript->GetAI = &GetNewAIInstance<npc_death_knight_initiateAI>;
     pNewScript->pGossipHello = &GossipHello_npc_death_knight_initiate;
     pNewScript->pGossipSelect = &GossipSelect_npc_death_knight_initiate;
     pNewScript->pEffectDummyNPC = &EffectDummyCreature_npc_death_knight_initiate;
     pNewScript->RegisterSelf();
 
     pNewScript = new Script;
-    pNewScript->Name = "npc_unworthy_initiate";
-    pNewScript->GetAI = &GetAI_npc_unworthy_initiate;
-    pNewScript->RegisterSelf();
-
-    pNewScript = new Script;
-    pNewScript->Name = "npc_unworthy_initiate_anchor";
-    pNewScript->GetAI = &GetAI_npc_unworthy_initiate_anchor;
-    pNewScript->RegisterSelf();
-
-    pNewScript = new Script;
-    pNewScript->Name = "go_acherus_soul_prison";
-    pNewScript->pGOUse = &GOUse_go_acherus_soul_prison;
-    pNewScript->RegisterSelf();
-
-    pNewScript = new Script;
     pNewScript->Name = "npc_eye_of_acherus";
-    pNewScript->GetAI = &GetAI_npc_eye_of_acherus;
+    pNewScript->GetAI = &GetNewAIInstance<npc_eye_of_acherusAI>;
     pNewScript->RegisterSelf();
 
     pNewScript = new Script;
     pNewScript->Name = "npc_scarlet_ghoul";
-    pNewScript->GetAI = &GetAI_npc_scarlet_ghoul;
+    pNewScript->GetAI = &GetNewAIInstance<npc_scarlet_ghoulAI>;
     pNewScript->pEffectDummyNPC = &EffectDummyCreature_npc_scarlet_ghoul;
     pNewScript->RegisterSelf();
 
@@ -2962,6 +2997,26 @@ void AddSC_ebon_hold()
 
     pNewScript = new Script;
     pNewScript->Name = "npc_scarlet_courier";
-    pNewScript->GetAI = &GetAI_npc_scarlet_courier;
+    pNewScript->GetAI = &GetNewAIInstance<npc_scarlet_courierAI>;
     pNewScript->RegisterSelf();
+
+    pNewScript = new Script;
+    pNewScript->Name = "go_plague_cauldron";
+    pNewScript->GetGameObjectAI = &GetNewAIInstance<go_plague_cauldron>;
+    pNewScript->RegisterSelf();
+
+    RegisterSpellScript<spell_emblazon_runeblade>("spell_emblazon_runeblade");
+    RegisterAuraScript<spell_emblazon_runeblade_aura>("spell_emblazon_runeblade_aura");
+    RegisterSpellScript<spell_death_knight_initiate_visual>("spell_death_knight_initiate_visual");
+    RegisterAuraScript<spell_siphon_of_acherus_aura>("spell_siphon_of_acherus_aura");
+    RegisterSpellScript<spell_siphon_of_acherus>("spell_siphon_of_acherus");
+    RegisterSpellScript<spell_siphon_of_acherus_credit>("spell_siphon_of_acherus_credit");
+    RegisterSpellScript<spell_recall_eye_of_acherus>("spell_recall_eye_of_acherus");
+    RegisterSpellScript<spell_summon_ghouls_scarlet_crusade>("spell_summon_ghouls_scarlet_crusade");
+    RegisterSpellScript<spell_ghoulplosion>("spell_ghoulplosion");
+    RegisterSpellScript<spell_dispel_scarlet_ghoul_credit>("spell_dispel_scarlet_ghoul_credit");
+    RegisterSpellScript<spell_gift_of_the_harvester>("spell_gift_of_the_harvester");
+    RegisterSpellScript<spell_devour_humanoid>("spell_devour_humanoid");
+    RegisterSpellScript<spell_portal_to_capital_city>("spell_portal_to_capital_city");
+    RegisterSpellScript<spell_acherus_deathcharger>("spell_acherus_deathcharger");
 }

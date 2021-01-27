@@ -18,10 +18,24 @@ enum
     NPC_HALION_TWILIGHT             = 40142,            // Halion - Twilight Realm NPC
     NPC_HALION_CONTROLLER           = 40146,
 
+    // npcs used in the Halion encounter
+    NPC_COMBUSTION                  = 40001,
+    NPC_CONSUMPTION                 = 40135,
+
     NPC_SHADOW_ORB_1                = 40083,            // shadow orbs for Halion encounter
     NPC_SHADOW_ORB_2                = 40100,
     NPC_SHADOW_ORB_3                = 40468,            // heroic only
     NPC_SHADOW_ORB_4                = 40469,            // heroic only
+
+    NPC_ORB_CARRIER                 = 40081,            // vehicle for shadow orbs; has 2 or 4 shadow orbs boarded; boarding handled by DB
+    NPC_ORB_ROTATION_FOCUS          = 40091,            // npc that moves in a circle, around the center of the boss arena; the orb carrier will alter rotation based on the position of this npc
+
+    NPC_METEOR_STRIKE_MAIN          = 40029,            // summons the other meteor strikes using serverside spells like 74680, 74681, 74682, 74683
+    NPC_METEOR_STRIKE_1             = 40041,            // Npc 40029 summons the first 4 secondary meteor strike npcs around the main one; then each of them summons one 40055 towards the back using serverside spells 74687, 74688
+    NPC_METEOR_STRIKE_2             = 40042,
+    NPC_METEOR_STRIKE_3             = 40043,
+    NPC_METEOR_STRIKE_4             = 40044,
+    NPC_METEOR_STRIKE_FLAME         = 40055,            // Each npc 40055 summons other 10 40055 npcs towards the back of the creature
 
     NPC_SAVIANA                     = 39747,            // minibosses
     NPC_BALTHARUS                   = 39751,
@@ -30,9 +44,10 @@ enum
     NPC_XERESTRASZA                 = 40429,            // friendly npc, used for some cinematic and quest
     NPC_ZARITHRIAN_SPAWN_STALKER    = 39794,
 
-    GO_TWILIGHT_PORTAL_ENTER_1      = 202794,           // Portals used in the Halion encounter
-    GO_TWILIGHT_PORTAL_ENTER_2      = 202795,
-    GO_TWILIGHT_PORTAL_LEAVE        = 202796,
+    // Portals used in the Halion encounter
+    GO_TWILIGHT_PORTAL_ENTER_1      = 202794,           // uses spell 75074; summoned by 74809
+    GO_TWILIGHT_PORTAL_ENTER_2      = 202795,           // uses spell 75074; static spawn; used in the 3rd encounter phase
+    GO_TWILIGHT_PORTAL_LEAVE        = 202796,           // uses spell 74812; static spawn; used in the 3rd encounter phase
 
     GO_FIRE_FIELD                   = 203005,           // Xerestrasza flame door
     GO_FLAME_WALLS                  = 203006,           // Zarithrian flame walls
@@ -68,6 +83,7 @@ class instance_ruby_sanctum : public ScriptedInstance
         void OnPlayerEnter(Player* pPlayer) override;
         void OnCreatureCreate(Creature* pCreature) override;
         void OnObjectCreate(GameObject* pGo) override;
+        void OnCreatureRespawn(Creature* pCreature) override;
 
         void SetData(uint32 uiType, uint32 uiData) override;
         uint32 GetData(uint32 uiType) const override;
@@ -75,6 +91,7 @@ class instance_ruby_sanctum : public ScriptedInstance
         void Update(const uint32 diff) override;
 
         void GetSpawnStalkersGuidList(GuidList& lList) const { lList = m_lSpawnStalkersGuidList; }
+        void GetPortalsGuidList(GuidList& lPortals) const { lPortals = m_lTwilightPortalsGuidList; }
 
         const char* Save() const override { return strInstData.c_str(); }
         void Load(const char* chrIn) override;
@@ -94,6 +111,7 @@ class instance_ruby_sanctum : public ScriptedInstance
         uint32 m_uiHalionResetTimer;
 
         GuidList m_lSpawnStalkersGuidList;
+        GuidList m_lTwilightPortalsGuidList;
 };
 
 #endif

@@ -16,14 +16,15 @@
 
 /* ScriptData
 SDName: Boss_Supremus
-SD%Complete: 90
-SDComment: Unknown if other speed-changes happen, remove AI for trigger mobs in next step
+SD%Complete: 100
+SDComment:
 SDCategory: Black Temple
 EndScriptData */
 
 #include "AI/ScriptDevAI/include/sc_common.h"
 #include "black_temple.h"
 #include "AI/ScriptDevAI/base/TimerAI.h"
+#include "Spells/Scripts/SpellScript.h"
 
 enum
 {
@@ -101,7 +102,7 @@ struct boss_supremusAI : public ScriptedAI, CombatActions
             SetCombatMovement(true);
             if (!m_bTankPhase)
                 ResetTimer(SUPREMUS_ACTION_SWITCH_TARGET, 0); // switch target immediately
-            DoStartMovement(m_creature->getVictim());
+            DoStartMovement(m_creature->GetVictim());
         });
         Reset();
     }
@@ -186,13 +187,14 @@ struct boss_supremusAI : public ScriptedAI, CombatActions
     {
         uint32 uiHealth = 0;
         Unit* target = nullptr;
+        Unit* victim = m_creature->GetVictim();
 
         ThreatList const& tList = m_creature->getThreatManager().getThreatList();
         for (auto iter : tList)
         {
             Unit* pUnit = m_creature->GetMap()->GetUnit(iter->getUnitGuid());
 
-            if (pUnit && m_creature->CanReachWithMeleeAttack(pUnit))
+            if (pUnit && pUnit != victim && m_creature->CanReachWithMeleeAttack(pUnit))
             {
                 if (pUnit->GetHealth() > uiHealth)
                 {
@@ -201,6 +203,9 @@ struct boss_supremusAI : public ScriptedAI, CombatActions
                 }
             }
         }
+        if (!target && victim && m_creature->CanReachWithMeleeAttack(victim))
+            target = victim;
+
         return target;
     }
 
@@ -220,7 +225,7 @@ struct boss_supremusAI : public ScriptedAI, CombatActions
             {
                 Unit* target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 1, nullptr, SELECT_FLAG_PLAYER);
                 if (!target)
-                    target = m_creature->getVictim();
+                    target = m_creature->GetVictim();
 
                 summoned->CastSpell(nullptr, SPELL_MOLTEN_FLAME, TRIGGERED_NONE);
                 summoned->SetInCombatWithZone();
@@ -327,6 +332,7 @@ struct boss_supremusAI : public ScriptedAI, CombatActions
                         {
                             if (DoCastSpellIfCan(target, SPELL_HATEFUL_STRIKE) == CAST_OK)
                             {
+                                m_creature->SetTarget(target);
                                 ResetTimer(i, GetSubsequentActionTimer(SupremusActions(i)));
                                 SetActionReadyStatus(i, false);
                             }
@@ -340,9 +346,9 @@ struct boss_supremusAI : public ScriptedAI, CombatActions
 
     void UpdateAI(const uint32 diff) override
     {
-        UpdateTimers(diff, m_creature->isInCombat());
+        UpdateTimers(diff, m_creature->IsInCombat());
 
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
         
         ExecuteActions();
@@ -350,15 +356,30 @@ struct boss_supremusAI : public ScriptedAI, CombatActions
     }
 };
 
-UnitAI* GetAI_boss_supremus(Creature* pCreature)
+struct SupremusRandomTarget : public AuraScript
 {
-    return new boss_supremusAI(pCreature);
-}
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        Unit* caster = aura->GetCaster();
+        if (!caster || !caster->AI())
+            return;
+        if (apply)
+        {
+            caster->FixateTarget(aura->GetTarget());
+            caster->AI()->AttackStart(aura->GetTarget()); // visual change for immediate crosshair update - only safe with fixate
+            caster->CastSpell(aura->GetTarget(), SPELL_CHARGE, TRIGGERED_OLD_TRIGGERED);
+        }
+        else
+            caster->AI()->SendAIEvent(AI_EVENT_CUSTOM_A, aura->GetTarget(), caster);
+    }
+};
 
 void AddSC_boss_supremus()
 {
     Script* pNewScript = new Script;
     pNewScript->Name = "boss_supremus";
-    pNewScript->GetAI = &GetAI_boss_supremus;
+    pNewScript->GetAI = &GetNewAIInstance<boss_supremusAI>;
     pNewScript->RegisterSelf();
+
+    RegisterAuraScript<SupremusRandomTarget>("spell_supremus_random_target");
 }

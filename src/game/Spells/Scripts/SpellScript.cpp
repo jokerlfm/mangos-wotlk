@@ -50,6 +50,7 @@ void SpellScriptMgr::SetAuraScript(std::string scriptName, AuraScript* script)
     m_auraScriptStringMap.emplace(scriptName, script);
 }
 
+extern void LoadDeathKnightScripts();
 extern void LoadDruidScripts();
 extern void LoadHunterScripts();
 extern void LoadMageScripts();
@@ -59,10 +60,12 @@ extern void LoadRogueScripts();
 extern void LoadShamanScripts();
 extern void LoadWarlockScripts();
 extern void LoadWarriorScripts();
+extern void LoadScalingScripts();
 
 void SpellScriptMgr::LoadScripts()
 {
     // load all scripts with names
+    LoadDeathKnightScripts();
     LoadDruidScripts();
     LoadHunterScripts();
     LoadMageScripts();
@@ -72,6 +75,7 @@ void SpellScriptMgr::LoadScripts()
     LoadShamanScripts();
     LoadWarlockScripts();
     LoadWarriorScripts();
+    LoadScalingScripts();
 
     // load names from DB and pair names to Ids
     std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT Id, ScriptName FROM spell_scripts"));

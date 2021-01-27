@@ -54,7 +54,7 @@ struct boss_maiden_of_griefAI : public ScriptedAI
 {
     boss_maiden_of_griefAI(Creature* pCreature) : ScriptedAI(pCreature)
     {
-        m_pInstance = (instance_halls_of_stone*)pCreature->GetInstanceData();
+        m_pInstance = static_cast<instance_halls_of_stone*>(pCreature->GetInstanceData());
         m_bIsRegularMode = pCreature->GetMap()->IsRegularDifficulty();
         Reset();
     }
@@ -110,7 +110,7 @@ struct boss_maiden_of_griefAI : public ScriptedAI
 
     void UpdateAI(const uint32 uiDiff) override
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_uiPartingSorrowTimer < uiDiff)
@@ -158,15 +158,10 @@ struct boss_maiden_of_griefAI : public ScriptedAI
     }
 };
 
-UnitAI* GetAI_boss_maiden_of_grief(Creature* pCreature)
-{
-    return new boss_maiden_of_griefAI(pCreature);
-}
-
 void AddSC_boss_maiden_of_grief()
 {
     Script* pNewScript = new Script;
     pNewScript->Name = "boss_maiden_of_grief";
-    pNewScript->GetAI = &GetAI_boss_maiden_of_grief;
+    pNewScript->GetAI = &GetNewAIInstance<boss_maiden_of_griefAI>;
     pNewScript->RegisterSelf();
 }

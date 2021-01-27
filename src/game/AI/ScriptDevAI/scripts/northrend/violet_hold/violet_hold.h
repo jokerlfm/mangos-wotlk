@@ -57,21 +57,26 @@ enum
     NPC_ZURAMAT                 = 29314,
     NPC_CYANIGOSA               = 31134,
 
-    NPC_PORTAL_GUARDIAN         = 30660,
-    NPC_PORTAL_KEEPER           = 30695,
+    NPC_PORTAL_GUARDIAN         = 30660,                    // summoned by serverside spell 58028
+    NPC_PORTAL_KEEPER_1         = 30695,
+    NPC_PORTAL_KEEPER_2         = 30893,
 
-    NPC_AZURE_INVADER           = 30661,
+    NPC_AZURE_INVADER           = 30661,                    // summoned by serverside spell 58087
     NPC_AZURE_SPELLBREAKER      = 30662,
     NPC_AZURE_BINDER            = 30663,
-    NPC_AZURE_MAGE_SLAYER       = 30664,
-    NPC_MAGE_HUNTER             = 30665,
-    NPC_AZURE_CAPTAIN           = 30666,
-    NPC_AZURE_SORCEROR          = 30667,
-    NPC_AZURE_RAIDER            = 30668,
-    NPC_AZURE_STALKER           = 32191,
+    NPC_AZURE_MAGE_SLAYER       = 30664,                    // summoned by serverside spell 58091
+    NPC_MAGE_HUNTER             = 30665,                    // summoned by serverside spell 58093
+    NPC_AZURE_CAPTAIN           = 30666,                    // summoned by serverside spell 60048
+    NPC_AZURE_SORCEROR          = 30667,                    // summoned by serverside spell 60050
+    NPC_AZURE_RAIDER            = 30668,                    // summoned by serverside spell 60049
+    NPC_AZURE_STALKER           = 32191,                    // summoned by serverside spell 60086
 
-    NPC_VOID_SENTRY             = 29364,                    // Npc checked for Zuramat achiev
-    NPC_ICHORON_SUMMON_TARGET   = 29326,                    // Npc which summons the Ichoron globules
+    NPC_VOID_SENTRY             = 29364,                    // Npc checked for Zuramat achiev; has phasing aura
+    NPC_VOID_SENTRY_BALL        = 29365,                    // void sentry which deals damage during the encounter
+    NPC_ETHEREAL_SPHERE_1       = 29271,
+    NPC_ETHEREAL_SPHERE_2       = 32582,
+    NPC_ICHOR_GLOBULE           = 29321,
+    // NPC_ICHORON_SUMMON_TARGET= 29326,                    // Npc which summons the Ichoron globules
 
     // used for intro
     NPC_AZURE_BINDER_INTRO      = 31007,
@@ -79,10 +84,10 @@ enum
     NPC_AZURE_SPELLBREAKER_INTRO = 31009,
     NPC_AZURE_MAGE_SLAYER_INTRO = 31010,
 
-    NPC_AZURE_SABOTEUR          = 31079,
+    NPC_AZURE_SABOTEUR          = 31079,                    // npc that opens the cells; not attackable
 
-    NPC_DEFENSE_SYSTEM          = 30837,
-    NPC_DEFENSE_DUMMY_TARGET    = 30857,
+    NPC_DEFENSE_SYSTEM          = 30837,                    // defense trigger that spawns in the middle of the room; summoned by GO use
+    // NPC_DEFENSE_DUMMY_TARGET = 30857,                    // visual target for the defense system
 
     // 'Ghosts' for Killed mobs after Wipe
     NPC_ARAKKOA                 = 32226,
@@ -93,28 +98,29 @@ enum
     NPC_WATCHER                 = 32235,
     NPC_LAVA_HOUND              = 32237,
 
-    SPELL_DEFENSE_SYSTEM_VISUAL = 57887,
-    SPELL_DEFENSE_SYSTEM_SPAWN  = 57886,
-    SPELL_LIGHTNING_INTRO       = 60038,                    // intro kill spells, also related to spell 58152
-    SPELL_ARCANE_LIGHTNING      = 57930,                    // damage spells, related to spell 57912
+    // Spells for the defense system - all handled in EAI
+    // SPELL_DEFENSE_SYSTEM_VISUAL = 57887,                    // spawn spells
+    // SPELL_DEFENSE_SYSTEM_SPAWN  = 57886,
+    // SPELL_LIGHTNING_DAMAGE      = 57912,                    // intro damage spell
+    // SPELL_LIGHTNING_VISUAL      = 57930,                    // targets creature 30857 all around the room
+    // SPELL_LIGHTNING_KILL        = 58152,                    // instant kill spell
+    // SPELL_LIGHTNING_VISUAL2     = 60038,                    // second visual spell - purpose unk
 
     SPELL_DESTROY_DOOR_SEAL     = 58040,                    // spell periodic cast by misc
     SPELL_TELEPORTATION_PORTAL  = 57687,                    // visual aura, but possibly not used? creature_template model for portals are same
 
-    SPELL_SHIELD_DISRUPTION     = 58291,                    // dummy when opening a cell
-    SPELL_SIMPLE_TELEPORT       = 12980,                    // used after a cell has been opened - not sure if the id is correct
+    // SPELL_SHIELD_DISRUPTION  = 58291,                    // dummy when opening a cell
+    // SPELL_SIMPLE_TELEPORT    = 51347,                    // used after a cell has been opened
 
     SPELL_PORTAL_PERIODIC       = 58008,                    // most likely the tick for each summon (tick each 15 seconds)
     SPELL_PORTAL_CHANNEL        = 58012,                    // the blue "stream" between portal and guardian/keeper
-    SPELL_PORTAL_BEAM           = 56046,                    // large beam, unsure if really used here (or possible for something different)
 
-    SPELL_PORTAL_VISUAL_1       = 57872,                    // no idea, but is possibly related based on it's visual appearence
-    SPELL_PORTAL_VISUAL_2       = 57630,
-
+    // yells when the door is about to be breached
     SAY_SEAL_75                 = -1608002,
     SAY_SEAL_50                 = -1608003,
     SAY_SEAL_5                  = -1608004,
 
+    // yells when realeasing specific bosses
     SAY_RELEASE_EREKEM          = -1608008,
     SAY_RELEASE_ICHORON         = -1608009,
     SAY_RELEASE_XEVOZZ          = -1608010,
@@ -131,10 +137,10 @@ enum
     ACHIEV_CRIT_VOID_DANCE      = 7587,                     // Zuramat achiev - 2153
 };
 
-static const float fDefenseSystemLoc[4] = {1888.146f, 803.382f, 58.604f, 3.072f};
-static const float fGuardExitLoc[3] = {1806.955f, 803.851f, 44.36f};
+static const float fCyanigosaLoc[4] = { 1922.109f, 804.44934f, 52.492542f, 3.17649f };
 static const float fSealAttackLoc[3] = {1858.027f, 804.11f, 44.008f};
 
+static const uint32 aRandomPortalElite[3] = { NPC_PORTAL_GUARDIAN, NPC_PORTAL_KEEPER_1, NPC_PORTAL_KEEPER_2 };
 static const uint32 aRandomPortalNpcs[5] = {NPC_AZURE_INVADER, NPC_MAGE_HUNTER, NPC_AZURE_SPELLBREAKER, NPC_AZURE_BINDER, NPC_AZURE_MAGE_SLAYER};
 static const uint32 aRandomIntroNpcs[4] = {NPC_AZURE_BINDER_INTRO, NPC_AZURE_INVADER_INTRO, NPC_AZURE_SPELLBREAKER_INTRO, NPC_AZURE_MAGE_SLAYER_INTRO};
 
@@ -168,8 +174,8 @@ static const PortalData afPortalLocation[] =
 
 struct BossInformation
 {
-    uint32 uiType, uiEntry, uiGhostEntry, uiWayPointId;
-    float fX, fY, fZ;                                       // Waypoint for Saboteur
+    uint32 uiType, uiEntry, uiGhostEntry;
+    uint8 pathId;
     int32 iSayEntry;
 };
 
@@ -181,12 +187,12 @@ struct BossSpawn
 
 static const BossInformation aBossInformation[] =
 {
-    {TYPE_EREKEM,    NPC_EREKEM,    NPC_ARAKKOA,    1, 1877.03f, 853.84f, 43.33f, SAY_RELEASE_EREKEM},
-    {TYPE_ZURAMAT,   NPC_ZURAMAT,   NPC_VOID_LORD,  1, 1922.41f, 847.95f, 47.15f, SAY_RELEASE_ZURAMAT},
-    {TYPE_XEVOZZ,    NPC_XEVOZZ,    NPC_ETHERAL,    1, 1903.61f, 838.46f, 38.72f, SAY_RELEASE_XEVOZZ},
-    {TYPE_ICHORON,   NPC_ICHORON,   NPC_SWIRLING,   1, 1915.52f, 779.13f, 35.94f, SAY_RELEASE_ICHORON},
-    {TYPE_LAVANTHOR, NPC_LAVANTHOR, NPC_LAVA_HOUND, 1, 1855.28f, 760.85f, 38.65f, 0},
-    {TYPE_MORAGG,    NPC_MORAGG,    NPC_WATCHER,    1, 1890.51f, 752.85f, 47.66f, 0}
+    {TYPE_EREKEM,    NPC_EREKEM,    NPC_ARAKKOA,    0, SAY_RELEASE_EREKEM},
+    {TYPE_ZURAMAT,   NPC_ZURAMAT,   NPC_VOID_LORD,  1, SAY_RELEASE_ZURAMAT},
+    {TYPE_XEVOZZ,    NPC_XEVOZZ,    NPC_ETHERAL,    2, SAY_RELEASE_XEVOZZ},
+    {TYPE_ICHORON,   NPC_ICHORON,   NPC_SWIRLING,   3, SAY_RELEASE_ICHORON},
+    {TYPE_LAVANTHOR, NPC_LAVANTHOR, NPC_LAVA_HOUND, 4, 0},
+    {TYPE_MORAGG,    NPC_MORAGG,    NPC_WATCHER,    5, 0}
 };
 
 class instance_violet_hold : public ScriptedInstance
@@ -200,15 +206,10 @@ class instance_violet_hold : public ScriptedInstance
         void OnCreatureCreate(Creature* pCreature) override;
         void OnObjectCreate(GameObject* pGo) override;
 
-        void UpdateCellForBoss(uint32 uiBossEntry, bool bForceClosing = false);
+        void DoReleaseBoss(uint32 entry = 0);
 
-        void SetIntroPortals(bool bDeactivate);
-
-        void CallGuards(bool bRespawn);
-
-        uint32 GetRandomPortalEliteEntry() const { return (urand(0, 1) ? NPC_PORTAL_GUARDIAN : NPC_PORTAL_KEEPER); }
+        uint32 GetRandomPortalEliteEntry() const { return aRandomPortalElite[urand(0, 2)]; }
         uint32 GetRandomMobForNormalPortal() const { return aRandomPortalNpcs[urand(0, 4)]; }
-        uint32 GetRandomMobForIntroPortal() const { return aRandomIntroNpcs[urand(0, 3)]; }
 
         uint32 GetCurrentPortalNumber() const { return m_uiWorldStatePortalCount; }
 
@@ -219,21 +220,20 @@ class instance_violet_hold : public ScriptedInstance
             return (m_uiWorldStatePortalCount % MAX_MINIBOSSES) != 0;
         }
 
-        void ProcessActivationCrystal(Unit* pUser, bool bIsIntro = false);
-
-        void GetErekemGuardList(GuidList& lGuardList) { lGuardList = GetData(TYPE_EREKEM) != DONE ? m_lErekemGuardList : m_lArakkoaGuardList; }
-        void GetIchoronTriggerList(GuidList& lList) const { lList = m_lIchoronTargetsList; }
-
         void OnPlayerEnter(Player* pPlayer) override;
 
         void OnCreatureEnterCombat(Creature* pCreature) override;
-        void OnCreatureEvade(Creature* pCreature);
+        void OnCreatureEvade(Creature* pCreature) override;
         void OnCreatureDeath(Creature* pCreature) override;
+        void OnCreatureRespawn(Creature* pCreature) override;
 
         void SetData(uint32 uiType, uint32 uiData) override;
         uint32 GetData(uint32 uiType) const override;
 
         bool CheckAchievementCriteriaMeet(uint32 uiCriteriaId, Player const* pSource, Unit const* pTarget, uint32 uiMiscValue1 /* = 0*/) const override;
+
+        void ShowChatCommands(ChatHandler* handler) override;
+        void ExecuteChatCommand(ChatHandler* handler, char* args) override;
 
         const char* Save() const override { return m_strInstData.c_str(); }
         void Load(const char* chrIn) override;
@@ -245,15 +245,24 @@ class instance_violet_hold : public ScriptedInstance
     protected:
         PortalData const* GetPortalData() const { return &afPortalLocation[m_uiPortalId]; }
 
-        void UpdateWorldState(bool bEnable = true);
+        void StartEvent();
 
+        void ResetEvent();
+        void ResetVariables();
+        void ResetIntroPortals();
+        void ResetGuards();
+
+        void UpdateWorldState(bool bEnable = true);
+        void UpdateCellForBoss(uint32 uiBossEntry, bool bForceClosing = false);
+
+        void DoSpawnIntroMob();
         void SetRandomBosses();
 
         void SpawnPortal();
         void SetPortalId();
+        void UpdateCrystals(bool reset);
 
-        void ResetAll();
-        void ResetVariables();
+        void DoClearBossMobs(GuidList& list);
 
         bool IsNextPortalForTrash() const
         {
@@ -261,6 +270,7 @@ class instance_violet_hold : public ScriptedInstance
         }
 
         BossSpawn* CreateBossSpawnByEntry(uint32 uiEntry);
+
         uint32 m_auiEncounter[MAX_ENCOUNTER];
         std::string m_strInstData;
 
@@ -273,7 +283,10 @@ class instance_violet_hold : public ScriptedInstance
         uint32 m_uiMaxCountPortalLoc;
 
         uint32 m_uiSealYellCount;
+        uint32 m_uiIntroSummonTimer;
         uint32 m_uiEventResetTimer;
+        uint32 m_uiEventStartTimer;
+        uint32 m_uiCyanigosaMoveTimer;
 
         bool m_bIsVoidDance;
         bool m_bIsDefenseless;
@@ -281,11 +294,14 @@ class instance_violet_hold : public ScriptedInstance
 
         BossToCellMap m_mBossToCellMap;
 
-        GuidList m_lIntroPortalList;
+        GuidVector m_lIntroPortalVector;
         GuidList m_lGuardsList;
         GuidList m_lErekemGuardList;
         GuidList m_lArakkoaGuardList;
-        GuidList m_lIchoronTargetsList;
+        GuidList m_lVoidSentriesList;
+        GuidList m_lIchorGlobuleList;
+        GuidList m_lEtherealSphereList;
+        GuidList m_lActivationCrystalList;
         std::vector<uint32> m_vRandomBossList;
 
         std::vector<BossSpawn*> m_vRandomBosses;

@@ -210,7 +210,7 @@ struct LootItem
     LootItem(uint32 _itemId, uint32 _count, uint32 _randomSuffix, int32 _randomPropertyId, uint32 _lootSlot);
 
     // Basic checks for player/item compatibility - if false no chance to see the item in the loot
-    bool AllowedForPlayer(Player const* player, WorldObject const* lootTarget) const;
+    bool AllowedForPlayer(Player const* player, WorldObject const* lootTarget, Player const* masterLooter) const;
     LootSlotType GetSlotTypeForSharedLoot(Player const* player, Loot const* loot) const;
     bool IsAllowed(Player const* player, Loot const* loot) const;
 };
@@ -302,7 +302,7 @@ class Loot
 
         // Inserts the item into the loot (called by LootTemplate processors)
         void AddItem(LootStoreItem const& item);
-        void AddItem(uint32 itemid, uint32 count, uint32 randomSuffix, int32 randomPropertyId);             // used in item.cpp to explicitly load a saved item
+        void AddItem(uint32 itemid, uint32 count, uint32 randomSuffix, int32 randomPropertyId, Player* player = nullptr, bool notify = false); // used in item.cpp to explicitly load a saved item and roll disenchant
         bool AutoStore(Player* player, bool broadcast = false, uint32 bag = NULL_BAG, uint32 slot = NULL_SLOT);
         bool CanLoot(Player const* player);
         void ShowContentTo(Player* plr);
@@ -321,7 +321,7 @@ class Loot
         LootItem* GetLootItemInSlot(uint32 itemSlot);
         GroupLootRoll* GetRollForSlot(uint32 itemSlot);
         InventoryResult SendItem(Player* target, uint32 itemSlot);
-        InventoryResult SendItem(Player* target, LootItem* lootItem);
+        InventoryResult SendItem(Player* target, LootItem* lootItem, bool sendError = true);
         WorldObject const* GetLootTarget() const { return m_lootTarget; }
         ObjectGuid const& GetLootGuid() const { return m_guidTarget; }
         ObjectGuid const& GetMasterLootGuid() const { return m_masterOwnerGuid; }
@@ -342,6 +342,7 @@ class Loot
         void NotifyMoneyRemoved();
         void NotifyItemRemoved(uint32 lootIndex);
         void NotifyItemRemoved(Player* player, uint32 lootIndex) const;
+        void NotifyItemChanged(LootItem* item);
         void GroupCheck();
         void SetGroupLootRight(Player* player);
         void GenerateMoneyLoot(uint32 minAmount, uint32 maxAmount);

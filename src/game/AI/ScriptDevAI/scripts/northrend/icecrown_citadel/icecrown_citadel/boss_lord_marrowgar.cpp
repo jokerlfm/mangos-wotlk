@@ -157,13 +157,13 @@ struct boss_lord_marrowgarAI : public ScriptedAI
             float fZ = pSummoned->GetPositionZ();
             // Note: the NearPoint2D function may not be correct here, because we may use a wrong Z value
             m_creature->GetNearPoint2d(fX, fY, 80.0f, m_creature->GetAngle(pSummoned));
-            pSummoned->GetMotionMaster()->MovePoint(0, fX, fY, fZ, false);
+            pSummoned->GetMotionMaster()->MovePoint(0, fX, fY, fZ, FORCED_MOVEMENT_NONE, false);
         }
     }
 
     void UpdateAI(const uint32 uiDiff) override
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         switch (m_uiPhase)
@@ -198,7 +198,7 @@ struct boss_lord_marrowgarAI : public ScriptedAI
                 // Bone Slice
                 if (m_uiBoneSliceTimer < uiDiff)
                 {
-                    if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_BONE_SLICE) == CAST_OK)
+                    if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_BONE_SLICE) == CAST_OK)
                         m_uiBoneSliceTimer = 1000;
                 }
                 else
@@ -242,7 +242,7 @@ struct boss_lord_marrowgarAI : public ScriptedAI
                             m_uiBoneStormTimer = 60000;
                             m_uiBoneSliceTimer = 10000;
                             SetCombatMovement(true);
-                            m_creature->GetMotionMaster()->MoveChase(m_creature->getVictim());
+                            m_creature->GetMotionMaster()->MoveChase(m_creature->GetVictim());
                             m_uiChargesCount = 0;
                             m_uiPhase = PHASE_NORMAL;
                         }

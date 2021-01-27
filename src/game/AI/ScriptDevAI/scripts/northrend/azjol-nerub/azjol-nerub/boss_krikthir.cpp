@@ -57,7 +57,7 @@ struct boss_krikthirAI : public ScriptedAI
 {
     boss_krikthirAI(Creature* pCreature) : ScriptedAI(pCreature)
     {
-        m_pInstance = (instance_azjol_nerub*)pCreature->GetInstanceData();
+        m_pInstance = static_cast<instance_azjol_nerub*>(pCreature->GetInstanceData());
         m_bIsRegularMode = pCreature->GetMap()->IsRegularDifficulty();
         Reset();
     }
@@ -123,12 +123,12 @@ struct boss_krikthirAI : public ScriptedAI
     {
         uint32 uiEntry = pSummoned->GetEntry();
         if (uiEntry == NPC_SKITTERING_SWARMER || uiEntry == NPC_SKITTERING_INFECTOR)
-            pSummoned->AI()->AttackStart(m_creature->getVictim());
+            pSummoned->AI()->AttackStart(m_creature->GetVictim());
     }
 
     void UpdateAI(const uint32 uiDiff) override
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (!m_bFrenzy && m_creature->GetHealthPercent() <= 10.0f)
@@ -142,7 +142,7 @@ struct boss_krikthirAI : public ScriptedAI
 
         if (m_uiCurseTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), m_bIsRegularMode ? SPELL_CURSE_OF_FATIGUE : SPELL_CURSE_OF_FATIGUE_H) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), m_bIsRegularMode ? SPELL_CURSE_OF_FATIGUE : SPELL_CURSE_OF_FATIGUE_H) == CAST_OK)
                 m_uiCurseTimer = 20000;
         }
         else
@@ -150,7 +150,7 @@ struct boss_krikthirAI : public ScriptedAI
 
         if (m_uiMindFlayTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), m_bIsRegularMode ? SPELL_MINDFLAY : SPELL_MINDFLAY_H) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), m_bIsRegularMode ? SPELL_MINDFLAY : SPELL_MINDFLAY_H) == CAST_OK)
                 m_uiMindFlayTimer = 8000;
         }
         else
@@ -171,15 +171,10 @@ struct boss_krikthirAI : public ScriptedAI
     }
 };
 
-UnitAI* GetAI_boss_krikthir(Creature* pCreature)
-{
-    return new boss_krikthirAI(pCreature);
-}
-
 void AddSC_boss_krikthir()
 {
     Script* pNewScript = new Script;
     pNewScript->Name = "boss_krikthir";
-    pNewScript->GetAI = &GetAI_boss_krikthir;
+    pNewScript->GetAI = &GetNewAIInstance<boss_krikthirAI>;
     pNewScript->RegisterSelf();
 }

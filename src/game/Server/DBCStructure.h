@@ -80,6 +80,10 @@ struct AchievementCriteriaEntry
         {
             uint32  creatureID;                             // 3
             uint32  creatureCount;                          // 4
+            uint32  condFlag1;                              // 5 condition flag1; in wotlk can be 0, 3 or 13
+            uint32  condVal1;                               // 6 condition value1; provided if condFlag1 is !0
+            uint32  condFlag2;                              // 7 condition flag2; in wotlk can be 0, 3 or 9
+            uint32  condVal2;                               // 8 condition value2; provided if condFlag2 is !0
         } kill_creature;
 
         // ACHIEVEMENT_CRITERIA_TYPE_WIN_BG                 = 1
@@ -189,6 +193,9 @@ struct AchievementCriteriaEntry
         {
             uint32  questID;                                // 3
             uint32  questCount;                             // 4
+            uint32  unused1;                                // 5
+            uint32  unused2;                                // 6
+            uint32  condFlag;                               // 7 condition flag; in wotlk value can be 0 or 10
         } complete_quest;
 
         // ACHIEVEMENT_CRITERIA_TYPE_BE_SPELL_TARGET        = 28
@@ -197,6 +204,10 @@ struct AchievementCriteriaEntry
         {
             uint32  spellID;                                // 3
             uint32  spellCount;                             // 4
+            uint32  condFlag1;                              // 5 condition flag1; in wotlk can be 0, 3 or 13
+            uint32  condVal1;                               // 6 condition value1; provided if condFlag1 is !0
+            uint32  condFlag2;                              // 7 condition flag2; in wotlk can be 0, 3 or 9
+            uint32  condVal2;                               // 8 condition value2; provided if condFlag2 is !0
         } be_spell_target;
 
         // ACHIEVEMENT_CRITERIA_TYPE_CAST_SPELL             = 29
@@ -205,13 +216,32 @@ struct AchievementCriteriaEntry
         {
             uint32  spellID;                                // 3
             uint32  castCount;                              // 4
+            uint32  condFlag1;                              // 5 condition flag1; in wotlk can be 0 or 3
+            uint32  condVal1;                               // 6 condition value1; provided if condFlag1 is !0
+            uint32  condFlag2;                              // 7 condition flag2; in wotlk can be 0, 3
+            uint32  condVal2;                               // 8 condition value2; provided if condFlag2 is !0
         } cast_spell;
+
+        // ACHIEVEMENT_CRITERIA_TYPE_BG_OBJECTIVE_CAPTURE   = 30
+        struct
+        {
+            uint32  objectiveId;                            // 3 related to battleground objectives; each objective action has a defined id
+            uint32  count;                                  // 4
+            uint32  condFlag1;                              // 5 condition flag1; in wotlk can be 0 or 3
+            uint32  condVal1;                               // 6 condition value1; provided if condFlag1 is !0
+            uint32  condFlag2;                              // 7 condition flag2; in wotlk can be 0, 1 or 3
+            uint32  condVal2;                               // 8 condition value2; provided if condFlag2 is !0
+        } capture_bg_objective;
 
         // ACHIEVEMENT_CRITERIA_TYPE_HONORABLE_KILL_AT_AREA = 31
         struct
         {
             uint32  areaID;                                 // 3 Reference to AreaTable.dbc
             uint32  killCount;                              // 4
+            uint32  condFlag1;                              // 5 condition flag1; in wotlk can be 0 or 3
+            uint32  condVal1;                               // 6 condition value1; provided if condFlag1 is !0
+            uint32  condFlag2;                              // 7 condition flag2; in wotlk can be 0, 3
+            uint32  condVal2;                               // 8 condition value2; provided if condFlag2 is !0
         } honorable_kill_at_area;
 
         // ACHIEVEMENT_CRITERIA_TYPE_WIN_ARENA              = 32
@@ -231,6 +261,18 @@ struct AchievementCriteriaEntry
         {
             uint32  spellID;                                // 3 Reference to Map.dbc
         } learn_spell;
+
+        // ACHIEVEMENT_CRITERIA_TYPE_HONORABLE_KILL         = 35
+        // ACHIEVEMENT_CRITERIA_TYPE_GET_KILLING_BLOWS      = 56
+        struct
+        {
+            uint32  unused;                                 // 3
+            uint32  count;                                  // 4
+            uint32  condFlag1;                              // 5 condition flag1; in wotlk can be 0 or 3
+            uint32  condVal1;                               // 6 condition value1; provided if condFlag1 is !0
+            uint32  condFlag2;                              // 7 condition flag2; in wotlk can be 0, 1 or 3
+            uint32  condVal2;                               // 8 condition value2; provided if condFlag2 is !0
+        } honorable_kill_battleground;
 
         // ACHIEVEMENT_CRITERIA_TYPE_OWN_ITEM               = 36
         struct
@@ -367,7 +409,6 @@ struct AchievementCriteriaEntry
         } do_emote;
         // ACHIEVEMENT_CRITERIA_TYPE_DAMAGE_DONE            = 13
         // ACHIEVEMENT_CRITERIA_TYPE_HEALING_DONE           = 55
-        // ACHIEVEMENT_CRITERIA_TYPE_GET_KILLING_BLOWS      = 56
         struct
         {
             uint32  unused;                                 // 3
@@ -405,11 +446,16 @@ struct AchievementCriteriaEntry
         } use_gameobject;
 
         // ACHIEVEMENT_CRITERIA_TYPE_SPECIAL_PVP_KILL       = 70
-        // TODO: are those special criteria stored in the dbc or do we have to add another sql table?
+        // Note: some achiev criterias require an extra pvp script check
+        // Note2: in 3.x either both flags and maps are provided or none of them
         struct
         {
             uint32  unused;                                 // 3
             uint32  killCount;                              // 4
+            uint32  flag1;                                  // 5    0 or 3; if !0 then mapId1 is provided; Possible guess: flag1 and mapId1 are checked for normal battleground difficulty;
+            uint32  mapId1;                                 // 6
+            uint32  flag2;                                  // 7    0 or 3; if !0 then mapId2 is provided; Possible guess: flag2 and mapId2 are checked for max lvl battleground difficulty
+            uint32  mapId2;                                 // 8
         } special_pvp_kill;
 
         // ACHIEVEMENT_CRITERIA_TYPE_FISH_IN_GAMEOBJECT     = 72
@@ -491,7 +537,7 @@ struct AchievementCriteriaEntry
     char*  name[16];                                        // 9-24     m_description_lang
     // uint32 name_flags;                                   // 25
     uint32  completionFlag;                                 // 26       m_flags
-    // uint32  timedCriteriaStartType;                      // 27       m_timer_start_event Only appears with timed achievements, seems to be the type of starting a timed Achievement, only type 1 and some of type 6 need manual starting: 1: ByEventId(?) (serverside IDs), 2: ByQuestId, 5: ByCastSpellId(?), 6: BySpellIdTarget(some of these are unknown spells, some not, some maybe spells), 7: ByKillNpcId,  9: ByUseItemId
+    uint32  timedCriteriaStartType;                         // 27       m_timer_start_event Only appears with timed achievements, seems to be the type of starting a timed Achievement, only type 1 and some of type 6 need manual starting: 1: ByEventId(?) (serverside IDs), 2: ByQuestId, 5: ByCastSpellId(?), 6: BySpellIdTarget(some of these are unknown spells, some not, some maybe spells), 7: ByKillNpcId,  9: ByUseItemId
     uint32  timedCriteriaMiscId;                            // 28       m_timer_asset_id Alway appears with timed events, used internally to start the achievement, store
     uint32  timeLimit;                                      // 29       m_timer_time
     uint32  showOrder;                                      // 30       m_ui_order also used in achievement shift-links as index in state bitmask
@@ -1016,6 +1062,43 @@ struct GlyphSlotEntry
     uint32  Order;                                          //          m_tooltip
 };
 
+struct GMSurveyAnswersEntry
+{
+    uint32    ID;                                           // 0    m_ID
+    uint32    sortIndex;                                    // 1    m_Sort_Index
+    uint32    questionID;                                   // 2    m_GMSurveyQuestionID
+    char*     answer[16];                                   // 3-19 m_Answer_lang
+    // 20 string flags, unused
+};
+
+struct GMSurveyCurrentSurveyEntry
+{
+    uint32    localeID;                                     // 0    m_LANGID
+    uint32    surveyID;                                     // 1    m_GMSURVEY_ID
+};
+
+#define MAX_GMSURVEY_QUESTIONS 10                           // Hardcoded in all versions of the game, max amount of questions in gm survey
+
+struct GMSurveyEntry
+{
+    uint32    ID;                                           // 0    m_ID
+    uint32    questionID[MAX_GMSURVEY_QUESTIONS];           // 1-11 m_Q[10]
+};
+
+struct GMSurveyQuestionsEntry
+{
+    uint32    ID;                                           // 0    m_ID
+    char*     question[16];                                 // 1-17 m_Question_lang;
+    // 18 string flags, unused
+};
+
+struct GMTicketCategoryEntry
+{
+    uint32    ID;                                           // 0    m_ID
+    char*     name[16];                                     // 1-17 m_category_lang
+    // 18 string flags, unused
+};
+
 // All Gt* DBC store data for 100 levels, some by 100 per class/race
 #define GT_MAX_LEVEL    100
 // gtOCTClassCombatRatingScalar.dbc stores data for 32 ratings, look at MAX_COMBAT_RATING for real used amount
@@ -1327,7 +1410,7 @@ struct MapEntry
     uint32  MapID;                                          // 0        m_ID
     // char*       internalname;                            // 1        m_Directory
     uint32  map_type;                                       // 2        m_InstanceType
-    // uint32 mapFlags;                                     // 3        m_Flags (0x100 - CAN_CHANGE_PLAYER_DIFFICULTY)
+    uint32  Flags;                                          // 3        m_Flags (0x100 - CAN_CHANGE_PLAYER_DIFFICULTY)
     // uint32 isPvP;                                        // 4        m_PVP 0 or 1 for battlegrounds (not arenas)
     char*   name[16];                                       // 5-20     m_MapName_lang
     // 21 string flags
@@ -1361,6 +1444,8 @@ struct MapEntry
     {
         return MapID == 0 || MapID == 1 || MapID == 530 || MapID == 571;
     }
+
+    bool IsDynamicDifficultyMap() const { return (Flags & MAP_FLAG_DYNAMIC_DIFFICULTY) != 0; }
 };
 
 struct MapDifficultyEntry
@@ -2072,6 +2157,28 @@ struct TotemCategoryEntry
     uint32    categoryMask;                                 // 19       m_totemCategoryMask (compatibility mask for same type: different for totems, compatible from high to low for rods)
 };
 
+struct TransportAnimationEntry
+{
+    uint32 id;                                              // 0        // m_id
+    uint32 TransportEntry;                                  // 1        // m_transportId (matched with gameobjects type 11 and 15)
+    uint32 TimeSeg;                                         // 2        // m_timeIndex
+    float   X;                                              // 3        // m_x
+    float   Y;                                              // 4        // m_y
+    float   Z;                                              // 5        // m_z
+    // uint32  MovementId;                                  // 6
+};
+
+struct TransportRotationEntry
+{
+    // uint32 id;                                           // 0        // m_id
+    uint32 TransportEntry;                                  // 1        // m_transportId (matched with gameobjects type 11 and 15)
+    uint32 TimeSeg;                                         // 2        // m_timeIndex
+    float x;                                                // 3        // m_x
+    float y;                                                // 4        // m_y
+    float z;                                                // 5        // m_z
+    float w;                                                // 6        // m_o
+};
+
 #define MAX_VEHICLE_SEAT 8
 
 struct VehicleEntry
@@ -2169,6 +2276,18 @@ struct VehicleSeatEntry
     // 55       m_cameraEnteringZoom"
     // 56       m_cameraSeatZoomMin
     // 57       m_cameraSeatZoomMax
+
+    inline bool HasFlag(VehicleSeatFlags flag) const { return (m_flags & flag) != 0; }
+    inline bool HasFlag(VehicleSeatFlagsB flag) const { return (m_flagsB & flag) != 0; }
+
+    inline bool CanEnterOrExit() const { return HasFlag(VehicleSeatFlags(SEAT_FLAG_CAN_EXIT | SEAT_FLAG_CAN_CONTROL | SEAT_FLAG_SHOULD_USE_VEH_SEAT_EXIT_ANIM_ON_FORCED_EXIT)); }
+    inline bool CanSwitchFromSeat() const { return HasFlag(SEAT_FLAG_CAN_SWITCH); }
+    inline bool IsUsableByOverride() const {
+        return HasFlag(VehicleSeatFlags(SEAT_FLAG_UNCONTROLLED | SEAT_FLAG_UNK15))
+            || HasFlag(VehicleSeatFlagsB(SEAT_FLAG_B_USABLE_FORCED | SEAT_FLAG_B_USABLE_FORCED_2 |
+                SEAT_FLAG_B_USABLE_FORCED_3 | SEAT_FLAG_B_USABLE_FORCED_4));
+    }
+    inline bool IsEjectable() const { return HasFlag(SEAT_FLAG_B_EJECTABLE); }
 };
 
 struct WMOAreaTableEntry
@@ -2281,7 +2400,7 @@ struct TaxiPathBySourceAndDestination
 typedef std::map<uint32, TaxiPathBySourceAndDestination> TaxiPathSetForSource;
 typedef std::map<uint32, TaxiPathSetForSource> TaxiPathSetBySource;
 
-typedef std::vector<TaxiPathNodeEntry const*> TaxiPathNodeList;
+typedef Path<TaxiPathNodeEntry const*> TaxiPathNodeList;
 typedef std::vector<TaxiPathNodeList> TaxiPathNodesByPath;
 
 #define TaxiMaskSize 14

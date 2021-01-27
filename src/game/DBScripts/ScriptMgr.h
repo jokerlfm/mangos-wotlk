@@ -52,7 +52,7 @@ enum ScriptCommand                                          // resSource, resTar
     // dataint = (bool) setRun; 0 = off (default), 1 = on
     SCRIPT_COMMAND_OPEN_DOOR                = 11,           // datalong=db_guid (or not provided), datalong2=reset_delay
     SCRIPT_COMMAND_CLOSE_DOOR               = 12,           // datalong=db_guid (or not provided), datalong2=reset_delay
-    SCRIPT_COMMAND_ACTIVATE_OBJECT          = 13,           // source = unit, target=GO
+    SCRIPT_COMMAND_ACTIVATE_OBJECT          = 13,           // source = unit, target=GO; data_flags & SCRIPT_FLAG_COMMAND_ADDITIONAL send gameobject custom anim, datalong = animId
     SCRIPT_COMMAND_REMOVE_AURA              = 14,           // resSource = Unit, datalong = spell_id
     SCRIPT_COMMAND_CAST_SPELL               = 15,           // resSource = Unit, cast spell at resTarget = Unit
     // datalong=spellid
@@ -62,7 +62,7 @@ enum ScriptCommand                                          // resSource, resTar
     SCRIPT_COMMAND_CREATE_ITEM              = 17,           // source or target must be player, datalong = item entry, datalong2 = amount
     SCRIPT_COMMAND_DESPAWN_SELF             = 18,           // resSource = Creature, datalong = despawn delay
     SCRIPT_COMMAND_PLAY_MOVIE               = 19,           // target can only be a player, datalog = movie id
-    SCRIPT_COMMAND_MOVEMENT                 = 20,           // resSource = Creature. datalong = MovementType (0:idle, 1:random or 2:waypoint), datalong2 = wander-distance/pathId
+    SCRIPT_COMMAND_MOVEMENT                 = 20,           // resSource = Creature. datalong = MovementType (0:idle, 1:random or 2:waypoint), datalong2 = wander-distance/pathId, datalong3 = timer
     // data_flags &  SCRIPT_FLAG_COMMAND_ADDITIONAL = Random-movement around current position
     SCRIPT_COMMAND_SET_ACTIVEOBJECT         = 21,           // resSource = Creature
     // datalong=bool 0=off, 1=on
@@ -109,7 +109,7 @@ enum ScriptCommand                                          // resSource, resTar
     // datalong: Send mailTemplateId from resSource (if provided) to player resTarget
     // datalong2: AlternativeSenderEntry. Use as sender-Entry
     // dataint1: Delay (>= 0) in Seconds
-    SCRIPT_COMMAND_SET_FLY                  = 39,           // resSource = Creature
+    SCRIPT_COMMAND_SET_HOVER                  = 39,           // resSource = Creature
     // datalong = bool 0=off, 1=on
     // data_flags & SCRIPT_FLAG_COMMAND_ADDITIONAL set/unset byte flag UNIT_BYTE1_FLAG_FLY_ANIM
     SCRIPT_COMMAND_DESPAWN_GO               = 40,           // resTarget = GameObject
@@ -127,6 +127,9 @@ enum ScriptCommand                                          // resSource, resTar
     // datalong2=castFlags, enum TriggerCastFlags
     // dataint1-3 define the &bp value for the spell. At least one field is required.
     SCRIPT_COMMAND_INTERRUPT_SPELL          = 47,           // datalong = SpellType enum CurrentSpellTypes
+    SCRIPT_COMMAND_MODIFY_UNIT_FLAGS        = 48,           // resSource = Creature
+    // datalong=UnitFlags
+    // datalong2:0x00=toggle, 0x01=add, 0x02=remove
 };
 
 #define MAX_TEXT_ID 4                                       // used for SCRIPT_COMMAND_TALK, SCRIPT_COMMAND_EMOTE, SCRIPT_COMMAND_CAST_SPELL, SCRIPT_COMMAND_TERMINATE_SCRIPT
@@ -230,7 +233,7 @@ struct ScriptInfo
 
         struct                                              // SCRIPT_COMMAND_ACTIVATE_OBJECT (13)
         {
-            uint32 empty1;                                  // datalong
+            uint32 animId;                                  // datalong
             uint32 empty2;                                  // datalong;
         } activateObject;
 
@@ -274,6 +277,7 @@ struct ScriptInfo
         {
             uint32 movementType;                            // datalong
             uint32 wanderORpathId;                          // datalong2
+            uint32 timer;                                   // datalong3
         } movement;
 
         struct                                              // SCRIPT_COMMAND_SET_ACTIVEOBJECT (21)
@@ -383,7 +387,7 @@ struct ScriptInfo
             uint32 altSender;                               // datalong2;
         } sendMail;
 
-        struct                                              // SCRIPT_COMMAND_SET_FLY (39)
+        struct                                              // SCRIPT_COMMAND_SET_HOVER (39)
         {
             uint32 fly;                                     // datalong
             uint32 empty;                                   // datalong2
@@ -422,6 +426,12 @@ struct ScriptInfo
             uint32 currentSpellType;                        // datalong
         } interruptSpell;
 
+        struct                                              // SCRIPT_COMMAND_MODIFY_UNIT_FLAGS (48)
+        {
+            uint32 flag;                                    // datalong
+            uint32 change_flag;                             // datalong2
+        } unitFlag;
+
         struct
         {
             uint32 data[3];
@@ -439,6 +449,13 @@ struct ScriptInfo
     float y;
     float z;
     float o;
+    uint32 condition_id;
+
+    ScriptInfo() : id(0), delay(0), command(0), buddyEntry(0), searchRadiusOrGuid(0), data_flags(0), x(0), y(0), z(0), o(0), condition_id(0)
+    {
+        memset(raw.data, 0, sizeof(raw.data));
+        memset(textId, 0, sizeof(textId));
+    }
 
     // helpers
     uint32 GetGOGuid() const
@@ -484,6 +501,7 @@ struct ScriptInfo
             case SCRIPT_COMMAND_MOVE_TO:
             case SCRIPT_COMMAND_TEMP_SPAWN_CREATURE:
             case SCRIPT_COMMAND_REMOVE_AURA:
+            case SCRIPT_COMMAND_ACTIVATE_OBJECT:
             case SCRIPT_COMMAND_PLAY_SOUND:
             case SCRIPT_COMMAND_CREATE_ITEM:
             case SCRIPT_COMMAND_MOVEMENT:
@@ -493,7 +511,7 @@ struct ScriptInfo
             case SCRIPT_COMMAND_TERMINATE_COND:
             case SCRIPT_COMMAND_SET_FACING:
             case SCRIPT_COMMAND_MOVE_DYNAMIC:
-            case SCRIPT_COMMAND_SET_FLY:
+            case SCRIPT_COMMAND_SET_HOVER:
                 return true;
             default:
                 return false;
@@ -588,7 +606,8 @@ class ScriptMgr
 
         bool CheckScriptStringTemplateId(uint32 id) const { return m_scriptTemplates[STRING_TEMPLATE].find(id) != m_scriptTemplates[STRING_TEMPLATE].end(); }
         bool CheckScriptRelayTemplateId(uint32 id) const { return m_scriptTemplates[RELAY_TEMPLATE].find(id) != m_scriptTemplates[RELAY_TEMPLATE].end(); }
-        typedef std::vector<std::pair<int32, uint32>> ScriptTemplateVector;
+        typedef std::pair<int32, uint32> ScriptTemplatePair;
+        typedef std::vector<ScriptTemplatePair> ScriptTemplateVector;
         void GetScriptStringTemplate(uint32 id, ScriptTemplateVector& stringTemplate) { stringTemplate = m_scriptTemplates[STRING_TEMPLATE][id]; }
         void GetScriptRelayTemplate(uint32 id, ScriptTemplateVector& stringTemplate) { stringTemplate = m_scriptTemplates[RELAY_TEMPLATE][id]; }
         int32 GetRandomScriptTemplateId(uint32 id, uint8 templateType);
@@ -614,8 +633,10 @@ class ScriptMgr
 
         AreaTriggerScriptMap    m_AreaTriggerScripts;
         EventIdScriptMap        m_EventIdScripts;
-
+        
         ScriptTemplateMap       m_scriptTemplates[MAX_TYPE];
+        ScriptTemplateMap       m_scriptTemplatesEquallyChanced[MAX_TYPE];
+        ScriptTemplateMap       m_scriptTemplatesExplicitlyChanced[MAX_TYPE];
         ScriptNameMap           m_scriptNames;
 
         // atomic op counter for active scripts amount

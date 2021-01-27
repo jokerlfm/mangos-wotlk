@@ -120,7 +120,7 @@ struct boss_baltharusAI : public ScriptedAI
 
     void MoveInLineOfSight(Unit* pWho) override
     {
-        if (!m_bHasDoneIntro && pWho->GetTypeId() == TYPEID_PLAYER && !((Player*)pWho)->isGameMaster())
+        if (!m_bHasDoneIntro && pWho->GetTypeId() == TYPEID_PLAYER && !((Player*) pWho)->IsGameMaster())
         {
             m_introDialogue.StartNextDialogueText(SAY_HELP);
             m_bHasDoneIntro = true;
@@ -171,7 +171,7 @@ struct boss_baltharusAI : public ScriptedAI
     {
         m_introDialogue.DialogueUpdate(uiDiff);
 
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_creature->GetHealthPercent() < 100 - m_fHealthPercentCheck * m_uiPhase)
@@ -258,7 +258,7 @@ struct npc_baltharus_cloneAI : public ScriptedAI
 
     void UpdateAI(const uint32 uiDiff) override
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_uiBladeTempestTimer < uiDiff)

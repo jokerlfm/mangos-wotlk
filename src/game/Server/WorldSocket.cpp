@@ -30,6 +30,7 @@
 #include "Server/WorldSession.h"
 #include "Log.h"
 #include "Server/DBCStores.h"
+#include "CommonDefines.h"
 
 #include <chrono>
 #include <functional>
@@ -84,6 +85,24 @@ struct ServerPktHeader
 #pragma pack(pop)
 #endif
 
+std::vector<uint32> InitOpcodeCooldowns()
+{
+    std::vector<uint32> data(NUM_MSG_TYPES, 0);
+
+    data[CMSG_WHO] = 5000;
+    data[CMSG_WHOIS] = 5000;
+    data[CMSG_INSPECT] = 5000;
+
+    return data;
+}
+
+std::vector<uint32> WorldSocket::m_packetCooldowns = InitOpcodeCooldowns();
+
+std::deque<uint32> WorldSocket::GetOpcodeHistory()
+{
+    return m_opcodeHistory;
+}
+
 WorldSocket::WorldSocket(boost::asio::io_service& service, std::function<void (Socket*)> closeHandler) : Socket(service, std::move(closeHandler)), m_lastPingTime(std::chrono::system_clock::time_point::min()), m_overSpeedPings(0), m_existingHeader(),
     m_useExistingHeader(false), m_session(nullptr), m_seed(urand())
 {
@@ -97,6 +116,9 @@ void WorldSocket::SendPacket(const WorldPacket& pct, bool immediate)
     // Dump outgoing packet.
     sLog.outWorldPacketDump(GetRemoteEndpoint().c_str(), pct.GetOpcode(), pct.GetOpcodeName(), pct, false);
 
+    // encrypt thread unsafe due to being executed from map contexts frequently - TODO: move to post service context in future
+    std::lock_guard<std::mutex> guard(m_worldSocketMutex);
+
     ServerPktHeader header(pct.size() + 2, pct.GetOpcode());
     m_crypt.EncryptSend((uint8*)header.header, header.getHeaderLength());
 
@@ -107,6 +129,10 @@ void WorldSocket::SendPacket(const WorldPacket& pct, bool immediate)
 
     if (immediate)
         ForceFlushOut();
+
+    m_opcodeHistory.push_front(uint32(pct.GetOpcode()));
+    if (m_opcodeHistory.size() > 50)
+        m_opcodeHistory.resize(20);
 }
 
 bool WorldSocket::Open()
@@ -151,6 +177,7 @@ bool WorldSocket::ProcessIncomingData()
             return false;
         }
 
+        // thread safe due to always being called from service context
         m_crypt.DecryptRecv((uint8*)&header, sizeof(ClientPktHeader));
 
         EndianConvertReverse(header.size);
@@ -200,6 +227,15 @@ bool WorldSocket::ProcessIncomingData()
 
     sLog.outWorldPacketDump(GetRemoteEndpoint().c_str(), pct->GetOpcode(), pct->GetOpcodeName(), *pct, true);
 
+    if (WorldSocket::m_packetCooldowns[opcode])
+    {
+        auto now = std::chrono::time_point_cast<std::chrono::milliseconds>(Clock::now());
+        if (now < m_lastPacket[opcode]) // packet on cooldown
+            return true;
+        else // start cooldown and allow execution
+            m_lastPacket[opcode] = now + std::chrono::milliseconds(WorldSocket::m_packetCooldowns[opcode]);
+    }
+
     try
     {
         switch (opcode)
@@ -221,6 +257,8 @@ bool WorldSocket::ProcessIncomingData()
 
                 return true;
 
+            case CMSG_TIME_SYNC_RESP:
+                pct->SetReceivedTime(std::chrono::steady_clock::now());
             default:
             {
                 if (!m_session)
@@ -305,17 +343,17 @@ bool WorldSocket::HandleAuthSession(WorldPacket& recvPacket)
 
     QueryResult* result =
         LoginDatabase.PQuery("SELECT "
-                             "id, "                      //0
+                             "a.id, "                    //0
                              "gmlevel, "                 //1
                              "sessionkey, "              //2
-                             "last_ip, "                 //3
+                             "lockedIp, "                //3
                              "locked, "                  //4
                              "v, "                       //5
                              "s, "                       //6
                              "expansion, "               //7
                              "mutetime, "                //8
                              "locale "                   //9
-                             "FROM account "
+                             "FROM account a "
                              "WHERE username = '%s'",
                              safe_account.c_str());
 
@@ -383,11 +421,7 @@ bool WorldSocket::HandleAuthSession(WorldPacket& recvPacket)
 
     time_t mutetime = time_t (fields[8].GetUInt64());
 
-    uint8 tempLoc = LocaleConstant(fields[9].GetUInt8());
-    if (tempLoc >= static_cast<uint8>(MAX_LOCALE))
-        locale = LOCALE_enUS;
-    else
-        locale = LocaleConstant(tempLoc);
+    locale = GetLocaleByName(fields[9].GetString());
 
     delete result;
 
@@ -458,8 +492,8 @@ bool WorldSocket::HandleAuthSession(WorldPacket& recvPacket)
     // No SQL injection, username escaped.
     static SqlStatementID updAccount;
 
-    SqlStatement stmt = LoginDatabase.CreateStatement(updAccount, "UPDATE account SET last_ip = ? WHERE username = ?");
-    stmt.PExecute(address.c_str(), account.c_str());
+    SqlStatement stmt = LoginDatabase.CreateStatement(updAccount, "INSERT INTO account_logons(accountId,ip,loginTime,loginSource) VALUES(?,?,NOW(),?)");
+    stmt.PExecute(id, address.c_str(), std::to_string(LOGIN_TYPE_MANGOSD).c_str());
 
     m_crypt.Init(&K);
 
@@ -471,13 +505,16 @@ bool WorldSocket::HandleAuthSession(WorldPacket& recvPacket)
         if (!m_session->RequestNewSocket(this))
             return false;
 
+        uint32 counter = 0;
+
         // wait session going to be ready
-        while (m_session->GetState() != WORLD_SESSION_STATE_READY)
+        while (m_session->GetState() != WORLD_SESSION_STATE_CHAR_SELECTION)
         {
+            ++counter;
             // just wait
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-            if (IsClosed())
+            if (IsClosed() || counter > 20)
                 return false;
         }
     }

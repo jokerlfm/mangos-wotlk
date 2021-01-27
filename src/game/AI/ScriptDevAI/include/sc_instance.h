@@ -42,6 +42,7 @@ class ScriptedInstance : public InstanceData
         // Change active state of doors or buttons
         void DoUseDoorOrButton(ObjectGuid guid, uint32 withRestoreTime = 0, bool useAlternativeState = false);
         void DoUseDoorOrButton(uint32 entry, uint32 withRestoreTime = 0, bool useAlternativeState = false);
+        void DoUseOpenableObject(uint32 entry, bool open, uint32 withRestoreTime = 0, bool useAlternativeState = false);
 
         // Respawns a GO having negative spawntimesecs in gameobject-table
         void DoRespawnGameObject(ObjectGuid guid, uint32 timeToDespawn = MINUTE);
@@ -68,6 +69,8 @@ class ScriptedInstance : public InstanceData
         void DoStartTimedAchievement(AchievementCriteriaTypes criteriaType, uint32 uiTimedCriteriaMiscId);
 
     protected:
+        void DespawnGuids(GuidVector& spawns); // despawns all creature guids and clears contents
+
         // Storage for GO-Guids and NPC-Guids
         EntryGuidMap m_goEntryGuidStore;                   // Store unique GO-Guids by entry
         EntryGuidMap m_npcEntryGuidStore;                  // Store unique NPC-Guids by entry
@@ -124,6 +127,8 @@ class DialogueHelper
         virtual void JustDidDialogueStep(int32 /*entry*/) {}
         /// Will be called to get a speaker, MUST be implemented if not used in instances
         virtual Creature* GetSpeakerByEntry(uint32 /*entry*/) { return nullptr; }
+        /// Will be called to get a target; OPTIONAL
+        virtual Unit* GetDialogueTarget() { return nullptr; }
 
     private:
         void DoNextDialogueStep();

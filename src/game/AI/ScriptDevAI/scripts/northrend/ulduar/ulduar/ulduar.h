@@ -219,6 +219,9 @@ enum
     NPC_NATURES_BLADE           = 33527,
     NPC_GUARDIAN_OF_LIFE        = 33528,
 
+    // Generic
+    NPC_INVISIBLE_STALKER       = 32780,                    // used for teleporting, and probably other things as well
+
     MAX_SPECIAL_ACHIEV_CRITS    = 20,
 
     TYPE_ACHIEV_CAT_LADY        = 0,
@@ -341,10 +344,14 @@ enum
 
     // Mimiron tram
     GO_TRAM                     = 194675,                   // Transport GO to Mimiron
-    // GO_CALL_TRAM_1           = 194914,                   // button - central Ulduar
-    // GO_CALL_TRAM_2           = 194912,                   // button - mimiron
-    // GO_TRAM_TURNAROUND_2     = 194915,                   // triggered by event 21393, when tram does 1st stop
-    // GO_TRAM_TURNAROUND_2     = 194913,                   // triggered by event 21394, when tram does 2nd stop
+    GO_ACTIVATE_TRAM            = 194437,                   // button that starts the tram; the button exists inside the tram
+    GO_CALL_TRAM_CENTER         = 194914,                   // button - central Ulduar
+    GO_CALL_TRAM_MIMIRON        = 194912,                   // button - mimiron
+    GO_TRAM_TURNAROUND_CENTER   = 194915,                   // triggered by event 21393, when tram does 1st stop
+    GO_TRAM_TURNAROUND_MIMIRON  = 194913,                   // triggered by event 21394, when tram does 2nd stop
+
+    // generic
+    GO_ULDUAR_TELEPORTER        = 194569,
 
     // World state used for algalon timer
     WORLD_STATE_TIMER           = 4132,
@@ -361,6 +368,9 @@ enum
     EVENT_ID_TOWER_FLAME        = 21033,
     EVENT_ID_TOWER_FROST        = 21032,
     EVENT_ID_TOWER_STORMS       = 21031,
+
+    // EVENT_ID_TRAM_MIMIRON    = 21393,                    // tram reached Mimiron
+    // EVENT_ID_TRAM_CENTER     = 21394,                    // tram reached Center
 
     // area triggers
     AREATRIGGER_ID_INTRO        = 5388,                     // starts the intro dialogue
@@ -581,6 +591,7 @@ class instance_ulduar : public ScriptedInstance, private DialogueHelper
         void OnCreatureEnterCombat(Creature* pCreature) override;
         void OnCreatureDeath(Creature* pCreature) override;
         void OnObjectCreate(GameObject* pGo) override;
+        void OnObjectSpawn(GameObject* go) override;
 
         void SetData(uint32 uiType, uint32 uiData) override;
         uint32 GetData(uint32 uiType) const override;
@@ -608,6 +619,9 @@ class instance_ulduar : public ScriptedInstance, private DialogueHelper
         void GetSmashTargetsGuids(GuidList& lTargets, bool bLeft) { lTargets = bLeft ? m_lLeftHandBunniesGuids : m_lRightHandBunniesGuids; }
         void GetOminousCloudGuids(GuidList& lClouds) const { lClouds = m_lOminousCloudsGuids; }
 
+        // Function that will trigger the tram turnaround object, based on the tram location
+        void SetTramRotateTimer() { m_uiTramRotateTimer = m_bTramAtCenter ? 33000 : 30000; }
+
         void Update(uint32 uiDiff);
 
     protected:
@@ -627,12 +641,14 @@ class instance_ulduar : public ScriptedInstance, private DialogueHelper
         uint32 m_auiAchievEncounter[MAX_ACHIEV_ENCOUNTER]; // for achievements which need saving
 
         bool m_bHelpersLoaded;
+        bool m_bTramAtCenter;
 
         uint32 m_uiAlgalonTimer;
         uint32 m_uiYoggResetTimer;
         uint32 m_uiShatterAchievTimer;
         uint32 m_uiGauntletStatus;
         uint32 m_uiStairsSpawnTimer;
+        uint32 m_uiTramRotateTimer;
         uint8 m_uiSlayedArenaMobs;
 
         ObjectGuid m_leftKoloStalkerGuid;

@@ -331,7 +331,7 @@ class Item : public Object
         int32 GetItemRandomPropertyId() const { return GetInt32Value(ITEM_FIELD_RANDOM_PROPERTIES_ID); }
         uint32 GetItemSuffixFactor() const { return GetUInt32Value(ITEM_FIELD_PROPERTY_SEED); }
         void SetItemRandomProperties(int32 randomPropId);
-        bool UpdateItemSuffixFactor();
+        void UpdateItemSuffixFactor();
         static int32 GenerateItemRandomPropertyId(uint32 item_id);
         void SetEnchantment(EnchantmentSlot slot, uint32 id, uint32 duration, uint32 charges, ObjectGuid caster = ObjectGuid());
         void SetEnchantmentDuration(EnchantmentSlot slot, uint32 duration);
@@ -343,6 +343,8 @@ class Item : public Object
 
         std::string const& GetText() const { return m_text; }
         void SetText(std::string const& text) { m_text = text; }
+
+        void SendUpdateSockets();
 
         void SendTimeUpdate(Player* owner) const;
         void UpdateDuration(Player* owner, uint32 diff);
@@ -379,6 +381,9 @@ class Item : public Object
         void AddToClientUpdateList() override;
         void RemoveFromClientUpdateList() override;
         void BuildUpdateData(UpdateDataMapType& update_players) override;
+
+        bool IsUsedInSpell() const { return m_usedInSpell; }
+        void SetUsedInSpell(bool state) { m_usedInSpell = state; }
     private:
         std::string m_text;
         uint8 m_slot;
@@ -387,6 +392,7 @@ class Item : public Object
         int16 uQueuePos;
         bool mb_in_trade;                                   // true if item is currently in trade-window
         ItemLootUpdateState m_lootState;
+        bool m_usedInSpell;
 };
 
 #endif

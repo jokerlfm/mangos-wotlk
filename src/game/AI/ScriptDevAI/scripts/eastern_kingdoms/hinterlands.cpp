@@ -28,6 +28,7 @@ EndContentData */
 
 #include "AI/ScriptDevAI/include/sc_common.h"
 #include "AI/ScriptDevAI/base/escort_ai.h"
+#include "world_eastern_kingdoms.h"
 
 /*######
 ## npc_00x09hl
@@ -67,13 +68,13 @@ struct npc_00x09hlAI : public npc_escortAI
     {
         switch (uiPointId)
         {
-            case 26:
+            case 27:
                 DoScriptText(SAY_OOX_AMBUSH, m_creature);
                 break;
-            case 43:
+            case 44:
                 DoScriptText(SAY_OOX_AMBUSH, m_creature);
                 break;
-            case 64:
+            case 65:
                 DoScriptText(SAY_OOX_END, m_creature);
                 if (Player* pPlayer = GetPlayerForEscort())
                     pPlayer->RewardPlayerAndGroupAtEventExplored(QUEST_RESQUE_OOX_09, m_creature);
@@ -85,7 +86,7 @@ struct npc_00x09hlAI : public npc_escortAI
     {
         switch (uiPointId)
         {
-            case 27:
+            case 28:
                 if (m_uiSummonCount >= 3)
                     break;
 
@@ -98,7 +99,7 @@ struct npc_00x09hlAI : public npc_escortAI
                     ++m_uiSummonCount;
                 }
                 break;
-            case 44:
+            case 45:
                 if (m_uiSummonCount >= 6)
                     break;
 
@@ -275,16 +276,16 @@ struct npc_rinjiAI : public npc_escortAI
 
         switch (uiPointId)
         {
-            case 1:
+            case 2:
                 DoScriptText(SAY_RIN_FREE, m_creature, pPlayer);
                 break;
-            case 7:
+            case 8:
                 DoSpawnAmbush(true);
                 break;
-            case 13:
+            case 14:
                 DoSpawnAmbush(false);
                 break;
-            case 17:
+            case 18:
                 DoScriptText(SAY_RIN_COMPLETE, m_creature, pPlayer);
                 pPlayer->RewardPlayerAndGroupAtEventExplored(QUEST_RINJI_TRAPPED, m_creature);
                 SetRun();
@@ -296,7 +297,7 @@ struct npc_rinjiAI : public npc_escortAI
     void UpdateEscortAI(const uint32 uiDiff) override
     {
         // Check if we have a current target
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
         {
             if (HasEscortState(STATE_ESCORT_ESCORTING) && m_uiPostEventCount)
             {
@@ -355,6 +356,24 @@ UnitAI* GetAI_npc_rinji(Creature* pCreature)
     return new npc_rinjiAI(pCreature);
 }
 
+enum
+{
+    YELL_FALSTAD_INVADERS = -27,
+};
+
+bool ProcessEventId_WildhammerMessage(uint32 /*eventId*/, Object* source, Object* /*target*/, bool /*isStart*/)
+{
+    if (!source->IsPlayer())
+        return true;
+
+    Player* player = static_cast<Player*>(source);
+    player->UpdatePvP(true);
+    player->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_ENTER_PVP_COMBAT);
+    if (Creature* falstad = static_cast<ScriptedInstance*>(player->GetInstanceData())->GetSingleCreatureFromStorage(NPC_FALSTAD_WILDHAMMER))
+        DoScriptText(YELL_FALSTAD_INVADERS, falstad, player);
+    return true;
+}
+
 void AddSC_hinterlands()
 {
     Script* pNewScript = new Script;
@@ -367,5 +386,10 @@ void AddSC_hinterlands()
     pNewScript->Name = "npc_rinji";
     pNewScript->GetAI = &GetAI_npc_rinji;
     pNewScript->pQuestAcceptNPC = &QuestAccept_npc_rinji;
+    pNewScript->RegisterSelf();
+
+    pNewScript = new Script;
+    pNewScript->Name = "event_wildhammer_message";
+    pNewScript->pProcessEventId = &ProcessEventId_WildhammerMessage;
     pNewScript->RegisterSelf();
 }

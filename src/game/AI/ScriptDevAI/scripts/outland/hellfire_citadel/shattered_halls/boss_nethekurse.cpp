@@ -196,7 +196,7 @@ struct boss_grand_warlock_nethekurseAI : public ScriptedAI
     // todo: use areatrigger 4347 instead (or when door lock is picked)
     void MoveInLineOfSight(Unit* pWho) override
     {
-        if (!m_bIntroOnce && pWho->GetTypeId() == TYPEID_PLAYER && !((Player*)pWho)->isGameMaster() && m_creature->IsWithinDistInMap(pWho, 45.0f) && m_creature->IsWithinLOSInMap(pWho))
+        if (!m_bIntroOnce && pWho->GetTypeId() == TYPEID_PLAYER && !((Player*) pWho)->IsGameMaster() && m_creature->IsWithinDistInMap(pWho, 45.0f) && m_creature->IsWithinLOSInMap(pWho))
         {
             m_bIntroOnce = true;
             m_bIsIntroEvent = true;
@@ -263,7 +263,7 @@ struct boss_grand_warlock_nethekurseAI : public ScriptedAI
             }
         }
 
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (!m_bIsMainEvent)
@@ -273,7 +273,7 @@ struct boss_grand_warlock_nethekurseAI : public ScriptedAI
         {
             if (m_uiCleaveTimer < uiDiff)
             {
-                DoCastSpellIfCan(m_creature->getVictim(), m_bIsRegularMode ? SPELL_SHADOW_CLEAVE : SPELL_SHADOW_SLAM_H);
+                DoCastSpellIfCan(m_creature->GetVictim(), m_bIsRegularMode ? SPELL_SHADOW_CLEAVE : SPELL_SHADOW_SLAM_H);
                 m_uiCleaveTimer = urand(6000, 8500);
             }
             else
@@ -330,7 +330,11 @@ struct mob_fel_orc_convertAI : public ScriptedAI
         m_uiHemorrhageTimer = 3000;
     }
 
-    void MoveInLineOfSight(Unit* /*pWho*/) override { }
+    void MoveInLineOfSight(Unit* pWho) override
+    {
+        if (pWho->GetTypeId() == TYPEID_PLAYER && !((Player*) pWho)->IsGameMaster() && m_creature->IsWithinDistInMap(pWho, 20.0f) && m_creature->IsWithinLOSInMap(pWho))
+            m_creature->SetInCombatWithZone();
+    }
 
     void AttackedBy(Unit* pWho) override
     {
@@ -374,12 +378,12 @@ struct mob_fel_orc_convertAI : public ScriptedAI
 
     void UpdateAI(const uint32 uiDiff) override
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_uiHemorrhageTimer < uiDiff)
         {
-            DoCastSpellIfCan(m_creature->getVictim(), SPELL_HEMORRHAGE);
+            DoCastSpellIfCan(m_creature->GetVictim(), SPELL_HEMORRHAGE);
             m_uiHemorrhageTimer = 15000;
         }
         else

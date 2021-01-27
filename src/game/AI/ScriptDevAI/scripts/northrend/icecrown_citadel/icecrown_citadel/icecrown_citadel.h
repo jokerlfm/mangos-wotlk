@@ -5,9 +5,11 @@
 #ifndef DEF_ICECROWN_CITADEL_H
 #define DEF_ICECROWN_CITADEL_H
 
+#include "Chat/Chat.h"
+
 enum
 {
-    MAX_ENCOUNTER                   = 15,
+    MAX_ENCOUNTER                   = 16,
 
     TYPE_MARROWGAR                  = 0,
     TYPE_LADY_DEATHWHISPER          = 1,
@@ -24,8 +26,9 @@ enum
     TYPE_BLOOD_WING_ENTRANCE        = 12,
     TYPE_FROST_WING_ENTRANCE        = 13,
     TYPE_PLAGUE_WING_ENTRANCE       = 14,
+    TYPE_SPIRE_FROSTWYRM            = 15,
 
-    // NPC entries
+    // main boss entries
     NPC_LORD_MARROWGAR              = 36612,
     NPC_LADY_DEATHWHISPER           = 36855,
     NPC_DEATHBRINGER_SAURFANG       = 37813,
@@ -58,6 +61,7 @@ enum
     NPC_MURADIN                     = 36948,        // Gunship Battle's encounter(?)
     NPC_TIRION                      = 38995,
     NPC_MENETHIL                    = 38579,
+    NPC_SPIRE_FROSTWYRM             = 37230,
     NPC_FROSTMOURNE_TRIGGER         = 38584,
     NPC_FROSTMOURNE_HOLDER          = 27880,
     NPC_STINKY                      = 37025,
@@ -98,6 +102,15 @@ enum
 
     GO_ORATORY_DOOR                 = 201563,
     GO_DEATHWHISPER_ELEVATOR        = 202220,
+
+    // Gunships
+    GO_THE_SKYBREAKER_A             = 201580,       // alliance raid, alliance ship; map 672
+    GO_ORGRIMS_HAMMER_A             = 201581,       // alliance raid, horde ship; map 673
+
+    GO_THE_SKYBREAKER_H             = 201811,       // horde raid, alliance ship; map 672
+    GO_ORGRIMS_HAMMER_H             = 201812,       // horde raid, horde ship; map 673
+
+    GO_ZEPPELIN_HORDE               = 201834,       // ship used during the Saurfang event; map 718
 
     GO_SAURFANG_DOOR                = 201825,
 
@@ -180,6 +193,8 @@ enum
     AT_SINDRAGOSA_PLATFORM          = 5604,
     AT_LIGHTS_HAMMER_INTRO_1        = 5611,
     AT_LIGHTS_HAMMER_INTRO_2        = 5612,
+    AT_RAMPART_ALLIANCE             = 5628,
+    AT_RAMPART_HORDE                = 5630,
     AT_PUTRICIDES_TRAP              = 5647,
     AT_DEATHWHISPER_INTRO           = 5709,
     AT_FROZEN_THRONE_TELE           = 5718,
@@ -275,6 +290,8 @@ class instance_icecrown_citadel : public ScriptedInstance, private DialogueHelpe
         void SetData(uint32 uiType, uint32 uiData) override;
         uint32 GetData(uint32 uiType) const override;
 
+        uint32 GetPlayerTeam() const { return m_uiTeam; }
+
         const char* Save() const override { return m_strInstData.c_str(); }
         void Load(const char* strIn) override;
 
@@ -295,6 +312,9 @@ class instance_icecrown_citadel : public ScriptedInstance, private DialogueHelpe
         bool CheckAchievementCriteriaMeet(uint32 uiCriteriaId, Player const* pSource, Unit const* pTarget = nullptr, uint32 uiMiscvalue1 = 0) const override;
 
         void Update(const uint32 diff) override;
+
+        void ShowChatCommands(ChatHandler* handler) override;
+        void ExecuteChatCommand(ChatHandler* handler, char* args) override;
 
     private:
         std::string m_strInstData;

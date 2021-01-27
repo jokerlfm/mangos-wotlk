@@ -16,14 +16,15 @@
 
 /* ScriptData
 SDName: Boss_Bloodboil
-SD%Complete: 90
-SDComment: Timers may need adjustments.
+SD%Complete: 100
+SDComment:
 SDCategory: Black Temple
 EndScriptData */
 
 #include "AI/ScriptDevAI/include/sc_common.h"
 #include "black_temple.h"
 #include "AI/ScriptDevAI/base/TimerAI.h"
+#include "Spells/Scripts/SpellScript.h"
 
 enum
 {
@@ -89,9 +90,8 @@ enum GurtoggActions
 
 struct boss_gurtogg_bloodboilAI : public ScriptedAI, public CombatActions
 {
-    boss_gurtogg_bloodboilAI(Creature* creature) : ScriptedAI(creature), CombatActions(GURTOGG_ACTION_MAX)
+    boss_gurtogg_bloodboilAI(Creature* creature) : ScriptedAI(creature), CombatActions(GURTOGG_ACTION_MAX), m_instance(static_cast<ScriptedInstance*>(creature->GetInstanceData()))
     {
-        m_instance = static_cast<ScriptedInstance*>(creature->GetInstanceData());
         AddCombatAction(GURTOGG_ACTION_CHANGE_PHASE, 0u);
         AddCombatAction(GURTOGG_ACTION_BERSERK, 0u);
         AddCombatAction(GURTOGG_ACTION_BLOODBOIL, 0u);
@@ -99,6 +99,10 @@ struct boss_gurtogg_bloodboilAI : public ScriptedAI, public CombatActions
         AddCombatAction(GURTOGG_ACTION_FEL_ACID, 0u);
         AddCombatAction(GURTOGG_ACTION_BEWILDERING_STRIKE, 0u);
         AddCombatAction(GURTOGG_ACTION_EJECT, 0u);
+        m_creature->GetCombatManager().SetLeashingCheck([](Unit*, float, float y, float)
+        {
+            return y < 140.f;
+        });
         Reset();
     }
 
@@ -297,7 +301,7 @@ struct boss_gurtogg_bloodboilAI : public ScriptedAI, public CombatActions
                             flags |= SELECT_FLAG_SKIP_TANK;
                             exclusionCount = 2;
                         }
-                        Unit* target = m_phase1 ? m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, exclusionCount, SPELL_FEL_ACID_1, flags) : m_creature->getVictim();
+                        Unit* target = m_phase1 ? m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, exclusionCount, SPELL_FEL_ACID_1, flags) : m_creature->GetVictim();
                         if (target)
                         {
                             if (DoCastSpellIfCan(target, m_phase1 ? SPELL_FEL_ACID_1 : SPELL_FEL_ACID_2) == CAST_OK)
@@ -311,7 +315,7 @@ struct boss_gurtogg_bloodboilAI : public ScriptedAI, public CombatActions
                     }
                     case GURTOGG_ACTION_BEWILDERING_STRIKE:
                     {
-                        if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_BEWILDERING_STRIKE) == CAST_OK)
+                        if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_BEWILDERING_STRIKE) == CAST_OK)
                         {
                             ResetTimer(i, GetSubsequentActionTimer(GurtoggActions(i)));
                             SetActionReadyStatus(i, false);
@@ -321,7 +325,7 @@ struct boss_gurtogg_bloodboilAI : public ScriptedAI, public CombatActions
                     }
                     case GURTOGG_ACTION_EJECT:
                     {
-                        if (DoCastSpellIfCan(m_creature->getVictim(), m_phase1 ? SPELL_EJECT_1 : SPELL_EJECT_2) == CAST_OK)
+                        if (DoCastSpellIfCan(m_creature->GetVictim(), m_phase1 ? SPELL_EJECT_1 : SPELL_EJECT_2) == CAST_OK)
                         {
                             ResetTimer(i, GetSubsequentActionTimer(GurtoggActions(i)));
                             SetActionReadyStatus(i, false);
@@ -336,12 +340,10 @@ struct boss_gurtogg_bloodboilAI : public ScriptedAI, public CombatActions
 
     void UpdateAI(const uint32 diff) override
     {
-        UpdateTimers(diff, m_creature->isInCombat());
+        UpdateTimers(diff, m_creature->IsInCombat());
 
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
-
-        EnterEvadeIfOutOfCombatArea(diff);
 
         ExecuteActions();
 
@@ -349,15 +351,10 @@ struct boss_gurtogg_bloodboilAI : public ScriptedAI, public CombatActions
     }
 };
 
-UnitAI* GetAI_boss_gurtogg_bloodboil(Creature* pCreature)
-{
-    return new boss_gurtogg_bloodboilAI(pCreature);
-}
-
 void AddSC_boss_gurtogg_bloodboil()
 {
     Script* pNewScript = new Script;
     pNewScript->Name = "boss_gurtogg_bloodboil";
-    pNewScript->GetAI = &GetAI_boss_gurtogg_bloodboil;
+    pNewScript->GetAI = &GetNewAIInstance<boss_gurtogg_bloodboilAI>;
     pNewScript->RegisterSelf();
 }

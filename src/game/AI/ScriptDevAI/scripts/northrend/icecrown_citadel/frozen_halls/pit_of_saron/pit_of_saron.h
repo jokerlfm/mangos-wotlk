@@ -40,8 +40,8 @@ enum
     NPC_CHAMPION_2_HORDE            = 37587,
     NPC_CHAMPION_3_HORDE            = 37588,
     NPC_CHAMPION_1_ALLIANCE         = 37496,
-    NPC_CHAMPION_2_ALLIANCE         = 37497,
-    NPC_CHAMPION_3_ALLIANCE         = 37498,
+    NPC_CHAMPION_2_ALLIANCE         = 37498,
+    NPC_CHAMPION_3_ALLIANCE         = 37497,
     NPC_CORRUPTED_CHAMPION          = 36796,
 
     // Enslaved npcs
@@ -55,6 +55,19 @@ enum
     NPC_FREE_ALLIANCE_SLAVE_1       = 37572,
     NPC_FREE_ALLIANCE_SLAVE_2       = 37575,
     NPC_FREE_ALLIANCE_SLAVE_3       = 37576,
+    NPC_HORDE_SLAVE_1               = 36770,
+    NPC_HORDE_SLAVE_2               = 36771,
+    NPC_HORDE_SLAVE_3               = 36772,
+    NPC_HORDE_SLAVE_4               = 36773,
+    NPC_ALLIANCE_SLAVE_1            = 36764,
+    NPC_ALLIANCE_SLAVE_2            = 36765,
+    NPC_ALLIANCE_SLAVE_3            = 36766,
+    NPC_ALLIANCE_SLAVE_4            = 36767,
+
+    // Various npcs
+    NPC_FROSTBLADE                  = 37670,
+    NPC_FORGEMASTER_STALKER         = 36495,                // used to mark Garfrost jump locations
+    NPC_EYE_LICH_KING               = 36913,
 
     // Ambush npcs
     NPC_YMIRJAR_DEATHBRINGER        = 36892,
@@ -72,6 +85,10 @@ enum
 
     GO_ICEWALL                      = 201885,               // open after gafrost/krick
     GO_HALLS_OF_REFLECT_PORT        = 201848,               // unlocked by jaina/sylvanas at last outro
+    GO_SARONITE_ROCK                = 196485,
+
+    // GO_BALL_AND_CHAIN_ALLIANCE   = 202168,               // ball and chain used in the quests; kept for reference only
+    // GO_BALL_AND_CHAIN_HORDE      = 201969,
 
     AREATRIGGER_ID_TUNNEL_START     = 5578,
     AREATRIGGER_ID_TUNNEL_END       = 5581,
@@ -83,57 +100,89 @@ enum
 static const float afTyrannusMovePos[4][3] =
 {
     {922.6365f, 145.877f, 643.2216f},                       // Hide position
-    {835.5887f, 139.4345f, 530.9526f},                      // Ick position
-    {906.9048f, -49.03813f, 618.8016f},                     // Tunnel position
     {966.3345f, 159.2058f, 665.0453f},                      // Rimefang position
+    {578.7934f, 122.4046f, 583.1108f},                      // Tyrannus backup summon
+    {1017.5917f, 37.31939f, 708.9627f},                     // Tyrannus tunnel move position
 };
 
 struct EventNpcLocations
 {
     uint32 uiEntryHorde, uiEntryAlliance;
     float fX, fY, fZ, fO;
-    float fMoveX, fMoveY, fMoveZ;
+    uint8 pathId;
 };
 
-const EventNpcLocations aEventBeginLocations[3] =
+const EventNpcLocations aEventBeginLocations[19] =
 {
-    {NPC_SYLVANAS_PART1, NPC_JAINA_PART1,   430.3012f, 212.204f,  530.1146f, 0.042f, 440.7882f, 213.7587f, 528.7103f},
-    {NPC_KILARA,         NPC_ELANDRA,       429.7142f, 212.3021f, 530.2822f, 0.14f,  438.9462f, 215.4271f, 528.7087f},
-    {NPC_LORALEN,        NPC_KORELN,        429.5675f, 211.7748f, 530.3246f, 5.972f, 438.5052f, 211.5399f, 528.7085f},
-    // ToDo: add the soldiers here when proper waypoint movement is supported
+    {NPC_SYLVANAS_PART1, NPC_JAINA_PART1,   430.3012f, 212.204f,  530.1146f, 0.042f, 0},
+    {NPC_KILARA,         NPC_ELANDRA,       429.7142f, 212.3021f, 530.2822f, 0.14f,  1},
+    {NPC_LORALEN,        NPC_KORELN,        429.5675f, 211.7748f, 530.3246f, 5.972f, 2},
+
+    {NPC_CHAMPION_1_HORDE, NPC_CHAMPION_1_ALLIANCE, 425.911f,   213.33363f, 528.7967f,  0.21628f, 9},
+    {NPC_CHAMPION_1_HORDE, NPC_CHAMPION_1_ALLIANCE, 425.95148f, 213.43628f, 528.7967f,  0.91054f, 10},
+    {NPC_CHAMPION_1_HORDE, NPC_CHAMPION_1_ALLIANCE, 425.42874f, 213.30286f, 528.805f,   0.16026f, 11},
+    {NPC_CHAMPION_1_HORDE, NPC_CHAMPION_1_ALLIANCE, 429.37402f, 212.1061f,  528.80206f, 6.16585f, 12},
+    {NPC_CHAMPION_1_HORDE, NPC_CHAMPION_1_ALLIANCE, 429.98132f, 213.41042f, 528.8051f,  0.09478f, 13},
+    {NPC_CHAMPION_1_HORDE, NPC_CHAMPION_1_ALLIANCE, 429.5885f,  210.69595f, 528.8051f,  5.95487f, 14},
+    {NPC_CHAMPION_1_HORDE, NPC_CHAMPION_1_ALLIANCE, 426.13156f, 211.77509f, 528.7967f,  6.14891f, 15},
+    {NPC_CHAMPION_1_HORDE, NPC_CHAMPION_1_ALLIANCE, 426.7432f,  212.22388f, 528.805f,   5.85526f, 16},
+    {NPC_CHAMPION_1_HORDE, NPC_CHAMPION_1_ALLIANCE, 424.07047f, 211.1222f,  528.7967f,  5.57246f, 17},
+
+    {NPC_CHAMPION_2_HORDE, NPC_CHAMPION_2_ALLIANCE, 424.7531f,  212.52791f, 528.8003f,  6.17507f, 3},
+    {NPC_CHAMPION_2_HORDE, NPC_CHAMPION_2_ALLIANCE, 425.66174f, 214.27966f, 528.80505f, 0.12017f, 4},
+    {NPC_CHAMPION_2_HORDE, NPC_CHAMPION_2_ALLIANCE, 425.34244f, 210.50476f, 528.80505f, 5.95579f, 5},
+
+    {NPC_CHAMPION_3_HORDE, NPC_CHAMPION_3_ALLIANCE, 426.8169f,  210.74643f, 528.7967f,  5.63237f, 4},
+    {NPC_CHAMPION_3_HORDE, NPC_CHAMPION_3_ALLIANCE, 427.46008f, 209.36372f, 528.80505f, 5.71778f, 5},
+    {NPC_CHAMPION_3_HORDE, NPC_CHAMPION_3_ALLIANCE, 427.26782f, 213.06624f, 528.7967f,  0.06322f, 6},
+    {NPC_CHAMPION_3_HORDE, NPC_CHAMPION_3_ALLIANCE, 427.55377f, 216.24657f, 528.80505f, 0.78343f, 7},
 };
 
 const EventNpcLocations aEventFirstAmbushLocations[2] =
 {
-    {NPC_YMIRJAR_DEATHBRINGER, 0, 951.6696f, 53.06405f, 567.5153f, 1.51f, 914.7256f, 76.66406f, 553.8029f},
-    {NPC_YMIRJAR_DEATHBRINGER, 0, 950.9911f, 60.26712f, 566.7658f, 1.79f, 883.1805f, 52.69792f, 527.6385f},
+    {NPC_YMIRJAR_DEATHBRINGER, 0, 951.6696f, 53.06405f, 567.5153f, 1.51f, 0},
+    {NPC_YMIRJAR_DEATHBRINGER, 0, 950.9911f, 60.26712f, 566.7658f, 1.79f, 1},
 };
 
 const EventNpcLocations aEventSecondAmbushLocations[] =
 {
-    {NPC_FALLEN_WARRIOR, 0, 916.658f, -55.94097f, 591.6827f, 1.85f, 950.5694f, 31.85649f, 572.2693f},
-    {NPC_FALLEN_WARRIOR, 0, 923.8055f, -55.63195f, 591.8663f, 1.85f, 941.3954f, 35.83769f, 571.4308f},
-    {NPC_FALLEN_WARRIOR, 0, 936.0625f, -53.52778f, 592.0226f, 1.85f, 934.8011f, 8.024931f, 577.3419f},
-    {NPC_FALLEN_WARRIOR, 0, 919.7518f, -68.39236f, 592.2916f, 1.85f, 932.5734f, -22.54153f, 587.403f},
-    {NPC_FALLEN_WARRIOR, 0, 926.8993f, -68.08334f, 592.0798f, 1.85f, 922.6043f, -22.07627f, 585.6684f},
-    {NPC_FALLEN_WARRIOR, 0, 939.1563f, -65.97916f, 592.2205f, 1.85f, 927.0928f, -32.97949f, 589.3028f},
-    {NPC_COLDWRAITH, 0, 924.0261f, -62.3316f, 592.0191f, 2.01f, 929.4673f, 9.722589f, 577.4904f},
-    {NPC_COLDWRAITH, 0, 936.4531f, -60.45486f, 592.1215f, 1.63f, 936.1395f, -4.003471f, 581.3139f},
-    {NPC_COLDWRAITH, 0, 935.8055f, -72.76736f, 592.077f, 1.66f, 933.8441f, -47.83234f, 591.7538f},
-    {NPC_COLDWRAITH, 0, 923.3785f, -74.6441f, 592.368f, 2.37f, 920.726f, -42.32272f, 589.9808f}
+    {NPC_FALLEN_WARRIOR, 0, 926.8993f, -68.083336f, 592.0798f, 1.85004f, 0},
+    {NPC_FALLEN_WARRIOR, 0, 919.7518f, -68.392365f, 592.2916f, 1.85004f, 1},
+    {NPC_FALLEN_WARRIOR, 0, 931.0399f, -55.154514f, 591.8819f, 1.85004f, 2},
+    {NPC_FALLEN_WARRIOR, 0, 923.8055f, -55.631947f, 591.8663f, 1.85004f, 3},
+    {NPC_FALLEN_WARRIOR, 0, 916.658f,  -55.94097f,  591.6827f, 1.85004f, 4},
+    {NPC_FALLEN_WARRIOR, 0, 939.1562f, -65.979164f, 592.2204f, 1.85004f, 5},
+    {NPC_COLDWRAITH, 0, 921.65546f, -57.30312f, 591.8749f, 2.01133f, 0},
+    {NPC_COLDWRAITH, 0, 935.2812f,  -67.22413f, 592.0464f, 1.66512f, 1},
+    {NPC_COLDWRAITH, 0, 926.8993f,  -68.08333f, 592.0798f, 1.85004f, 2},
+    {NPC_COLDWRAITH, 0, 935.5867f,  -46.55127f, 591.9112f, 1.63308f, 3},
 };
 
 const EventNpcLocations aEventTunnelEndLocations[] =
 {
-    {NPC_IRONSKULL_PART2, NPC_VICTUS_PART2, 1071.45f, 48.23907f, 630.4871f, 1.68f, 1046.361f, 124.7031f, 628.2811f},
-    // ToDo: add the freed slaves here when proper waypoint movement is supported
-};
-const EventNpcLocations aEventOutroLocations[] =
-{
-    {NPC_SINDRAGOSA, 0, 842.8611f, 194.5556f, 531.6536f, 6.108f, 900.106f, 181.677f, 659.374f},
-    {NPC_SYLVANAS_PART2, NPC_JAINA_PART2, 1062.85f, 100.075f, 631.0021f, 1.77f, 1062.85f, 100.075f, 631.0021f},
-};
+    {NPC_IRONSKULL_PART2,    NPC_VICTUS_PART2,          1071.8212f, 45.12153f,  630.2551f,  1.83259f, 0},
 
+    {NPC_FREE_HORDE_SLAVE_1, NPC_FREE_ALLIANCE_SLAVE_1, 1070.9827f, 37.543404f, 629.8123f,  1.74532f, 2},
+    {NPC_FREE_HORDE_SLAVE_1, NPC_FREE_ALLIANCE_SLAVE_1, 1077.1823f, 31.899305f, 629.99915f, 1.88495f, 3},
+    {NPC_FREE_HORDE_SLAVE_1, NPC_FREE_ALLIANCE_SLAVE_1, 1069.2067f, 34.383682f, 629.9972f,  1.65806f, 4},
+    {NPC_FREE_HORDE_SLAVE_1, NPC_FREE_ALLIANCE_SLAVE_1, 1071.1875f, 32.758682f, 630.1298f,  1.72787f, 5},
+    {NPC_FREE_HORDE_SLAVE_1, NPC_FREE_ALLIANCE_SLAVE_1, 1079.3368f, 32.458332f, 629.9384f,  1.95476f, 6},
+    {NPC_FREE_HORDE_SLAVE_1, NPC_FREE_ALLIANCE_SLAVE_1, 1073.4149f, 31.364584f, 630.2189f,  1.78023f, 7},
+    {NPC_FREE_HORDE_SLAVE_1, NPC_FREE_ALLIANCE_SLAVE_1, 1075.0416f, 32.175346f, 630.05164f, 1.83259f, 8},
+    {NPC_FREE_HORDE_SLAVE_1, NPC_FREE_ALLIANCE_SLAVE_1, 1072.1216f, 28.32639f,  630.7766f,  1.72787f, 9},
+
+    {NPC_FREE_HORDE_SLAVE_2, NPC_FREE_ALLIANCE_SLAVE_2, 1070.5591f, 29.996529f, 630.42804f, 1.69296f, 1},
+    {NPC_FREE_HORDE_SLAVE_2, NPC_FREE_ALLIANCE_SLAVE_2, 1072.7274f, 24.48611f,  631.86096f, 1.72787f, 2},
+    {NPC_FREE_HORDE_SLAVE_2, NPC_FREE_ALLIANCE_SLAVE_2, 1079.0312f, 27.003473f, 630.8719f,  1.90240f, 3},
+    {NPC_FREE_HORDE_SLAVE_2, NPC_FREE_ALLIANCE_SLAVE_2, 1074.849f,  25.770834f, 631.36926f, 1.78023f, 4},
+
+    {NPC_FREE_HORDE_SLAVE_3, NPC_FREE_ALLIANCE_SLAVE_3, 1067.3195f, 43.131947f, 630.1227f,  1.60570f, 2},
+    {NPC_FREE_HORDE_SLAVE_3, NPC_FREE_ALLIANCE_SLAVE_3, 1070.6545f, 42.70486f,  630.0697f,  1.76278f, 3},
+    {NPC_FREE_HORDE_SLAVE_3, NPC_FREE_ALLIANCE_SLAVE_3, 1073.8733f, 40.260418f, 629.9038f,  1.86750f, 4},
+    {NPC_FREE_HORDE_SLAVE_3, NPC_FREE_ALLIANCE_SLAVE_3, 1075.3594f, 36.43403f,  629.72156f, 1.88495f, 5},
+    {NPC_FREE_HORDE_SLAVE_3, NPC_FREE_ALLIANCE_SLAVE_3, 1073.8507f, 42.680557f, 630.03265f, 1.90240f, 6},
+    {NPC_FREE_HORDE_SLAVE_3, NPC_FREE_ALLIANCE_SLAVE_3, 1075.8976f, 40.331596f, 629.86383f, 1.93731f, 7},
+};
 
 class instance_pit_of_saron : public ScriptedInstance, private DialogueHelper
 {
@@ -149,13 +198,12 @@ class instance_pit_of_saron : public ScriptedInstance, private DialogueHelper
         void OnPlayerEnter(Player* pPlayer) override;
         void OnCreatureEnterCombat(Creature* pCreature) override;
         void OnCreatureDeath(Creature* pCreature) override;
+        void OnCreatureRespawn(Creature* pCreature) override;
 
         void SetData(uint32 uiType, uint32 uiData) override;
         uint32 GetData(uint32 uiType) const override;
 
         uint32 GetPlayerTeam() const { return m_uiTeam; }
-
-        void DoStartAmbushEvent();
 
         void SetSpecialAchievementCriteria(uint32 uiType, bool bIsMet);
         bool CheckAchievementCriteriaMeet(uint32 uiCriteriaId, Player const* pSource, Unit const* pTarget, uint32 uiMiscValue1 /* = 0*/) const override;
@@ -167,7 +215,10 @@ class instance_pit_of_saron : public ScriptedInstance, private DialogueHelper
 
     protected:
         void JustDidDialogueStep(int32 iEntry) override;
-        void ProcessIntroEventNpcs(Player* pPlayer);
+
+        void DoStartIntroEvent();
+        void DoStartAmbushEvent();
+        void DoStartTyrannusEvent();
 
         uint32 m_auiEncounter[MAX_ENCOUNTER];
         std::string m_strInstData;
@@ -176,12 +227,16 @@ class instance_pit_of_saron : public ScriptedInstance, private DialogueHelper
 
         uint8 m_uiAmbushAggroCount;
         uint32 m_uiTeam;                                    // Team of first entered player, used to set if Jaina or Silvana to spawn
+        uint32 m_uiSummonDelayTimer;
         uint32 m_uiIciclesTimer;
+        uint32 m_uiEyeLichKingTimer;
 
         GuidList m_lTunnelStalkersGuidList;
         GuidList m_lAmbushNpcsGuidList;
         GuidList m_lArcaneShieldBunniesGuidList;
         GuidList m_lFrozenAftermathBunniesGuidList;
+        GuidList m_lSaroniteRockGuidList;
+        GuidList m_lEndingCreaturesGuidList;
 };
 
 #endif

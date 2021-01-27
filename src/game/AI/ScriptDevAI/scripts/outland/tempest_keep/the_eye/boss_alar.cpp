@@ -32,6 +32,7 @@ Patches
 #include "AI/ScriptDevAI/include/sc_common.h"
 #include "the_eye.h"
 #include "AI/ScriptDevAI/base/CombatAI.h"
+#include "Spells/Scripts/SpellScript.h"
 
 enum
 {
@@ -59,7 +60,11 @@ enum
     NPC_FLAME_PATCH         = 20602,        // summoned by spell 29218
     SPELL_FLAME_PATCH       = 35380,
 
+#ifdef PRENERF_2_0_3
     MAX_PLATFORMS           = 6,
+#else
+    MAX_PLATFORMS           = 4,
+#endif
 
     POINT_ID_RESSURRECT     = 0,            // center of the hall
     POINT_ID_PLATFORM       = 1,            // platform points
@@ -73,7 +78,6 @@ enum
 
     QUEST_RUSE_ASHTONGUE    = 10946,        // Quest 10946 for attunement in Black Temple.
     SPELL_ASHTONGUE_RUSE    = 42090,        // Player can complete 10946 quest, only if has aura 42090. If kill Alar without this aura - quest not completed.
-    NPC_ASHTONGUE_CREDIT    = 22850,
 };
 
 struct EventLocation
@@ -88,8 +92,10 @@ static const EventLocation aPlatformLocation[MAX_PLATFORMS] =
     {387.8628f, 32.18992f, 20.23814f},
     {388.777f, -32.10653f, 20.26319f},
     {333.6099f,-60.69928f, 18.01521f},
+#ifdef PRENERF_2_0_3
     {264.36f, 40.78f, 20.21f},
     {268.38f,-49.80f, 20.38f}
+#endif
 };
 
 static const EventLocation aCenterLocation[] =
@@ -133,6 +139,8 @@ struct boss_alarAI : public CombatAI
     
     ScriptedInstance* m_instance;
 
+    GuidVector m_spawns;
+
     uint8 m_phase;
     uint8 m_uiCurrentPlatformId;
     uint8 m_uiFuturePlatformId;
@@ -151,17 +159,32 @@ struct boss_alarAI : public CombatAI
         SetCombatScriptStatus(false);
 
         m_rangeCheckState       = -1;
-        m_uiFuturePlatformId    = urand(1, MAX_PLATFORMS - 1);
+
+#ifdef PRENERF_2_0_3
+        m_uiFuturePlatformId = urand(1, MAX_PLATFORMS - 1);
+#else
+        m_uiFuturePlatformId = 1;
+#endif
 
         m_firstPlatform = true;
 
         SetDeathPrevention(true);
+        SetMeleeEnabled(true);
 
         m_creature->SetIgnoreRangedTargets(true);
 
         m_creature->SetDisplayId(m_creature->GetNativeDisplayId());
 
         m_uiCurrentPlatformId   = 0;
+
+        m_creature->RemoveAurasDueToSpell(SPELL_FLIGHT_MODE);
+        m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+
+        DespawnGuids(m_spawns);
+
+        m_creature->SetWalk(false);
+        m_creature->SetHover(true);
+        SetReactState(REACT_AGGRESSIVE);
     }
 
     void Aggro(Unit* /*who*/) override
@@ -169,7 +192,8 @@ struct boss_alarAI : public CombatAI
         if (m_instance)
             m_instance->SetData(TYPE_ALAR, IN_PROGRESS);
 
-        m_creature->SetWalk(false);
+        SetCombatScriptStatus(true);
+        m_creature->CastSpell(nullptr, SPELL_FLIGHT_MODE, TRIGGERED_OLD_TRIGGERED);
 
         // The boss will always move to the first platform from the left side; also set the movement to idle to stop the DB movement
         m_creature->GetMotionMaster()->MoveIdle();
@@ -180,43 +204,28 @@ struct boss_alarAI : public CombatAI
     {
         if (m_instance)
             m_instance->SetData(TYPE_ALAR, FAIL);
-
-        m_creature->SetWalk(true);
     }
 
     void JustDied(Unit* /*killer*/) override
     {
         if (m_instance)
-        {
             m_instance->SetData(TYPE_ALAR, DONE);
 
-            Map::PlayerList const& players = m_instance->instance->GetPlayers();
-            for (const auto& playerRef : players)
-                if (Player* player = playerRef.getSource())
-                    if (player->GetQuestStatus(QUEST_RUSE_ASHTONGUE) == QUEST_STATUS_INCOMPLETE && player->HasAura(SPELL_ASHTONGUE_RUSE))
-                        player->AreaExploredOrEventHappens(QUEST_RUSE_ASHTONGUE);
-        }
+        Map::PlayerList const& players = m_instance->instance->GetPlayers();
+        for (const auto& playerRef : players)
+            if (Player* player = playerRef.getSource())
+                if (player->GetQuestStatus(QUEST_RUSE_ASHTONGUE) == QUEST_STATUS_INCOMPLETE && player->HasAura(SPELL_ASHTONGUE_RUSE))
+                    player->AreaExploredOrEventHappens(QUEST_RUSE_ASHTONGUE);
     }
 
     void JustSummoned(Creature* summoned) override
     {
         if (summoned->GetEntry() == NPC_FLAME_PATCH)
-            summoned->CastSpell(summoned, SPELL_FLAME_PATCH, TRIGGERED_OLD_TRIGGERED);
-    }
-    
-    // UNCOMMENT THIS AREA WHEN PATCH 2.1 HITS - should be done through serverside 41910
-    /* void SummonedCreatureJustDied(Creature* pSummoned) override
-    {
-        // drain 2% of boss health when the ember dies
-        if (pSummoned->GetEntry() == NPC_EMBER_OF_ALAR)
         {
-            // Check first if we have enough health to drain
-            if (m_creature->GetHealth() <= m_creature->GetMaxHealth()*.02f)
-                m_creature->DealDamage(m_creature, m_creature->GetMaxHealth()*.02f, nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
-            else
-                m_creature->DealDamage(m_creature, m_creature->GetHealth(), nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
+            summoned->CastSpell(nullptr, SPELL_FLAME_PATCH, TRIGGERED_OLD_TRIGGERED);
+            m_spawns.push_back(summoned->GetObjectGuid());
         }
-    } */
+    }
 
     void EnterEvadeMode() override
     {
@@ -233,6 +242,9 @@ struct boss_alarAI : public CombatAI
         {
             m_uiFuturePlatformId = urand(0, 1) ? 0 : 3;
             DoPlatformMove(false);
+#ifndef PRENERF_2_0_3
+            m_firstPlatform = true;
+#endif
         }
         else if (eventType == AI_EVENT_CUSTOM_B) // ember of alar was spawned
         {
@@ -256,25 +268,33 @@ struct boss_alarAI : public CombatAI
     {
         if (summon)
         {
-            // m_creature->CastSpell(nullptr, SPELL_SUMMON_PHOENIX_ADDS, TRIGGERED_OLD_TRIGGERED); - post 2.1
+#ifdef PRENERF_2_0_3
             if (m_firstPlatform || urand(0, 3) == 0) // pre 2.1
             {
-                m_firstPlatform = false;
                 m_creature->CastSpell(nullptr, SPELL_SUMMON_PHOENIX_ADDS_PRENERF, TRIGGERED_OLD_TRIGGERED);
             }
+#else
+            m_creature->CastSpell(nullptr, SPELL_SUMMON_PHOENIX_ADDS, TRIGGERED_OLD_TRIGGERED); // post 2.1
+#endif
         }
+        m_firstPlatform = false;
         m_creature->GetMotionMaster()->MovePoint(POINT_ID_PLATFORM, aPlatformLocation[m_uiFuturePlatformId].m_fX, aPlatformLocation[m_uiFuturePlatformId].m_fY, aPlatformLocation[m_uiFuturePlatformId].m_fZ);
 
+#ifdef PRENERF_2_0_3
         // plan next platform
         m_uiCurrentPlatformId = m_uiFuturePlatformId;
         m_uiFuturePlatformId = urand(0, MAX_PLATFORMS - 1);
 
         if (m_uiFuturePlatformId == m_uiCurrentPlatformId)
             m_uiFuturePlatformId = (m_uiFuturePlatformId + 1) % MAX_PLATFORMS;
+#else
+        m_uiCurrentPlatformId = m_uiFuturePlatformId;
+        m_uiFuturePlatformId = (m_uiFuturePlatformId + 1) % MAX_PLATFORMS;
+#endif
 
         SetCombatScriptStatus(true);
         m_creature->SetTarget(nullptr);
-        ResetCombatAction(ALAR_PLATFORM_MOVE, 30000);
+        ResetCombatAction(ALAR_PLATFORM_MOVE, urand(30000, 35000));
     }
 
     void MovementInform(uint32 motionType, uint32 pointId) override
@@ -285,8 +305,7 @@ struct boss_alarAI : public CombatAI
         switch (pointId)
         {
             case POINT_ID_QUILLS:
-                if (m_phase == PHASE_ONE)
-                    DoCastSpellIfCan(nullptr, SPELL_FLAME_QUILLS);
+				DoCastSpellIfCan(nullptr, SPELL_FLAME_QUILLS);
                 break;
             case POINT_ID_PLATFORM:
                 // When we reach the platform we start the range check and we can summon the embers
@@ -296,17 +315,14 @@ struct boss_alarAI : public CombatAI
                 m_creature->SetLevitate(false);
                 break;
             case POINT_ID_RESSURRECT:
-                // remove the invisibility aura
-                if (m_creature->HasAura(SPELL_EMBER_BLAST))
-                    m_creature->RemoveAurasDueToSpell(SPELL_EMBER_BLAST);
-
                 m_rebirthState = 0;
-                ResetTimer(ALAR_REBIRTH, 1000);
+                ResetTimer(ALAR_REBIRTH, 10000);
                 break;
             case POINT_ID_DIVE_BOMB:
                 if (DoCastSpellIfCan(m_creature, SPELL_DIVE_BOMB_VISUAL) == CAST_OK)
                 {
                     m_diveBombState = 0;
+                    m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
                     ResetTimer(ALAR_DIVE_BOMB_TIMER, 5000);
                 }
                 break;
@@ -319,12 +335,13 @@ struct boss_alarAI : public CombatAI
         if (m_phase != PHASE_ONE)
             return;
 
+        m_phase = PHASE_TWO;
         SetActionReadyStatus(ALAR_PHASE_2, true);
     }
 
     void StartPhaseTransition()
     {
-        m_creature->AttackStop();
+        m_creature->AttackStop(true);
         m_creature->InterruptNonMeleeSpells(true);
         m_creature->RemoveAurasDueToSpell(SPELL_FLAME_QUILLS);
         // We set the health to 1 in order to avoid the forced death stand flag - this way we can have the ressurrect animation
@@ -340,15 +357,17 @@ struct boss_alarAI : public CombatAI
         m_creature->SetStandState(UNIT_STAND_STATE_DEAD);
 
         m_creature->SetIgnoreRangedTargets(false); // TODO: Use root for this
+        m_creature->SetTarget(nullptr);
+        SetMeleeEnabled(false);
         SetCombatScriptStatus(true);
+        SetReactState(REACT_PASSIVE);
 
         m_creature->CastSpell(nullptr, SPELL_CLEAR_ALL_DEBUFFS, TRIGGERED_OLD_TRIGGERED);
 
         if (DoCastSpellIfCan(nullptr, SPELL_EMBER_BLAST) == CAST_OK)
         {
-            m_creature->CastSpell(nullptr, SPELL_FLIGHT_MODE, TRIGGERED_OLD_TRIGGERED);
             // Move to the center of the hall and ressurrect
-            m_creature->GetMotionMaster()->MovePoint(POINT_ID_RESSURRECT, aCenterLocation[1].m_fX, aCenterLocation[1].m_fY, aCenterLocation[1].m_fZ);
+            m_creature->GetMotionMaster()->MovePoint(POINT_ID_RESSURRECT, aCenterLocation[1].m_fX, aCenterLocation[1].m_fY, aCenterLocation[1].m_fZ, FORCED_MOVEMENT_RUN);
         }
     }
 
@@ -356,14 +375,20 @@ struct boss_alarAI : public CombatAI
     {
         if (m_rebirthState == 0)
         {
-            SetCombatScriptStatus(false);
+            // remove the invisibility aura
+            if (m_creature->HasAura(SPELL_EMBER_BLAST))
+                m_creature->RemoveAurasDueToSpell(SPELL_EMBER_BLAST);
+
+            ResetTimer(ALAR_REBIRTH, 1000);
+        }
+        else if (m_rebirthState == 1)
+        {
             m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
             m_creature->SetStandState(UNIT_STAND_STATE_STAND);
-            m_creature->RemoveAurasDueToSpell(SPELL_FLIGHT_MODE);
 
             // cast rebirth and remove fake death
             m_creature->CastSpell(nullptr, SPELL_REBIRTH, TRIGGERED_NONE);
-            ResetTimer(ALAR_REBIRTH, 3500);
+            ResetTimer(ALAR_REBIRTH, 4000);
         }
         else
         {
@@ -371,9 +396,11 @@ struct boss_alarAI : public CombatAI
             DoResetThreat();
             HandlePhaseTransition();
             SetDeathPrevention(false);
+            SetReactState(REACT_AGGRESSIVE);
+            SetMeleeEnabled(true);
             SetCombatMovement(true, true);
             SetCombatScriptStatus(false);
-            m_phase = PHASE_TWO;
+            AttackClosestEnemy();
         }
         ++m_rebirthState;
     }
@@ -384,31 +411,33 @@ struct boss_alarAI : public CombatAI
         {
             case 0:
             {
+
                 if (Unit* target = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 0, uint32(0), SELECT_FLAG_PLAYER))
                 {
-                    if (DoCastSpellIfCan(target, SPELL_DIVE_BOMB) == CAST_OK)
-                    {
-                        m_creature->RemoveAurasDueToSpell(SPELL_DIVE_BOMB_VISUAL);
-                        m_creature->NearTeleportTo(target->GetPositionX(), target->GetPositionY(), target->GetPositionZ(), target->GetOrientation());
-                        ResetTimer(ALAR_DIVE_BOMB_TIMER, 3500);
-                    }
+                    SpellCastResult result = m_creature->CastSpell(target, SPELL_DIVE_BOMB, TRIGGERED_NONE);
+                    if (result != SPELL_CAST_OK)
+                        sLog.outCustomLog("Alar produced weird error on dive bomb: %u", uint32(result));
+                    m_creature->NearTeleportTo(target->GetPositionX(), target->GetPositionY(), target->GetPositionZ(), target->GetOrientation());
                 }
+                m_creature->RemoveAurasDueToSpell(SPELL_DIVE_BOMB_VISUAL);
+                ResetTimer(ALAR_DIVE_BOMB_TIMER, 3000);
                 break;
             }
             case 1:
             {
-                if (DoCastSpellIfCan(nullptr, SPELL_BOMB_REBIRTH) == CAST_OK)
-                {
-                    m_creature->SetDisplayId(m_creature->GetNativeDisplayId());
-                    ResetTimer(ALAR_DIVE_BOMB_TIMER, 500);
-                }
+                DoCastSpellIfCan(nullptr, SPELL_BOMB_REBIRTH);
+                m_creature->SetDisplayId(m_creature->GetNativeDisplayId());
+                ResetTimer(ALAR_DIVE_BOMB_TIMER, 2500);
                 break;
             }
             case 2:
             {
+                m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
                 m_creature->SetHover(false);
                 m_creature->SetLevitate(false);
+                SetCombatScriptStatus(false);
                 SetCombatMovement(true, true);
+                SetMeleeEnabled(true);
                 SetDeathPrevention(false);
                 break;
             }
@@ -451,7 +480,11 @@ struct boss_alarAI : public CombatAI
             }
             case ALAR_PLATFORM_MOVE:
             {
+#ifdef PRENERF_2_0_3
                 if (urand(0, 3) == 0)
+#else
+                if (!m_firstPlatform && urand(0, 1) == 0)
+#endif
                     DoFlameQuills();
                 else
                     DoPlatformMove(true);
@@ -461,7 +494,7 @@ struct boss_alarAI : public CombatAI
             {
                 uint32 timer = 500;
                 // If victim exists we have a target in melee range
-                if (m_creature->getVictim() && m_creature->CanReachWithMeleeAttack(m_creature->getVictim()))
+                if (m_creature->GetVictim() && m_creature->CanReachWithMeleeAttack(m_creature->GetVictim()))
                     m_rangeCheckState = -1;
                 // Spam Waterbolt spell when not tanked
                 else
@@ -478,11 +511,14 @@ struct boss_alarAI : public CombatAI
             {
                 ResetCombatAction(ALAR_CHARGE, urand(25000, 30000));
                 SetCombatMovement(false);
+                SetMeleeEnabled(false);
+                SetCombatScriptStatus(true);
+                m_creature->SetTarget(nullptr);
                 m_creature->SetHover(true);
                 m_creature->SetLevitate(true);
                 m_creature->GetMotionMaster()->MovePoint(POINT_ID_DIVE_BOMB, aCenterLocation[2].m_fX, aCenterLocation[2].m_fY, aCenterLocation[2].m_fZ);
                 SetDeathPrevention(true);
-                ResetCombatAction(action, 40000);
+                ResetCombatAction(action, urand(50000, 60000));
                 break;
             }
             case ALAR_FLAME_PATCH:
@@ -494,7 +530,7 @@ struct boss_alarAI : public CombatAI
             }
             case ALAR_MELT_ARMOR:
             {
-                if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_MELT_ARMOR) == CAST_OK)
+                if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_MELT_ARMOR) == CAST_OK)
                     ResetCombatAction(action, 60000);
                 break;
             }
@@ -509,15 +545,52 @@ struct boss_alarAI : public CombatAI
     }
 };
 
-UnitAI* GetAI_boss_alar(Creature* creature)
+struct AlarEmberBlast : public SpellScript
 {
-    return new boss_alarAI(creature);
-}
+    void OnEffectExecute(Spell* spell, SpellEffectIndex /*effIdx*/) const override
+    {
+        if (!spell->GetUnitTarget())
+            return;
+
+        spell->SetDamage(spell->GetUnitTarget()->GetMaxHealth() * .02f);
+    }
+};
+
+struct DiveBomb : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (!spell->GetUnitTarget())
+            return;
+
+        uint32 count = 0;
+        auto& targets = spell->GetTargetList();
+        for (Spell::TargetList::const_iterator ihit = targets.begin(); ihit != targets.end(); ++ihit)
+            if (ihit->effectHitMask & (1 << effIdx))
+                ++count;
+
+        spell->SetDamage(spell->GetDamage() / count); // divide to all targets              
+    }
+
+    void OnAfterHit(Spell* spell) const override
+    {
+        if (!spell->GetUnitTarget())
+            return;
+
+        if (spell->GetUnitTarget()->GetObjectGuid() != spell->m_targets.getUnitTargetGuid())
+            return;
+
+        spell->GetUnitTarget()->CastSpell(nullptr, 39110, TRIGGERED_OLD_TRIGGERED);
+    }
+};
 
 void AddSC_boss_alar()
 {
     Script* pNewScript = new Script;
     pNewScript->Name = "boss_alar";
-    pNewScript->GetAI = &GetAI_boss_alar;
+    pNewScript->GetAI = &GetNewAIInstance<boss_alarAI>;
     pNewScript->RegisterSelf();
+
+    RegisterSpellScript<AlarEmberBlast>("spell_alar_phoenix_ember_blast");
+    RegisterSpellScript<DiveBomb>("spell_dive_bomb");
 }

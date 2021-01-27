@@ -27,6 +27,7 @@
 #include "Tools/Formulas.h"
 #include "Globals/ObjectAccessor.h"
 #include "BattleGround/BattleGround.h"
+#include "BattleGround/BattleGroundMgr.h"
 #include "Maps/MapManager.h"
 #include "Maps/MapPersistentStateMgr.h"
 #include "Spells/SpellAuras.h"
@@ -48,7 +49,7 @@ GroupMemberStatus GetGroupMemberStatus(const Player* member = nullptr)
     uint8 flags = MEMBER_STATUS_ONLINE;
     if (member->IsPvP())
         flags |= MEMBER_STATUS_PVP;
-    if (member->isDead())
+    if (member->IsDead())
         flags |= MEMBER_STATUS_DEAD;
     if (member->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
         flags |= MEMBER_STATUS_GHOST;
@@ -550,13 +551,17 @@ void Group::SetTargetIcon(uint8 id, ObjectGuid whoGuid, ObjectGuid targetGuid)
 
 static void GetDataForXPAtKill_helper(Player* player, Unit const* victim, uint32& sum_level, Player*& member_with_max_level, Player*& not_gray_member_with_max_level)
 {
-    sum_level += player->getLevel();
-    if (!member_with_max_level || member_with_max_level->getLevel() < player->getLevel())
+    const uint32 level = player->getLevel();
+
+    sum_level += level;
+
+    if (!member_with_max_level || member_with_max_level->getLevel() < level)
         member_with_max_level = player;
 
-    uint32 gray_level = MaNGOS::XP::GetGrayLevel(player->getLevel());
-    if (victim->getLevel() > gray_level && (!not_gray_member_with_max_level
-                                            || not_gray_member_with_max_level->getLevel() < player->getLevel()))
+    if (MaNGOS::XP::IsTrivialLevelDifference(level, victim->GetLevelForTarget(player)))
+        return;
+
+    if (!not_gray_member_with_max_level || not_gray_member_with_max_level->getLevel() < level)
         not_gray_member_with_max_level = player;
 }
 
@@ -565,7 +570,7 @@ void Group::GetDataForXPAtKill(Unit const* victim, uint32& count, uint32& sum_le
     for (GroupReference const* itr = GetFirstMember(); itr != nullptr; itr = itr->next())
     {
         Player* member = itr->getSource();
-        if (!member || !member->isAlive())                  // only for alive
+        if (!member || !member->IsAlive())                  // only for alive
             continue;
 
         // will proccesed later
@@ -1215,7 +1220,7 @@ uint32 Group::GetMaxSkillValueForGroup(SkillType skill)
 
 GroupJoinBattlegroundResult Group::CanJoinBattleGroundQueue(BattleGround const* bgOrTemplate, BattleGroundQueueTypeId bgQueueTypeId, uint32 MinPlayerCount, uint32 /*MaxPlayerCount*/, bool isRated, uint32 arenaSlot)
 {
-    BattlemasterListEntry const* bgEntry = sBattlemasterListStore.LookupEntry(bgOrTemplate->GetTypeID());
+    BattlemasterListEntry const* bgEntry = sBattlemasterListStore.LookupEntry(bgOrTemplate->GetTypeId());
     if (!bgEntry)
         return ERR_GROUP_JOIN_BATTLEGROUND_FAIL;            // shouldn't happen
 
@@ -1223,7 +1228,7 @@ GroupJoinBattlegroundResult Group::CanJoinBattleGroundQueue(BattleGround const* 
     uint32 memberscount = GetMembersCount();
 
     // only check for MinPlayerCount since MinPlayerCount == MaxPlayerCount for arenas...
-    if (bgOrTemplate->isArena() && memberscount != MinPlayerCount)
+    if (bgOrTemplate->IsArena() && memberscount != MinPlayerCount)
         return ERR_ARENA_TEAM_PARTY_SIZE;
 
     if (memberscount > bgEntry->maxGroupSize)               // no MinPlayerCount for battlegrounds
@@ -1241,6 +1246,8 @@ GroupJoinBattlegroundResult Group::CanJoinBattleGroundQueue(BattleGround const* 
 
     uint32 arenaTeamId = reference->GetArenaTeamId(arenaSlot);
     Team team = reference->GetTeam();
+
+    BattleGroundQueueTypeId bgQueueTypeIdRandom = BattleGroundMgr::BgQueueTypeId(BATTLEGROUND_RB, ARENA_TYPE_NONE);
 
     // check every member of the group to be able to join
     for (GroupReference* itr = GetFirstMember(); itr != nullptr; itr = itr->next())
@@ -1262,14 +1269,23 @@ GroupJoinBattlegroundResult Group::CanJoinBattleGroundQueue(BattleGround const* 
         // don't let join if someone from the group is already in that bg queue
         if (member->InBattleGroundQueueForBattleGroundQueueType(bgQueueTypeId))
             return ERR_BATTLEGROUND_JOIN_FAILED;            // not blizz-like
+        // don't let join if someone from the group is in bg queue random
+        if (bgOrTemplate->GetTypeId() != BATTLEGROUND_AA && member->InBattleGroundQueueForBattleGroundQueueType(bgQueueTypeIdRandom))
+            return ERR_IN_RANDOM_BG;
+        // don't let join to bg queue random if someone from the group is already in bg queue
+        if (bgOrTemplate->GetTypeId() == BATTLEGROUND_RB && member->InBattleGroundQueue())
+            return ERR_IN_NON_RANDOM_BG;
         // check for deserter debuff in case not arena queue
-        if (bgOrTemplate->GetTypeID() != BATTLEGROUND_AA && !member->CanJoinToBattleground())
+        if (bgOrTemplate->GetTypeId() != BATTLEGROUND_AA && !member->CanJoinToBattleground())
             return ERR_GROUP_JOIN_BATTLEGROUND_DESERTERS;
         // check if member can join any more battleground queues
         if (!member->HasFreeBattleGroundQueueId())
             return ERR_BATTLEGROUND_TOO_MANY_QUEUES;        // not blizz-like
+        // do not allow joining queue if member still in arena
+        if (member->InArena())
+            return ERR_BATTLEGROUND_JOIN_FAILED;
     }
-    return GroupJoinBattlegroundResult(bgOrTemplate->GetTypeID());
+    return GroupJoinBattlegroundResult(bgOrTemplate->GetTypeId());
 }
 
 void Group::SetDungeonDifficulty(Difficulty difficulty)
@@ -1292,7 +1308,7 @@ void Group::SetRaidDifficulty(Difficulty difficulty)
 {
     m_raidDifficulty = difficulty;
     if (!isBattleGroup())
-        CharacterDatabase.PExecute("UPDATE groups SET raiddifficulty = %u WHERE groupId='%u'", m_raidDifficulty, m_Id);
+        CharacterDatabase.PExecute("UPDATE `groups` SET raiddifficulty = %u WHERE groupId='%u'", m_raidDifficulty, m_Id);
 
     for (GroupReference* itr = GetFirstMember(); itr != nullptr; itr = itr->next())
     {
@@ -1514,7 +1530,7 @@ void Group::UnbindInstance(uint32 mapid, uint8 difficulty, bool unload)
 
 void Group::_homebindIfInstance(Player* player) const
 {
-    if (player && !player->isGameMaster())
+    if (player && !player->IsGameMaster())
     {
         Map* map = player->GetMap();
         if (map->IsDungeon())
@@ -1531,8 +1547,13 @@ void Group::_homebindIfInstance(Player* player) const
 static void RewardGroupAtKill_helper(Player* pGroupGuy, Unit* pVictim, uint32 count, bool PvP, float group_rate, uint32 sum_level, bool is_dungeon, Player* not_gray_member_with_max_level, Player* member_with_max_level, uint32 xp)
 {
     // honor can be in PvP and !PvP (racial leader) cases (for alive)
-    if (pGroupGuy->isAlive())
+    if (pGroupGuy->IsAlive())
+    {
         pGroupGuy->RewardHonor(pVictim, count);
+        // Send player killcredit for quests with PlayerSlain
+        if (pVictim->GetTypeId() == TYPEID_PLAYER)
+            pGroupGuy->KilledPlayerCredit();
+    }
 
     // xp and reputation only in !PvP case
     if (!PvP)
@@ -1547,7 +1568,7 @@ static void RewardGroupAtKill_helper(Player* pGroupGuy, Unit* pVictim, uint32 co
             pGroupGuy->RewardReputation(creatureVictim, is_dungeon ? 1.0f : 1.0f / count);
 
             // XP updated only for alive group member
-            if (pGroupGuy->isAlive() && not_gray_member_with_max_level &&
+            if (pGroupGuy->IsAlive() && not_gray_member_with_max_level &&
                 pGroupGuy->getLevel() <= not_gray_member_with_max_level->getLevel())
             {
                 float itr_xp = (member_with_max_level == not_gray_member_with_max_level) ? xp * rate : (xp * rate * 0.5f) + 1.0f;
@@ -1562,7 +1583,7 @@ static void RewardGroupAtKill_helper(Player* pGroupGuy, Unit* pVictim, uint32 co
             }
 
             // quest objectives updated only for alive group member or dead but with not released body
-            if (pGroupGuy->isAlive() || !pGroupGuy->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
+            if (pGroupGuy->IsAlive() || !pGroupGuy->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
             {
                 // normal creature (not pet/etc) can be only in !PvP case
                 if (creatureVictim->GetTypeId() == TYPEID_UNIT)

@@ -16,8 +16,8 @@
 
 /* ScriptData
 SDName: boss_lich_king
-SD%Complete: 80%
-SDComment: Needs to be paired with DBscripts. Gunship transports NYI. Some spell targets must be improved. Movement must be improved.
+SD%Complete: 100%
+SDComment: Script needs to be paired with DBscripts.
 SDCategory: Halls of Reflection
 EndScriptData */
 
@@ -40,8 +40,8 @@ enum
     SPELL_SOUL_REAPER               = 69409,
     SPELL_SOUL_REAPER_H             = 73797,
     SPELL_SOUL_REAPER_TRIGGER       = 69410,
-    SPELL_REMORSLESS_WINTER         = 69780,
-    SPELL_PAIN_AND_SUFFERING        = 74115,                // used to force players not to stand behind the boss
+    // SPELL_REMORSLESS_WINTER      = 69780,                // handled by dbscripts_on_creature_movement
+    // SPELL_PAIN_AND_SUFFERING     = 74115,                // used to force players not to stand behind the boss; handled by dbscripts_on_creature_movement
     SPELL_FURY_FROSTMOURNE          = 70063,                // spell used to clear the encounter on fail
     SPELL_HARVEST_SOUL              = 69866,
 
@@ -49,13 +49,12 @@ enum
     SPELL_STUN_BREAK_VISUAL_A       = 69764,
     SPELL_STUN_BREAK_VISUAL_H       = 70200,
 
-    SPELL_SUMMON_ICE_WALL           = 69768,                // summon GO 201385
-    SPELL_SUMMON_RAGING_GHOUL       = 69818,                // channeled spell that summons 6 ghouls: 36940
-    SPELL_SUMMON_ABOMINATION        = 69835,                // summon 37069
-    SPELL_SUMMON_WITCH_DOCTOR       = 69836,                // summon 36941
+    // SPELL_SUMMON_ICE_WALL        = 69768,                // summon GO 201385 and sends event 22795; handled by dbscripts_on_creature_movement
+    // SPELL_SUMMON_RAGING_GHOUL    = 69818,                // channeled spell that summons 6 ghouls: 36940; handled by dbscripts_on_creature_movement
+    // SPELL_SUMMON_ABOMINATION     = 69835,                // summon 37069; handled by dbscripts_on_creature_movement
+    // SPELL_SUMMON_WITCH_DOCTOR    = 69836,                // summon 36941; handled by dbscripts_on_creature_movement
 
-    // other
-    EVENT_ID_SUMMON_ICE_WALL        = 22795,
+    POINT_ID_EPILOGUE               = 101,
 };
 
 struct boss_lich_king_horAI : public ScriptedAI
@@ -67,6 +66,7 @@ struct boss_lich_king_horAI : public ScriptedAI
         SetCombatMovement(false);
         m_bIsEventStarted = false;
         m_bIsEventFailed = false;
+        m_uiPathId = 0;
         Reset();
     }
 
@@ -74,25 +74,16 @@ struct boss_lich_king_horAI : public ScriptedAI
 
     bool m_bIsEventStarted;
     bool m_bIsEventFailed;
-    bool m_bCanSummonCreatures;
-    bool m_bCanSummonWall;
 
-    uint8 m_uiCreatureWavesCount;
-    uint8 m_uiCreaturesAliveCount;
     uint32 m_uiSoulReaperTimer;
-    uint32 m_uiResumeMovementTimer;
 
-    ObjectGuid m_iceWallGuid;
+    uint8 m_uiPathId;
+
+    GuidList m_lSummonedCreaturesGuids;
 
     void Reset() override
     {
         m_uiSoulReaperTimer     = urand(3000, 5000);
-        m_uiCreatureWavesCount  = 0;
-        m_uiCreaturesAliveCount = 0;
-        m_uiResumeMovementTimer = 0;
-
-        m_bCanSummonCreatures   = false;
-        m_bCanSummonWall        = false;
     }
 
     void MoveInLineOfSight(Unit* pWho) override
@@ -102,7 +93,25 @@ struct boss_lich_king_horAI : public ScriptedAI
         {
             // Set event as failed: stop movement and wipe players
             if (!m_bIsEventFailed && (pWho->GetEntry() == NPC_JAINA_PART2 || pWho->GetEntry() == NPC_SYLVANAS_PART2) && m_creature->IsWithinDistInMap(pWho, 5.0f))
-                m_bIsEventFailed = true;
+            {
+                if (DoCastSpellIfCan(m_creature, SPELL_FURY_FROSTMOURNE, CAST_INTERRUPT_PREVIOUS) == CAST_OK)
+                {
+                    // reset instance, walls and creatures
+                    if (m_pInstance)
+                        m_pInstance->SetData(TYPE_LICH_KING, FAIL);
+
+                    // clear the summoned list
+                    for (const auto& guid : m_lSummonedCreaturesGuids)
+                    {
+                        if (Creature* pSummoned = m_creature->GetMap()->GetCreature(guid))
+                            pSummoned->ForcedDespawn(5000);
+                    }
+
+                    m_creature->GetMotionMaster()->PauseWaypoints(0);
+                    m_creature->ForcedDespawn(5000);
+                    m_bIsEventFailed = true;
+                }
+            }
         }
         else
             ScriptedAI::MoveInLineOfSight(pWho);
@@ -130,34 +139,24 @@ struct boss_lich_king_horAI : public ScriptedAI
             pTarget->CastSpell(m_creature, SPELL_SOUL_REAPER_TRIGGER, TRIGGERED_OLD_TRIGGERED);
     }
 
-    void JustSummoned(GameObject* pGo) override
-    {
-        if (pGo->GetEntry() == GO_ICE_WALL)
-            m_iceWallGuid = pGo->GetObjectGuid();
-    }
-
     void JustSummoned(Creature* pSummoned) override
     {
         if (!m_pInstance)
             return;
 
-        // check position of the summoned. Sometimes, creatures are spawned below or above the map (bad targeting)
-        if (std::abs(m_creature->GetPositionZ() - pSummoned->GetPositionZ()) <= 5.0f)
+        switch (pSummoned->GetEntry())
         {
-            if (Player* pPlayer = m_pInstance->GetPlayerInMap(true, false))
-                pSummoned->AI()->AttackStart(pPlayer);
-        }
-        else
-        {
-            // sometimes the creature is summoned in a bad place, so make sure that it always move to the creature
-            if (Creature* pCreature = m_pInstance->GetSingleCreatureFromStorage(m_pInstance->GetPlayerTeam() == ALLIANCE ? NPC_JAINA_PART2 : NPC_SYLVANAS_PART2))
-            {
-                pSummoned->SetWalk(false);
-                pSummoned->GetMotionMaster()->MovePoint(0, pCreature->GetPositionX(), pCreature->GetPositionY(), pCreature->GetPositionZ(), false);
-            }
+            case NPC_LUMBERING_ABOMINATION:
+                if (Player* pPlayer = m_pInstance->GetPlayerInMap(true, false))
+                    pSummoned->AI()->AttackStart(pPlayer);
+                break;
+            default:
+                // combat for the others is handled by EAI
+                break;
         }
 
-        ++m_uiCreaturesAliveCount;
+        // count the summoned creatures
+        m_lSummonedCreaturesGuids.push_back(pSummoned->GetObjectGuid());
     }
 
     void SummonedCreatureJustDied(Creature* pSummoned) override
@@ -165,26 +164,26 @@ struct boss_lich_king_horAI : public ScriptedAI
         if (!m_pInstance)
             return;
 
-        --m_uiCreaturesAliveCount;
+        m_lSummonedCreaturesGuids.remove(pSummoned->GetObjectGuid());
 
         // when all creatures are cleared, destroy the wall and allow Jaina / Sylvanas to continue
-        if (!m_uiCreaturesAliveCount)
+        if (m_lSummonedCreaturesGuids.empty())
         {
-            if (GameObject* pWall = m_creature->GetMap()->GetGameObject(m_iceWallGuid))
-            {
-                if (Creature* pTarget = GetClosestCreatureWithEntry(pWall, NPC_ICE_WALL_TARGET, 5.0f))
-                    pTarget->ForcedDespawn();
-
-                pWall->Use(m_creature);
-            }
-
+            // Make Jaina / Sylvanas start next path
             if (Creature* pCreature = m_pInstance->GetSingleCreatureFromStorage(m_pInstance->GetPlayerTeam() == ALLIANCE ? NPC_JAINA_PART2 : NPC_SYLVANAS_PART2))
-                pCreature->clearUnitState(UNIT_STAT_WAYPOINT_PAUSED);
+            {
+                // destroy the wall
+                if (GameObject* pWall = GetClosestGameObjectWithEntry(pCreature, GO_ICE_WALL, 30.0f))
+                    pWall->Use(pCreature);
 
-            if (m_uiCreatureWavesCount >= 20)
-                m_creature->RemoveAurasDueToSpell(SPELL_REMORSLESS_WINTER);
-            else
-                m_bCanSummonWall = true;
+                // force creature to evade, in case it was attacked by the minions
+                ++m_uiPathId;
+                pCreature->AI()->EnterEvadeMode();
+                pCreature->InterruptNonMeleeSpells(false);
+
+                // start next WP movement path
+                pCreature->GetMotionMaster()->MoveWaypoint(m_uiPathId);
+            }
         }
     }
 
@@ -201,33 +200,6 @@ struct boss_lich_king_horAI : public ScriptedAI
                 m_pInstance->DoStartTimedAchievement(ACHIEVEMENT_CRITERIA_TYPE_BE_SPELL_TARGET, ACHIEV_START_NOT_RETREATING_ID);
             }
         }
-        else if (eventType == AI_EVENT_CUSTOM_B)
-        {
-            switch (m_uiCreatureWavesCount)
-            {
-                case 0:
-                    DoScriptText(SAY_FIRST_WALL, m_creature);
-                    // ToDo: fix spell targets
-                    // DoCastSpellIfCan(m_creature, SPELL_PAIN_AND_SUFFERING, CAST_TRIGGERED);
-                    break;
-                case 2:
-                    DoScriptText(SAY_SECOND_WALL, m_creature);
-                    break;
-                case 6:
-                    DoScriptText(SAY_THIRD_WALL, m_creature);
-                    break;
-                case 11:
-                    DoScriptText(SAY_LAST_WALL, m_creature);
-                    break;
-            }
-
-            // all event handles trigger one creature wave summoning
-            // wave 1: 6 ghouls; 1 doctor
-            // wave 2: 6 ghouls; 2 doctors; 1 abomination
-            // wave 3: 6 ghouls; 2 doctors; 2 abominations
-            // wave 4: 12 ghouls; 4 doctors; 3 abominations
-            m_bCanSummonCreatures = true;
-        }
     }
 
     void MovementInform(uint32 uiType, uint32 uiPointId) override
@@ -235,128 +207,40 @@ struct boss_lich_king_horAI : public ScriptedAI
         if (uiType != WAYPOINT_MOTION_TYPE)
             return;
 
+        // Event logic handled by DB scripts
+        // wave 1: 6 ghouls; 1 doctor
+        // wave 2: 6 ghouls; 2 doctors; 1 abomination
+        // wave 3: 6 ghouls; 2 doctors; 2 abominations
+        // wave 4: 12 ghouls; 4 doctors; 3 abominations
+
         // handle event complete
-        if (uiPointId == 98)
+        if (uiPointId == POINT_ID_EPILOGUE && m_pInstance)
         {
-            if (m_pInstance)
+            if (Creature* pCreature = m_pInstance->GetSingleCreatureFromStorage(m_pInstance->GetPlayerTeam() == ALLIANCE ? NPC_JAINA_PART2 : NPC_SYLVANAS_PART2))
             {
-                // epilog script handled by DB scripts
-                if (Creature* pCreature = m_pInstance->GetSingleCreatureFromStorage(m_pInstance->GetPlayerTeam() == ALLIANCE ? NPC_JAINA_PART2 : NPC_SYLVANAS_PART2))
+                if (DoCastSpellIfCan(pCreature, SPELL_HARVEST_SOUL) == CAST_OK)
                 {
-                    DoCastSpellIfCan(pCreature, SPELL_HARVEST_SOUL);
-                    pCreature->clearUnitState(UNIT_STAT_WAYPOINT_PAUSED);
+                    // mark the encounter as done; epilog script handled by DB scripts
+                    pCreature->GetMotionMaster()->UnpauseWaypoints();
+
+                    m_pInstance->SetData(TYPE_LICH_KING, DONE);
                 }
-
-                m_pInstance->SetData(TYPE_LICH_KING, DONE);
-            }
-
-            return;
-        }
-
-        // handle event failed
-        if (m_bIsEventFailed)
-        {
-            m_creature->addUnitState(UNIT_STAT_WAYPOINT_PAUSED);
-            m_creature->RemoveAurasDueToSpell(SPELL_REMORSLESS_WINTER);
-
-            if (DoCastSpellIfCan(m_creature, SPELL_FURY_FROSTMOURNE, CAST_INTERRUPT_PREVIOUS) == CAST_OK)
-            {
-                // reset instance, walls and creatures
-                if (m_pInstance)
-                    m_pInstance->SetData(TYPE_LICH_KING, FAIL);
-
-                m_creature->ForcedDespawn(10000);
-            }
-        }
-
-        // handle summon during the event
-        if (m_bCanSummonCreatures)
-        {
-            ++m_uiCreatureWavesCount;
-
-            // each wave is made of various creature types
-            switch (m_uiCreatureWavesCount)
-            {
-                case 1:
-                case 3:
-                case 7:
-                case 12:
-                case 17:
-                    if (DoCastSpellIfCan(m_creature, SPELL_SUMMON_RAGING_GHOUL) == CAST_OK)
-                    {
-                        m_creature->addUnitState(UNIT_STAT_WAYPOINT_PAUSED);
-                        m_uiResumeMovementTimer = 3000;
-                    }
-                    break;
-                case 2:
-                case 4:
-                case 6:
-                case 8:
-                case 10:
-                case 13:
-                case 16:
-                case 19:
-                case 20:
-                    DoCastSpellIfCan(m_creature, SPELL_SUMMON_WITCH_DOCTOR, CAST_TRIGGERED);
-                    break;
-                case 5:
-                case 9:
-                case 11:
-                case 14:
-                case 15:
-                case 18:
-                    DoCastSpellIfCan(m_creature, SPELL_SUMMON_ABOMINATION, CAST_TRIGGERED);
-                    break;
-            }
-
-            // stop summoning after specific wave
-            switch (m_uiCreatureWavesCount)
-            {
-                case 2:
-                case 6:
-                case 11:
-                case 20:
-                    m_bCanSummonCreatures = false;
-                    break;
-            }
-        }
-
-        // handle wall summoning
-        if (m_bCanSummonWall)
-        {
-            if (DoCastSpellIfCan(m_creature, SPELL_SUMMON_ICE_WALL) == CAST_OK)
-            {
-                m_creature->addUnitState(UNIT_STAT_WAYPOINT_PAUSED);
-                m_uiResumeMovementTimer = 3000;
-                m_bCanSummonWall = false;
             }
         }
     }
 
     void UpdateAI(const uint32 uiDiff) override
     {
-        // resume wp movement after specified timer
-        if (m_uiResumeMovementTimer)
-        {
-            if (m_uiResumeMovementTimer <= uiDiff)
-            {
-                m_creature->clearUnitState(UNIT_STAT_WAYPOINT_PAUSED);
-                m_uiResumeMovementTimer = 0;
-            }
-            else
-                m_uiResumeMovementTimer -= uiDiff;
-        }
-
         // no combat during escape event
         if (m_bIsEventStarted)
             return;
 
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_uiSoulReaperTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_SOUL_REAPER) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SOUL_REAPER) == CAST_OK)
                 m_uiSoulReaperTimer = urand(5000, 10000);
         }
         else
@@ -366,17 +250,12 @@ struct boss_lich_king_horAI : public ScriptedAI
     }
 };
 
-UnitAI* GetAI_boss_lich_king_hor(Creature* pCreature)
-{
-    return new boss_lich_king_horAI(pCreature);
-}
-
 bool EffectScriptEffectCreature_spell_stun_break(Unit* pCaster, uint32 uiSpellId, SpellEffectIndex uiEffIndex, Creature* pCreatureTarget, ObjectGuid /*originalCasterGuid*/)
 {
     if (uiSpellId == SPELL_STUN_BREAK && uiEffIndex == EFFECT_INDEX_0)
     {
         pCreatureTarget->AI()->EnterEvadeMode();
-        pCreatureTarget->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
+        pCreatureTarget->SetImmuneToPlayer(true);
         pCreatureTarget->AI()->SendAIEvent(AI_EVENT_CUSTOM_A, pCaster, pCreatureTarget);
 
         return true;
@@ -438,7 +317,7 @@ struct npc_jaina_sylvanas_horAI : public ScriptedAI
 
     void UpdateAI(const uint32 uiDiff) override
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         // ToDo: research if there are any spells involved
@@ -446,11 +325,6 @@ struct npc_jaina_sylvanas_horAI : public ScriptedAI
         DoMeleeAttackIfReady();
     }
 };
-
-UnitAI* GetAI_npc_jaina_sylvanas_hor(Creature* pCreature)
-{
-    return new npc_jaina_sylvanas_horAI(pCreature);
-}
 
 /*######
 ## at_wrath_lich_king
@@ -460,7 +334,7 @@ bool AreaTrigger_at_wrath_lich_king(Player* pPlayer, AreaTriggerEntry const* pAt
 {
     if (pAt->id == AREATRIGGER_LICH_KING_ROOM)
     {
-        if (pPlayer->isGameMaster() || !pPlayer->isAlive())
+        if (pPlayer->IsGameMaster() || !pPlayer->IsAlive())
             return false;
 
         instance_halls_of_reflection* pInstance = (instance_halls_of_reflection*)pPlayer->GetInstanceData();
@@ -477,44 +351,21 @@ bool AreaTrigger_at_wrath_lich_king(Player* pPlayer, AreaTriggerEntry const* pAt
     return false;
 }
 
-/*######
-## event_spell_summon_ice_wall
-######*/
-
-bool ProcessEventId_event_spell_summon_ice_wall(uint32 uiEventId, Object* pSource, Object* /*pTarget*/, bool bIsStart)
-{
-    if (uiEventId == EVENT_ID_SUMMON_ICE_WALL && bIsStart && pSource->GetTypeId() == TYPEID_UNIT)
-    {
-        Creature* pLichKing = (Creature*)pSource;
-        if (!pLichKing)
-            return false;
-
-        pLichKing->AI()->SendAIEvent(AI_EVENT_CUSTOM_B, pLichKing, pLichKing);
-    }
-
-    return false;
-}
-
 void AddSC_boss_lich_king()
 {
     Script* pNewScript = new Script;
     pNewScript->Name = "boss_lich_king_hor";
-    pNewScript->GetAI = &GetAI_boss_lich_king_hor;
+    pNewScript->GetAI = &GetNewAIInstance<boss_lich_king_horAI>;
     pNewScript->pEffectScriptEffectNPC = &EffectScriptEffectCreature_spell_stun_break;
     pNewScript->RegisterSelf();
 
     pNewScript = new Script;
     pNewScript->Name = "npc_jaina_sylvanas_hor";
-    pNewScript->GetAI = &GetAI_npc_jaina_sylvanas_hor;
+    pNewScript->GetAI = &GetNewAIInstance<npc_jaina_sylvanas_horAI>;
     pNewScript->RegisterSelf();
 
     pNewScript = new Script;
     pNewScript->Name = "at_wrath_lich_king";
     pNewScript->pAreaTrigger = &AreaTrigger_at_wrath_lich_king;
-    pNewScript->RegisterSelf();
-
-    pNewScript = new Script;
-    pNewScript->Name = "event_spell_summon_ice_wall";
-    pNewScript->pProcessEventId = &ProcessEventId_event_spell_summon_ice_wall;
     pNewScript->RegisterSelf();
 }

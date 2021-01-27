@@ -33,7 +33,7 @@ void AbstractRandomMovementGenerator::Initialize(Unit& owner)
     else if (owner.AI())
     {
         owner.SetTarget(nullptr);
-        owner.SendMeleeAttackStop(owner.getVictim());
+        owner.MeleeAttackStop(owner.GetVictim());
     }
 
     // Stop any previously dispatched splines no matter the source
@@ -80,7 +80,7 @@ void AbstractRandomMovementGenerator::Reset(Unit& owner)
 
 bool AbstractRandomMovementGenerator::Update(Unit& owner, const uint32& diff)
 {
-    if (!owner.isAlive())
+    if (!owner.IsAlive())
         return false;
 
     if (owner.hasUnitState(UNIT_STAT_NO_FREE_MOVE & ~i_stateActive))
@@ -195,6 +195,20 @@ void WanderMovementGenerator::Interrupt(Unit& owner)
         static_cast<Creature&>(owner).SetWalk(!owner.hasUnitState(UNIT_STAT_RUNNING_STATE), false);
 }
 
+TimedWanderMovementGenerator::TimedWanderMovementGenerator(Creature const& npc, uint32 timer, float radius, float verticalZ)
+    : TimedWanderMovementGenerator(timer, npc.GetPositionX(), npc.GetPositionY(), npc.GetPositionZ(), radius, verticalZ)
+{
+}
+
+bool TimedWanderMovementGenerator::Update(Unit& owner, const uint32& diff)
+{
+    m_durationTimer.Update(diff);
+    if (m_durationTimer.Passed())
+        return false;
+
+    return WanderMovementGenerator::Update(owner, diff);
+}
+
 FleeingMovementGenerator::FleeingMovementGenerator(Unit const& source) :
     AbstractRandomMovementGenerator(UNIT_STAT_FLEEING, UNIT_STAT_FLEEING_MOVE, 500, 1500)
 {
@@ -218,6 +232,17 @@ bool FleeingMovementGenerator::_getLocation(Unit& owner, float& x, float& y, flo
         i_radius = frand(0.6f, 1.2f) * (MAX_QUIET_DISTANCE - MIN_QUIET_DISTANCE);
 
     owner.GetPosition(x, y, z);
+
+    if (owner.IsPlayer())
+    {
+        float angle = 2.0f * M_PI_F * rand_norm_f();
+        Position pos(owner.GetPosition());
+        owner.MovePositionToFirstCollision(pos, i_radius, angle);
+        x = pos.x;
+        y = pos.y;
+        z = pos.z + 1;
+        return true;
+    }
 
     return owner.GetMap()->GetReachableRandomPosition(&owner, x, y, z, i_radius, false);
 }

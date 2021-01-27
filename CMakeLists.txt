@@ -16,7 +16,7 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 # Minimum required cmake version to run the build
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.1)
 
 # Will cache object files if ccache is available
 # Must be set at top of cmake outside of project header
@@ -26,6 +26,11 @@ if(CCACHE_PROGRAM)
 endif()
 
 project(CMaNGOS_WoTLK)
+
+# Require C++ 14 support
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Define here name of the binaries
 set(CMANGOS_BINARY_SERVER_NAME "mangosd")
@@ -206,9 +211,9 @@ if (POLICY CMP0074)
 endif()
 
 # Find needed packages and if necessery abort if something important is missing
-find_package(Boost REQUIRED COMPONENTS system program_options thread regex)
+find_package(Boost REQUIRED COMPONENTS system program_options thread regex serialization)
 
-if(NOT Boost_FOUND)
+if(NOT Boost_FOUND AND (BUILD_GAME_SERVER OR BUILD_LOGIN_SERVER))
   message(STATUS "BOOST_ROOT = $ENV{BOOST_ROOT}")
   message(STATUS "BOOST_LIBRARYDIR = $ENV{BOOST_LIBRARYDIR}")
   if ("$ENV{BOOST_ROOT}" STREQUAL "")
@@ -225,7 +230,7 @@ if(NOT Boost_FOUND)
 endif()
 
 # Win32 delivered packages
-if(WIN32)
+if(WIN32 AND (BUILD_GAME_SERVER OR BUILD_LOGIN_SERVER OR BUILD_EXTRACTORS))
   set(MYSQL_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/dep/lib/include/mysql")
   set(MYSQL_LIBRARY "${CMAKE_SOURCE_DIR}/dep/lib/${DEP_ARCH}_release/libmySQL.lib")
   set(MYSQL_DEBUG_LIBRARY "${CMAKE_SOURCE_DIR}/dep/lib/${DEP_ARCH}_debug/libmySQL.lib")
@@ -235,7 +240,7 @@ if(WIN32)
 endif()
 
 # *nix-specific packages
-if(UNIX)
+if(UNIX AND (BUILD_GAME_SERVER OR BUILD_LOGIN_SERVER OR BUILD_EXTRACTORS))
   if(POSTGRESQL)
     find_package(PostgreSQL REQUIRED)
   else()
@@ -351,7 +356,7 @@ endif()
 # print out the results before continuing
 include(cmake/showoptions.cmake)
 
-if(NOT BUILD_GAME_SERVER AND NOT BUILD_LOGIN_SERVER AND NOT BUILD_EXTRACTORS AND NOT BUILD_RECASTDEMOMOD)
+if(NOT BUILD_GAME_SERVER AND NOT BUILD_LOGIN_SERVER AND NOT BUILD_EXTRACTORS AND NOT BUILD_DOCS AND NOT BUILD_RECASTDEMOMOD)
   message(FATAL_ERROR "You must select something to build!")
 endif()
 
@@ -403,6 +408,10 @@ if(BUILD_EXTRACTORS)
     add_subdirectory(contrib/vmap_assembler)
     add_subdirectory(contrib/mmap)
   endif()
+endif()
+
+if(BUILD_DOCS)
+  add_subdirectory(doc)
 endif()
 
 if(BUILD_RECASTDEMOMOD)

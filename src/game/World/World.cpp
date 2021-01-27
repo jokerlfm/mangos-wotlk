@@ -62,7 +62,6 @@
 #include "MotionGenerators/WaypointManager.h"
 #include "GMTickets/GMTicketMgr.h"
 #include "Util.h"
-#include "AuctionHouseBot/AuctionHouseBot.h"
 #include "Tools/CharacterDatabaseCleaner.h"
 #include "Entities/CreatureLinkingMgr.h"
 #include "Calendar/Calendar.h"
@@ -70,6 +69,14 @@
 #include "World/WorldState.h"
 #include "Cinematics/CinematicMgr.h"
 
+#ifdef BUILD_AHBOT
+#include "AuctionHouseBot/AuctionHouseBot.h"
+#endif
+
+#include "Metric/Metric.h"
+#include "Maps/TransportMgr.h"
+
+#include <algorithm>
 #include <mutex>
 
 // EJ robot
@@ -101,7 +108,7 @@ TimePoint World::m_currentTime = TimePoint();
 uint32 World::m_currentDiff = 0;
 
 /// World constructor
-World::World(): mail_timer(0), mail_timer_expires(0), m_NextMonthlyQuestReset(0)
+World::World() : mail_timer(0), mail_timer_expires(0), m_NextDailyQuestReset(0), m_NextWeeklyQuestReset(0), m_NextMonthlyQuestReset(0), m_opcodeCounters(NUM_MSG_TYPES)
 {
     m_playerLimit = 0;
     m_allowMovement = true;
@@ -111,10 +118,8 @@ World::World(): mail_timer(0), mail_timer_expires(0), m_NextMonthlyQuestReset(0)
     m_startTime = m_gameTime;
     m_maxActiveSessionCount = 0;
     m_maxQueuedSessionCount = 0;
-    m_NextDailyQuestReset = 0;
-    m_NextWeeklyQuestReset = 0;
 
-    m_defaultDbcLocale = LOCALE_enUS;
+    m_defaultDbcLocale = DEFAULT_LOCALE;
     m_availableDbcLocaleMask = 0;
 
     for (unsigned int& m_configUint32Value : m_configUint32Values)
@@ -152,7 +157,7 @@ World::~World()
 /// Cleanups before world stop
 void World::CleanupsBeforeStop()
 {
-    KickAll();                                       // save and kick all players
+    KickAll(true);                                   // save and kick all players
     UpdateSessions(1);                               // real players unload required UpdateSessions call
     sBattleGroundMgr.DeleteAllBattleGrounds();       // unload battleground templates before different singletons destroyed
     sMapMgr.UnloadAll();                             // unload all grids (including locked in memory)
@@ -247,6 +252,9 @@ World::AddSession_(WorldSession* s)
     // login as a session and queue the socket that we are using
     if (decrease_session)
         --Sessions;
+
+    if (m_uniqueSessionCount.find(s->GetAccountId()) == m_uniqueSessionCount.end())
+        m_uniqueSessionCount.insert(s->GetAccountId());
 
     if (pLimit > 0 && Sessions >= pLimit && s->GetSecurity() == SEC_PLAYER)
     {
@@ -507,6 +515,8 @@ void World::LoadConfigSettings(bool reload)
             m_configForceLoadMapIds.insert(id);
     }
 
+    setConfig(CONFIG_BOOL_AUTOLOAD_ACTIVE, "Autoload.Active", true);
+
     setConfig(CONFIG_UINT32_INTERVAL_SAVE, "PlayerSave.Interval", 15 * MINUTE * IN_MILLISECONDS);
     setConfigMinMax(CONFIG_UINT32_MIN_LEVEL_STAT_SAVE, "PlayerSave.Stats.MinLevel", 0, 0, MAX_LEVEL);
     setConfig(CONFIG_BOOL_STATS_SAVE_ONLY_ON_LOGOUT, "PlayerSave.Stats.SaveOnlyOnLogout", true);
@@ -578,6 +588,7 @@ void World::LoadConfigSettings(bool reload)
 
     setConfigMinMax(CONFIG_UINT32_START_ARENA_POINTS, "StartArenaPoints", 0, 0, getConfig(CONFIG_UINT32_MAX_ARENA_POINTS));
 
+    setConfig(CONFIG_BOOL_TAXI_FLIGHT_CHAT_FIX, "TaxiFlightChatFix", false);
     setConfig(CONFIG_BOOL_LONG_TAXI_PATHS_PERSISTENCE, "LongFlightPathsPersistence", false);
     setConfig(CONFIG_BOOL_ALL_TAXI_PATHS, "AllFlightPaths", false);
 
@@ -601,11 +612,15 @@ void World::LoadConfigSettings(bool reload)
 
     setConfigMinMax(CONFIG_UINT32_MIN_PETITION_SIGNS, "MinPetitionSigns", 9, 0, 9);
 
-    setConfig(CONFIG_UINT32_GM_LOGIN_STATE,    "GM.LoginState",    2);
-    setConfig(CONFIG_UINT32_GM_VISIBLE_STATE,  "GM.Visible",       2);
-    setConfig(CONFIG_UINT32_GM_ACCEPT_TICKETS, "GM.AcceptTickets", 2);
-    setConfig(CONFIG_UINT32_GM_CHAT,           "GM.Chat",          2);
-    setConfig(CONFIG_UINT32_GM_WISPERING_TO,   "GM.WhisperingTo",  2);
+    setConfig(CONFIG_UINT32_GM_LOGIN_STATE,                 "GM.LoginState",                2);
+    setConfig(CONFIG_UINT32_GM_VISIBLE_STATE,               "GM.Visible",                   2);
+    setConfig(CONFIG_UINT32_GM_ACCEPT_TICKETS,              "GM.AcceptTickets",             2);
+    setConfig(CONFIG_UINT32_GM_LEVEL_ACCEPT_TICKETS,        "GM.AcceptTicketsLevel",        2);
+    setConfig(CONFIG_UINT32_GM_CHAT,                        "GM.Chat",                      2);
+    setConfig(CONFIG_UINT32_GM_LEVEL_CHAT,                  "GM.ChatLevel",                 1);
+    setConfig(CONFIG_UINT32_GM_LEVEL_CHANNEL_MODERATION,    "GM.ChannelModerationLevel",    1);
+    setConfig(CONFIG_UINT32_GM_LEVEL_CHANNEL_SILENT_JOIN,   "GM.ChannelSilentJoinLevel",    0);
+    setConfig(CONFIG_UINT32_GM_WISPERING_TO,                "GM.WhisperingTo",              2);
 
     setConfig(CONFIG_UINT32_GM_LEVEL_IN_GM_LIST,  "GM.InGMList.Level",  SEC_ADMINISTRATOR);
     setConfig(CONFIG_UINT32_GM_LEVEL_IN_WHO_LIST, "GM.InWhoList.Level", SEC_ADMINISTRATOR);
@@ -615,6 +630,7 @@ void World::LoadConfigSettings(bool reload)
     setConfig(CONFIG_BOOL_GM_LOWER_SECURITY, "GM.LowerSecurity", false);
     setConfig(CONFIG_BOOL_GM_ALLOW_ACHIEVEMENT_GAINS, "GM.AllowAchievementGain", true);
     setConfig(CONFIG_UINT32_GM_INVISIBLE_AURA, "GM.InvisibleAura", 37800);
+    setConfig(CONFIG_BOOL_GM_TICKETS_QUEUE_STATUS, "GM.TicketsQueueStatus", true);
 
     setConfig(CONFIG_UINT32_FOGOFWAR_STEALTH, "Visibility.FogOfWar.Stealth", 0);
     setConfig(CONFIG_UINT32_FOGOFWAR_HEALTH, "Visibility.FogOfWar.Health", 2);
@@ -689,8 +705,10 @@ void World::LoadConfigSettings(bool reload)
 
     setConfig(CONFIG_BOOL_DETECT_POS_COLLISION, "DetectPosCollision", true);
 
-    setConfig(CONFIG_BOOL_RESTRICTED_LFG_CHANNEL,      "Channel.RestrictedLfg", true);
-    setConfig(CONFIG_BOOL_SILENTLY_GM_JOIN_TO_CHANNEL, "Channel.SilentlyGMJoin", false);
+    setConfig(CONFIG_BOOL_CHAT_RESTRICTED_RAID_WARNINGS,        "Chat.RestrictedRaidWarnings", 1);
+    setConfig(CONFIG_UINT32_CHANNEL_RESTRICTED_LANGUAGE_MODE,   "Channel.RestrictedLanguageMode", 0);
+    setConfig(CONFIG_BOOL_CHANNEL_RESTRICTED_LFG,               "Channel.RestrictedLfg", true);
+    setConfig(CONFIG_UINT32_CHANNEL_STATIC_AUTO_TRESHOLD,       "Channel.StaticAutoTreshold", 0);
 
     setConfig(CONFIG_BOOL_TALENTS_INSPECTING,           "TalentsInspecting", true);
     setConfig(CONFIG_BOOL_CHAT_FAKE_MESSAGE_PREVENTING, "ChatFakeMessagePreventing", false);
@@ -715,7 +733,6 @@ void World::LoadConfigSettings(bool reload)
     setConfigMinMax(CONFIG_FLOAT_GHOST_RUN_SPEED_WORLD,   "Death.Ghost.RunSpeed.World", 1.0f, 0.1f, 10.0f);
     setConfigMinMax(CONFIG_FLOAT_GHOST_RUN_SPEED_BG,      "Death.Ghost.RunSpeed.Battleground", 1.0f, 0.1f, 10.0f);
 
-    setConfig(CONFIG_FLOAT_THREAT_RADIUS, "ThreatRadius", 100.0f);
     setConfigMin(CONFIG_UINT32_CREATURE_RESPAWN_AGGRO_DELAY, "CreatureRespawnAggroDelay", 5000, 0);
     setConfig(CONFIG_UINT32_CREATURE_PICKPOCKET_RESTOCK_DELAY, "CreaturePickpocketRestockDelay", 600);
 
@@ -732,6 +749,7 @@ void World::LoadConfigSettings(bool reload)
     setConfig(CONFIG_UINT32_BATTLEGROUND_INVITATION_TYPE,              "Battleground.InvitationType", 0);
     setConfig(CONFIG_UINT32_BATTLEGROUND_PREMATURE_FINISH_TIMER,       "BattleGround.PrematureFinishTimer", 5 * MINUTE * IN_MILLISECONDS);
     setConfig(CONFIG_UINT32_BATTLEGROUND_PREMADE_GROUP_WAIT_FOR_MATCH, "BattleGround.PremadeGroupWaitForMatch", 30 * MINUTE * IN_MILLISECONDS);
+    setConfigMinMax(CONFIG_UINT32_BATTLEGROUND_RANDOM_RESET_HOUR,      "BattleGround.Random.ResetHour", 6, 0, 23);
     setConfig(CONFIG_UINT32_ARENA_MAX_RATING_DIFFERENCE,               "Arena.MaxRatingDifference", 150);
     setConfig(CONFIG_UINT32_ARENA_RATING_DISCARD_TIMER,                "Arena.RatingDiscardTimer", 10 * MINUTE * IN_MILLISECONDS);
     setConfig(CONFIG_BOOL_ARENA_AUTO_DISTRIBUTE_POINTS,                "Arena.AutoDistributePoints", false);
@@ -959,7 +977,7 @@ void World::SetInitialWorldSettings()
     sLog.outString("Initialize DBC data stores...");
     LoadDBCStores(m_dataPath);
     DetectDBCLang();
-    sObjectMgr.SetDBCLocaleIndex(GetDefaultDbcLocale());    // Get once for all the locale index of DBC language (console/broadcasts)
+    sObjectMgr.SetDbc2StorageLocaleIndex(GetDefaultDbcLocale());    // Get once for all the locale index of DBC language (console/broadcasts)
 
     // Loading cameras for characters creation cinematic
     sLog.outString("Loading cinematic...");
@@ -998,11 +1016,15 @@ void World::SetInitialWorldSettings()
     sObjectMgr.LoadPageTexts();
 
     sLog.outString("Loading Game Object Templates...");     // must be after LoadPageTexts
-    sObjectMgr.LoadGameobjectInfo();
+    std::vector<uint32> transportDisplayIds = sObjectMgr.LoadGameobjectInfo();
+    MMAP::MMapFactory::createOrGetMMapManager()->loadAllGameObjectModels(transportDisplayIds);
 
     sLog.outString("Loading GameObject models...");
     LoadGameObjectModelList();
     sLog.outString();
+
+    // loads GO data
+    sTransportMgr.LoadTransportAnimationAndRotation();
 
     sLog.outString("Loading Spell Chain Data...");
     sSpellMgr.LoadSpellChains();
@@ -1088,11 +1110,17 @@ void World::SetInitialWorldSettings()
     sLog.outString("Loading Creature Conditional Spawn Data...");  // must be after LoadCreatureTemplates and before LoadCreatures
     sObjectMgr.LoadCreatureConditionalSpawn();
 
+    sLog.outString("Loading Creature Spawn Template Data..."); // must be before LoadCreatures
+    sObjectMgr.LoadCreatureSpawnDataTemplates();
+
     sLog.outString("Loading Creature Spawn Entry Data..."); // must be before LoadCreatures
     sObjectMgr.LoadCreatureSpawnEntry();
 
     sLog.outString("Loading Creature Data...");
     sObjectMgr.LoadCreatures();
+
+    sLog.outString("Loading Gameobject Data...");
+    sObjectMgr.LoadGameObjects();
 
     sLog.outString("Loading SpellsScriptTarget...");
     sSpellMgr.LoadSpellScriptTarget();                      // must be after LoadCreatureTemplates, LoadCreatures and LoadGameobjectInfo
@@ -1110,9 +1138,6 @@ void World::SetInitialWorldSettings()
     sObjectMgr.LoadCreatureAddons();                        // must be after LoadCreatureTemplates() and LoadCreatures()
     sLog.outString(">>> Creature Addon Data loaded");
     sLog.outString();
-
-    sLog.outString("Loading Gameobject Data...");
-    sObjectMgr.LoadGameObjects();
 
     sLog.outString("Loading Gameobject Addon Data...");
     sObjectMgr.LoadGameObjectAddon();
@@ -1144,6 +1169,10 @@ void World::SetInitialWorldSettings()
 
     sLog.outString("Loading Conditions...");                // Load Conditions
     sObjectMgr.LoadConditions();
+
+    // Not sure if this can be moved up in the sequence (with static data loading) as it uses MapManager
+    sLog.outString("Loading Transports...");
+    sMapMgr.LoadTransports();
 
     sLog.outString("Creating map persistent states for non-instanceable maps...");     // must be after PackInstances(), LoadCreatures(), sPoolMgr.LoadFromDB(), sGameEventMgr.LoadFromDB();
     sMapPersistentStateMgr.InitWorldMaps();
@@ -1381,8 +1410,10 @@ void World::SetInitialWorldSettings()
     m_timers[WUPDATE_CORPSES].SetInterval(20 * MINUTE * IN_MILLISECONDS);
     m_timers[WUPDATE_DELETECHARS].SetInterval(DAY * IN_MILLISECONDS); // check for chars to delete every day
 
+#ifdef BUILD_AHBOT
     // for AhBot
     m_timers[WUPDATE_AHBOT].SetInterval(20 * IN_MILLISECONDS); // every 20 sec
+#endif
 
     // Update groups with offline leader after delay in seconds
     m_timers[WUPDATE_GROUPS].SetInterval(IN_MILLISECONDS);
@@ -1413,10 +1444,6 @@ void World::SetInitialWorldSettings()
     sBattleGroundMgr.CreateInitialBattleGrounds();
     sBattleGroundMgr.InitAutomaticArenaPointDistribution();
 
-    // Not sure if this can be moved up in the sequence (with static data loading) as it uses MapManager
-    sLog.outString("Loading Transports...");
-    sMapMgr.LoadTransports();
-
     sLog.outString("Deleting expired bans...");
     LoginDatabase.Execute("DELETE FROM ip_banned WHERE expires_at<=UNIX_TIMESTAMP() AND expires_at<>banned_at");
     sLog.outString();
@@ -1431,6 +1458,10 @@ void World::SetInitialWorldSettings()
 
     sLog.outString("Calculate next monthly quest reset time...");
     SetMonthlyQuestResetTime();
+    sLog.outString();
+
+    sLog.outString("Calculate random battleground reset time...");
+    InitRandomBattlegroundResetTime();
     sLog.outString();
 
     sLog.outString("Loading Spam records...");
@@ -1449,13 +1480,18 @@ void World::SetInitialWorldSettings()
     // Delete all characters which have been deleted X days before
     Player::DeleteOldCharacters();
 
+#ifdef BUILD_AHBOT
     sLog.outString("Initialize AuctionHouseBot...");
-    sAuctionBot.Initialize();
+    sAuctionHouseBot.Initialize();
     sLog.outString();
+#endif
 
     sLog.outString("Loading WorldState");
     sWorldState.Load();
     sLog.outString();
+
+    // update metrics output every second
+    m_timers[WUPDATE_METRICS].SetInterval(1 * IN_MILLISECONDS);
 
 #ifdef BUILD_PLAYERBOT
     PlayerbotMgr::SetInitialWorldSettings();
@@ -1485,7 +1521,7 @@ void World::DetectDBCLang()
     if (m_lang_confid != 255 && m_lang_confid >= MAX_LOCALE)
     {
         sLog.outError("Incorrect DBC.Locale! Must be >= 0 and < %d (set to 0)", MAX_LOCALE);
-        m_lang_confid = LOCALE_enUS;
+        m_lang_confid = DEFAULT_LOCALE;
     }
 
     ChrRacesEntry const* race = sChrRacesStore.LookupEntry(RACE_HUMAN);
@@ -1543,6 +1579,8 @@ void World::Update(uint32 diff)
     ///- Update the game time and check for shutdown time
     _UpdateGameTime();
 
+    GetMessager().Execute(this);
+
     ///-Update mass mailer tasks if any
     sMassMailMgr.Update();
 
@@ -1557,6 +1595,10 @@ void World::Update(uint32 diff)
     /// Handle monthly quests reset time
     if (m_gameTime > m_NextMonthlyQuestReset)
         ResetMonthlyQuests();
+
+    /// Handle daily random battleground reset time
+    if (m_gameTime > m_NextRandomBattlegroundReset)
+        ResetRandomBattleground();
 
     /// <ul><li> Handle auctions when the timer has passed
     if (m_timers[WUPDATE_AUCTIONS].Passed())
@@ -1575,14 +1617,17 @@ void World::Update(uint32 diff)
         sAuctionMgr.Update();
     }
 
+#ifdef BUILD_AHBOT
     /// <li> Handle AHBot operations
     if (m_timers[WUPDATE_AHBOT].Passed())
     {
-        sAuctionBot.Update();
+        sAuctionHouseBot.Update();
         m_timers[WUPDATE_AHBOT].Reset();
     }
+#endif
 
     /// <li> Handle session updates
+    auto preSessionTime = std::chrono::time_point_cast<std::chrono::milliseconds>(Clock::now());
     UpdateSessions(diff);
 
     /// <li> Update uptime table
@@ -1594,14 +1639,15 @@ void World::Update(uint32 diff)
         m_timers[WUPDATE_UPTIME].Reset();
         LoginDatabase.PExecute("UPDATE uptime SET uptime = %u, maxplayers = %u WHERE realmid = %u AND starttime = " UI64FMTD, tmpDiff, maxClientsNum, realmID, uint64(m_startTime));
     }
-
+    auto preMapTime = std::chrono::time_point_cast<std::chrono::milliseconds>(Clock::now());
     /// <li> Handle all other objects
     ///- Update objects (maps, transport, creatures,...)
     sMapMgr.Update(diff);
+    auto postMapTime = std::chrono::time_point_cast<std::chrono::milliseconds>(Clock::now());
     sBattleGroundMgr.Update(diff);
     sOutdoorPvPMgr.Update(diff);
     sWorldState.Update(diff);
-
+    auto postSingletonTime = std::chrono::time_point_cast<std::chrono::milliseconds>(Clock::now());
     ///- Update groups with offline leaders
     if (m_timers[WUPDATE_GROUPS].Passed())
     {
@@ -1640,6 +1686,13 @@ void World::Update(uint32 diff)
         m_timers[WUPDATE_EVENTS].Reset();
     }
 
+    if (m_timers[WUPDATE_METRICS].Passed())
+    {
+        m_timers[WUPDATE_METRICS].Reset();
+
+        GeneratePacketMetrics();
+    }
+
     /// </ul>
     ///- Move all creatures with "delayed move" and remove and delete all objects with "delayed remove"
     sMapMgr.RemoveAllObjectsInRemoveList();
@@ -1652,12 +1705,28 @@ void World::Update(uint32 diff)
 
     // cleanup unused GridMap objects as well as VMaps
     sTerrainMgr.Update(diff);
-
+    
 	// EJ marketer
 	sMarketerManager->UpdateMarketer();
 
 	// EJ robot
 	sRobotManager->UpdateManager();
+	
+    auto updateEndTime = std::chrono::time_point_cast<std::chrono::milliseconds>(Clock::now());
+    long long total = (updateEndTime - m_currentTime).count();
+    long long presession = (preSessionTime - m_currentTime).count();
+    long long premap = (preMapTime - preSessionTime).count();
+    long long map = (postMapTime - preMapTime).count();
+    long long singletons = (postSingletonTime - postMapTime).count();
+    long long cleanup = (updateEndTime - postSingletonTime).count();
+
+    metric::measurement meas("world.update");
+    meas.add_field("total", std::to_string(total));
+    meas.add_field("presession", std::to_string(presession));
+    meas.add_field("premap", std::to_string(premap));
+    meas.add_field("map", std::to_string(map));
+    meas.add_field("singletons", std::to_string(singletons));
+    meas.add_field("cleanup", std::to_string(cleanup));
 }
 
 namespace MaNGOS
@@ -1749,15 +1818,36 @@ void World::SendWorldTextToAboveSecurity(uint32 securityLevel, int32 string_id, 
     va_end(ap);
 }
 
+/// Sends a system message to all players who accept tickets
+void World::SendWorldTextToAcceptingTickets(int32 string_id, ...)
+{
+    va_list ap;
+    va_start(ap, string_id);
+
+    MaNGOS::WorldWorldTextBuilder wt_builder(string_id, &ap);
+    MaNGOS::LocalizedPacketListDo<MaNGOS::WorldWorldTextBuilder> wt_do(wt_builder);
+    for (SessionMap::const_iterator itr = m_sessions.begin(); itr != m_sessions.end(); ++itr)
+    {
+        if (WorldSession* session = itr->second)
+        {
+            Player* player = session->GetPlayer();
+            if (player && player->isAcceptTickets() && player->IsInWorld())
+                wt_do(player);
+        }
+    }
+
+    va_end(ap);
+}
+
 /// Sends a packet to all players with optional team and instance restrictions
-void World::SendGlobalMessage(WorldPacket const& packet) const
+void World::SendGlobalMessage(WorldPacket const& packet, uint32 team) const
 {
     for (const auto& m_session : m_sessions)
     {
         if (WorldSession* session = m_session.second)
         {
             Player* player = session->GetPlayer();
-            if (player && player->IsInWorld())
+            if (player && player->IsInWorld() && (team == 0 || team == player->GetTeam()))
                 session->SendPacket(packet);
         }
     }
@@ -1840,13 +1930,13 @@ void World::SendDefenseMessageBroadcastText(uint32 zoneId, uint32 textId)
 }
 
 /// Kick (and save) all players
-void World::KickAll()
+void World::KickAll(bool save)
 {
     m_QueuedSessions.clear();                               // prevent send queue update packet and login queued sessions
 
     // session not removed at kick and will removed in next update tick
     for (SessionMap::const_iterator itr = m_sessions.begin(); itr != m_sessions.end(); ++itr)
-        itr->second->KickPlayer();
+        itr->second->KickPlayer(save, true);
 }
 
 /// Kick (and save) all players with security level less `sec`
@@ -1897,7 +1987,7 @@ BanReturn World::BanAccount(BanMode mode, std::string nameOrIP, uint32 duration_
     {
         case BAN_IP:
             // No SQL injection as strings are escaped
-            resultAccounts = LoginDatabase.PQuery("SELECT id FROM account WHERE last_ip = '%s'", nameOrIP.c_str());
+            resultAccounts = LoginDatabase.PQuery("SELECT accountId FROM account_logons WHERE ip = '%s' ORDER BY loginTime DESC LIMIT 1", nameOrIP.c_str());
             LoginDatabase.PExecute("INSERT INTO ip_banned VALUES ('%s',UNIX_TIMESTAMP(),UNIX_TIMESTAMP()+%u,'%s','%s')", nameOrIP.c_str(), duration_secs, safe_author.c_str(), reason.c_str());
             break;
         case BAN_ACCOUNT:
@@ -2068,16 +2158,18 @@ void World::ShutdownCancel()
     DEBUG_LOG("Server %s cancelled.", (m_ShutdownMask & SHUTDOWN_MASK_RESTART ? "restart" : "shutdown"));
 }
 
-void World::UpdateSessions(uint32 /*diff*/)
+void World::UpdateSessions(uint32 diff)
 {
     ///- Add new sessions
     {
-        std::lock_guard<std::mutex> guard(m_sessionAddQueueLock);
+        std::deque<WorldSession*> sessionQueueCopy;
+        {
+            std::lock_guard<std::mutex> guard(m_sessionAddQueueLock);
+            std::swap(m_sessionAddQueue, sessionQueueCopy);
+        }
 
-        for (auto const& session : m_sessionAddQueue)
+        for (auto const& session : sessionQueueCopy)
             AddSession_(session);
-
-        m_sessionAddQueue.clear();
     }
 
     ///- Then send an update signal to remaining ones
@@ -2085,10 +2177,8 @@ void World::UpdateSessions(uint32 /*diff*/)
     {
         ///- and remove not active sessions from the list
         WorldSession* pSession = itr->second;
-        WorldSessionFilter updater(pSession);
 
-        // if WorldSession::Update fails, it means that the session should be destroyed
-        if (!pSession->Update(updater))
+        if (!pSession->Update(diff))
         {
             RemoveQueuedSession(pSession);
             itr = m_sessions.erase(itr);
@@ -2341,6 +2431,37 @@ void World::LoadSpamRecords(bool reload)
     }
 }
 
+void World::InitRandomBattlegroundResetTime()
+{
+    QueryResult * result = CharacterDatabase.Query("SELECT NextRandomBattlegroundResetTime FROM saved_variables");
+    if (!result)
+        m_NextRandomBattlegroundReset = time_t(time(NULL));         // game time not yet init
+    else
+        m_NextRandomBattlegroundReset = time_t((*result)[0].GetUInt64());
+
+    // generate time by config
+    time_t curTime = time(NULL);
+    tm localTm = *localtime(&curTime);
+    localTm.tm_hour = getConfig(CONFIG_UINT32_BATTLEGROUND_RANDOM_RESET_HOUR);
+    localTm.tm_min  = 0;
+    localTm.tm_sec  = 0;
+
+    // current day reset time
+    time_t nextDayResetTime = mktime(&localTm);
+
+    // next reset time before current moment
+    if (curTime >= nextDayResetTime)
+        nextDayResetTime += DAY;
+
+    // normalize reset time
+    m_NextRandomBattlegroundReset = m_NextRandomBattlegroundReset < curTime ? nextDayResetTime - DAY : nextDayResetTime;
+
+    if (!result)
+        CharacterDatabase.PExecute("INSERT INTO saved_variables (NextRandomBattlegroundResetTime) VALUES ('" UI64FMTD "')", uint64(m_NextRandomBattlegroundReset));
+    else
+        delete result;
+}
+
 void World::ResetDailyQuests()
 {
     DETAIL_LOG("Daily quests reset for all characters.");
@@ -2382,10 +2503,24 @@ void World::ResetMonthlyQuests()
     SetMonthlyQuestResetTime(false);
 }
 
+void World::ResetRandomBattleground()
+{
+    DETAIL_LOG("Random battleground reset for all characters.");
+
+    CharacterDatabase.Execute("DELETE FROM character_battleground_random");
+
+    for (SessionMap::const_iterator itr = m_sessions.begin(); itr != m_sessions.end(); ++itr)
+        if (itr->second->GetPlayer())
+            itr->second->GetPlayer()->SetRandomBattlegroundWinner(false);
+
+    m_NextRandomBattlegroundReset = time_t(m_NextRandomBattlegroundReset + DAY);
+    CharacterDatabase.PExecute("UPDATE saved_variables SET NextRandomBattlegroundResetTime = '" UI64FMTD "'", uint64(m_NextRandomBattlegroundReset));
+}
+
 void World::SetPlayerLimit(int32 limit, bool needUpdate)
 {
-    if (limit < -SEC_ADMINISTRATOR)
-        limit = -SEC_ADMINISTRATOR;
+    if (limit < -int32(SEC_ADMINISTRATOR))
+        limit = -int32(SEC_ADMINISTRATOR);
 
     // lock update need
     bool db_update_need = needUpdate || (limit < 0) != (m_playerLimit < 0) || (limit < 0 && m_playerLimit < 0 && limit != m_playerLimit);
@@ -2401,6 +2536,22 @@ void World::UpdateMaxSessionCounters()
 {
     m_maxActiveSessionCount = std::max(m_maxActiveSessionCount, uint32(m_sessions.size() - m_QueuedSessions.size()));
     m_maxQueuedSessionCount = std::max(m_maxQueuedSessionCount, uint32(m_QueuedSessions.size()));
+}
+
+void World::SetOnlinePlayer(Team team, uint8 race, uint8 plClass, bool apply)
+{
+    if (apply)
+    {
+        ++m_onlineTeams[team == ALLIANCE ? 1 : 0];
+        ++m_onlineRaces[race];
+        ++m_onlineClasses[plClass];
+    }
+    else
+    {
+        --m_onlineTeams[team == ALLIANCE ? 1 : 0];
+        --m_onlineRaces[race];
+        --m_onlineClasses[plClass];
+    }
 }
 
 void World::LoadDBVersion()
@@ -2590,9 +2741,53 @@ void World::InvalidatePlayerDataToAllClient(ObjectGuid guid) const
     SendGlobalMessage(data);
 }
 
-void World::UpdateSessionExpansion(uint8 expansion)
+void World::IncrementOpcodeCounter(uint32 opcodeId)
 {
-    for (auto& data : m_sessions)
-        if (data.second->GetSecurity() < SEC_GAMEMASTER)
-            data.second->SetExpansion(expansion);
+    ++m_opcodeCounters[opcodeId];
+}
+
+void World::GeneratePacketMetrics()
+{
+    for (uint32 i = 0; i < NUM_MSG_TYPES; ++i)
+    {
+        if (m_opcodeCounters[i] == 0)
+            continue;
+
+        metric::measurement meas("world.metrics.packets.received", { {"opcode", opcodeTable[i].name} });
+        meas.add_field("count", std::to_string(static_cast<uint32>(m_opcodeCounters[i])));
+
+        // Reset counter
+        m_opcodeCounters[i] = 0;
+    }
+
+    metric::measurement meas_players("world.metrics.players");
+    meas_players.add_field("online", std::to_string(GetActiveSessionCount()));
+    meas_players.add_field("unique", std::to_string(GetUniqueSessionCount()));
+    meas_players.add_field("queued", std::to_string(GetQueuedSessionCount()));
+    // team
+    meas_players.add_field("alliance", std::to_string(GetOnlineTeamPlayers(true)));
+    meas_players.add_field("horde", std::to_string(GetOnlineTeamPlayers(false)));
+    // race
+    meas_players.add_field("human", std::to_string(GetOnlineRacePlayers(RACE_HUMAN)));
+    meas_players.add_field("dwarf", std::to_string(GetOnlineRacePlayers(RACE_DWARF)));
+    meas_players.add_field("gnome", std::to_string(GetOnlineRacePlayers(RACE_GNOME)));
+    meas_players.add_field("nelf", std::to_string(GetOnlineRacePlayers(RACE_NIGHTELF)));
+    meas_players.add_field("draenei", std::to_string(GetOnlineRacePlayers(RACE_DRAENEI)));
+
+    meas_players.add_field("orc", std::to_string(GetOnlineRacePlayers(RACE_ORC)));
+    meas_players.add_field("undead", std::to_string(GetOnlineRacePlayers(RACE_UNDEAD)));
+    meas_players.add_field("tauren", std::to_string(GetOnlineRacePlayers(RACE_TAUREN)));
+    meas_players.add_field("troll", std::to_string(GetOnlineRacePlayers(RACE_TROLL)));
+    meas_players.add_field("belf", std::to_string(GetOnlineRacePlayers(RACE_BLOODELF)));
+    // class
+    meas_players.add_field("warrior", std::to_string(GetOnlineClassPlayers(CLASS_WARRIOR)));
+    meas_players.add_field("paladin", std::to_string(GetOnlineClassPlayers(CLASS_PALADIN)));
+    meas_players.add_field("hunter", std::to_string(GetOnlineClassPlayers(CLASS_HUNTER)));
+    meas_players.add_field("rogue", std::to_string(GetOnlineClassPlayers(CLASS_ROGUE)));
+    meas_players.add_field("priest", std::to_string(GetOnlineClassPlayers(CLASS_PRIEST)));
+    meas_players.add_field("shaman", std::to_string(GetOnlineClassPlayers(CLASS_SHAMAN)));
+    meas_players.add_field("mage", std::to_string(GetOnlineClassPlayers(CLASS_MAGE)));
+    meas_players.add_field("warlock", std::to_string(GetOnlineClassPlayers(CLASS_WARLOCK)));
+    meas_players.add_field("druid", std::to_string(GetOnlineClassPlayers(CLASS_DRUID)));
+    meas_players.add_field("deathknight", std::to_string(GetOnlineClassPlayers(CLASS_DEATH_KNIGHT)));
 }

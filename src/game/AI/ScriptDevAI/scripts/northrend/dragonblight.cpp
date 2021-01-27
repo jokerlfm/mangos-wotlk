@@ -17,16 +17,20 @@
 /* ScriptData
 SDName: Dragonblight
 SD%Complete: 100
-SDComment: Quest support: 12075, 12166, 12261.
+SDComment: Quest support: 11983, 12075, 12166, 12261.
 SDCategory: Dragonblight
 EndScriptData */
 
 /* ContentData
 npc_destructive_ward
 npc_crystalline_ice_giant
+spell_Taunka_Face_Me
+spell_container_of_rats
 EndContentData */
 
 #include "AI/ScriptDevAI/include/sc_common.h"
+#include "Spells/Scripts/SpellScript.h"
+#include "Spells/SpellAuras.h"
 
 /*######
 # npc_destructive_ward
@@ -60,6 +64,7 @@ struct npc_destructive_wardAI : public Scripted_NoMovementAI
 {
     npc_destructive_wardAI(Creature* pCreature) : Scripted_NoMovementAI(pCreature)
     {
+        SetReactState(REACT_PASSIVE);
         m_uiPowerTimer = 30000;
         m_uiStack = 0;
         m_uiSummonTimer = 2000;
@@ -193,6 +198,181 @@ bool NpcSpellClick_npc_crystalline_ice_giant(Player* pPlayer, Creature* pClicked
     return true;
 }
 
+/*######
+## spell_taunka_face_me
+######*/
+
+struct TaunkaFaceMeSpellScript : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex /*effIdx*/) const override
+    {
+        Unit* caster = spell->GetCaster();
+        Unit* target = spell->GetUnitTarget();
+        if (!target || !target->IsPlayer())
+            return;
+
+        Player* player = static_cast<Player*>(target);
+        spell->GetCaster()->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
+        player->PrepareGossipMenu(spell->GetCaster(), 9302);
+        player->SendPreparedGossip(spell->GetCaster());
+    }
+};
+
+/*######
+## spell_capture_jormungar_spawn
+######*/
+
+struct CaptureJormungarSpawnSpellScript : public SpellScript
+{
+    SpellCastResult OnCheckCast(Spell* spell, bool /*strict*/) const override
+    {
+        Unit* target = spell->m_targets.getUnitTarget();
+        // Capture Jormungar Spawn can be cast only on this target
+        if (!target || target->GetEntry() != 26359)
+            return SPELL_FAILED_BAD_TARGETS;
+
+        return SPELL_CAST_OK;
+    }
+};
+
+/*######
+## spell_scrape_corrosive_spit
+######*/
+
+struct ScrapeCorrosiveSpit : public SpellScript
+{
+    SpellCastResult OnCheckCast(Spell* spell, bool/* strict*/) const override
+    {
+        if (!spell->GetCaster()->HasAura(47447))
+            return SPELL_FAILED_CASTER_AURASTATE;
+        return SPELL_CAST_OK;
+    }
+};
+
+/*######
+## spell_container_of_rats
+######*/
+
+struct ContainerOfRatsSpellScript : public SpellScript
+{
+    SpellCastResult OnCheckCast(Spell* spell, bool /*strict*/) const override
+    {
+        Unit* target = spell->m_targets.getUnitTarget();
+        if (!target || target->IsAlive())
+            return SPELL_FAILED_BAD_TARGETS;
+        // Container of Rats can be cast only on these targets
+        if (target->GetEntry() != 27202 && target->GetEntry() != 27203 && target->GetEntry() != 27206 && target->GetEntry() != 27207 && target->GetEntry() != 27210)
+            return SPELL_FAILED_BAD_TARGETS;
+
+        return SPELL_CAST_OK;
+    }
+};
+
+/*######
+## spell_drop_off_villager
+######*/
+
+struct DropOffVillager : public SpellScript
+{
+    SpellCastResult OnCheckCast(Spell* spell, bool/* strict*/) const override
+    {
+        if (!spell->GetCaster()->HasAura(43671))
+            return SPELL_FAILED_NOT_READY;
+        return SPELL_CAST_OK;
+    }
+};
+
+/*######
+## spell_army_of_the_dead
+######*/
+
+struct ArmyOfTheDead : public AuraScript
+{
+    void OnPeriodicTrigger(Aura* aura, PeriodicTriggerData& data) const override
+    {
+        data.caster = aura->GetCaster();
+        data.target = aura->GetTarget();
+    }
+};
+
+enum
+{
+    SPELL_UNDIGESTIBLE = 47430,
+};
+
+struct CorrosiveSpit : public SpellScript
+{
+    void OnCast(Spell* spell) const override
+    {
+        if (Unit* target = spell->m_targets.getUnitTarget())
+        {
+            if (target->HasAura(SPELL_UNDIGESTIBLE))
+            {
+                auto& list = spell->GetTargetList();
+                for (auto& target : list)
+                    target.effectHitMask &= ~(1 << EFFECT_INDEX_1);
+            }
+        }
+    }
+};
+
+/*######
+## go_scrying_orb
+######*/
+
+struct go_scrying_orb : public GameObjectAI
+{
+    go_scrying_orb(GameObject* go) : GameObjectAI(go)
+    {
+        go->GetVisibilityData().SetInvisibilityMask(1, true);
+        go->GetVisibilityData().AddInvisibilityValue(1, 1000);
+    }
+};
+
+/*######
+## spell_twisting_blade
+######*/
+
+struct TwistingBlade : public SpellScript
+{
+    SpellCastResult OnCheckCast(Spell* spell, bool strict) const override
+    {
+        Unit* target = spell->m_targets.getUnitTarget();
+        if (target->GetEntry() != 26316 && target->GetEntry() != 26575 && target->GetEntry() != 26577 && target->GetEntry() != 26578)
+            return SPELL_FAILED_BAD_TARGETS;
+
+        return SPELL_CAST_OK;
+    }
+};
+
+/*######
+## spell_ley_line_focus_item
+######*/
+
+struct spell_ley_line_focus_item : public AuraScript
+{
+    void OnPeriodicTrigger(Aura* aura, PeriodicTriggerData& data) const override
+    {
+        data.caster = aura->GetCaster();
+        data.target = nullptr;
+    }
+};
+
+struct spell_ley_line_focus_item_trigger : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        Unit* target = spell->GetUnitTarget();
+        Unit* caster = spell->GetCaster();
+        switch (spell->m_spellInfo->Id)
+        {
+            case 50546: target->CastSpell(caster, 47390, TRIGGERED_OLD_TRIGGERED); break;
+            case 50547: target->CastSpell(caster, 47472, TRIGGERED_OLD_TRIGGERED); break;
+            case 50548: target->CastSpell(caster, 47635, TRIGGERED_OLD_TRIGGERED); break;
+        }
+    }
+};
+
 void AddSC_dragonblight()
 {
     Script* pNewScript = new Script;
@@ -204,4 +384,20 @@ void AddSC_dragonblight()
     pNewScript->Name = "npc_crystalline_ice_giant";
     pNewScript->pNpcSpellClick = &NpcSpellClick_npc_crystalline_ice_giant;
     pNewScript->RegisterSelf();
+
+    pNewScript = new Script;
+    pNewScript->Name = "go_scrying_orb";
+    pNewScript->GetGameObjectAI = &GetNewAIInstance<go_scrying_orb>;
+    pNewScript->RegisterSelf();
+
+    RegisterSpellScript<TaunkaFaceMeSpellScript>("spell_taunka_face_me");
+    RegisterSpellScript<CaptureJormungarSpawnSpellScript>("spell_capture_jormungar_spawn");
+    RegisterSpellScript<ScrapeCorrosiveSpit>("spell_scrape_corrosive_spit");
+    RegisterSpellScript<ContainerOfRatsSpellScript>("spell_container_of_rats");
+    RegisterSpellScript<DropOffVillager>("spell_drop_off_villager");
+    RegisterSpellScript<TwistingBlade>("spell_twisting_blade");
+    RegisterAuraScript<ArmyOfTheDead>("spell_army_of_the_dead");
+    RegisterSpellScript<CorrosiveSpit>("spell_corrosive_spit");
+    RegisterAuraScript<spell_ley_line_focus_item>("spell_ley_line_focus_ring");
+    RegisterSpellScript<spell_ley_line_focus_item_trigger>("spell_ley_line_focus_item_trigger");
 }

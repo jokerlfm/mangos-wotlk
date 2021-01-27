@@ -23,6 +23,7 @@ EndScriptData */
 
 #include "AI/ScriptDevAI/include/sc_common.h"
 #include "nexus.h"
+#include "Spells/Scripts/SpellScript.h"
 #include "Spells/SpellAuras.h"
 
 enum
@@ -42,7 +43,10 @@ enum
     SPELL_FRENZY_H              = 57086,
     SPELL_TRAMPLE               = 48016,
     SPELL_TRAMPLE_H             = 57066,
-    SPELL_SUMMON_TANGLER_H      = 61564,
+    SPELL_SUMMON_TANGLER_H      = 61564,        // summons creature 32665
+
+    // crystalline tangler spell
+    SPELL_CRYSTALLINE_TANGLER   = 61555,        // procs aura 61556 on melee attack
 
     // crystal spike spells
     SPELL_CRYSTAL_SPIKE_BACK    = 47936,
@@ -58,7 +62,7 @@ enum
     NPC_CRYSTAL_SPIKE_INITIAL   = 27101,
     NPC_CRYSTAL_SPIKE_TRIGGER   = 27079,
     //NPC_CRYSTAL_SPIKE           = 27099,          // summoned by 47947 - handled in eventAI
-    NPC_CRYSTALLINE_TANGLER     = 32665,
+    NPC_CRYSTALLINE_TANGLER     = 32665,            // has aura 61555
 
     GO_CRYSTAL_SPIKE            = 188537,
 
@@ -73,12 +77,12 @@ struct boss_ormorokAI : public ScriptedAI
 {
     boss_ormorokAI(Creature* pCreature) : ScriptedAI(pCreature)
     {
-        m_pInstance = (ScriptedInstance*)pCreature->GetInstanceData();
+        m_pInstance = static_cast<instance_nexus*>(pCreature->GetInstanceData());
         m_bIsRegularMode = pCreature->GetMap()->IsRegularDifficulty();
         Reset();
     }
 
-    ScriptedInstance* m_pInstance;
+    instance_nexus* m_pInstance;
     bool m_bIsRegularMode;
 
     bool m_bIsEnraged;
@@ -124,6 +128,8 @@ struct boss_ormorokAI : public ScriptedAI
         switch (pSummoned->GetEntry())
         {
             case NPC_CRYSTALLINE_TANGLER:
+                pSummoned->CastSpell(pSummoned, SPELL_CRYSTALLINE_TANGLER, TRIGGERED_OLD_TRIGGERED);
+
                 if (Unit* pTarget = m_creature->SelectAttackingTarget(ATTACKING_TARGET_RANDOM, 1))
                     pSummoned->AI()->AttackStart(pTarget);
                 break;
@@ -132,6 +138,10 @@ struct boss_ormorokAI : public ScriptedAI
                 ++m_uiSpikeCount;
             // no break;
             case NPC_CRYSTAL_SPIKE_INITIAL:
+                // make creature passive
+                pSummoned->AI()->SetReactState(REACT_PASSIVE);
+                pSummoned->SetCanEnterCombat(false);
+
                 // Update orientation so we can always face the boss
                 pSummoned->SetFacingToObject(m_creature);
 
@@ -144,7 +154,7 @@ struct boss_ormorokAI : public ScriptedAI
 
     void UpdateAI(const uint32 uiDiff) override
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (!m_bIsEnraged && m_creature->GetHealthPercent() < 25.0f)
@@ -203,11 +213,6 @@ struct boss_ormorokAI : public ScriptedAI
     }
 };
 
-UnitAI* GetAI_boss_ormorok(Creature* pCreature)
-{
-    return new boss_ormorokAI(pCreature);
-}
-
 bool EffectDummyCreature_npc_crystal_spike_trigger(Unit* /*pCaster*/, uint32 uiSpellId, SpellEffectIndex uiEffIndex, Creature* pCreatureTarget, ObjectGuid /*originalCasterGuid*/)
 {
     // always check spellid and effectindex
@@ -262,11 +267,44 @@ bool EffectAuraDummy_spell_aura_dummy_crystal_spike_visual(const Aura* pAura, bo
     return true;
 }
 
+/*######
+## spell_crystal_spikes - 47958, 57082, 57083
+######*/
+
+struct spell_crystal_spikes : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* target = spell->GetUnitTarget();
+        if (!target)
+            return;
+
+        // trigger spells that will summon creature 27101 around the caster
+        if (spell->m_spellInfo->Id == 47958)
+        {
+            target->CastSpell(target, 47954, TRIGGERED_OLD_TRIGGERED);
+            target->CastSpell(target, 47955, TRIGGERED_OLD_TRIGGERED);
+            target->CastSpell(target, 47956, TRIGGERED_OLD_TRIGGERED);
+            target->CastSpell(target, 47957, TRIGGERED_OLD_TRIGGERED);
+        }
+        else
+        {
+            target->CastSpell(target, 57077, TRIGGERED_OLD_TRIGGERED);
+            target->CastSpell(target, 57078, TRIGGERED_OLD_TRIGGERED);
+            target->CastSpell(target, 57080, TRIGGERED_OLD_TRIGGERED);
+            target->CastSpell(target, 57081, TRIGGERED_OLD_TRIGGERED);
+        }
+    }
+};
+
 void AddSC_boss_ormorok()
 {
     Script* pNewScript = new Script;
     pNewScript->Name = "boss_ormorok";
-    pNewScript->GetAI = &GetAI_boss_ormorok;
+    pNewScript->GetAI = &GetNewAIInstance<boss_ormorokAI>;
     pNewScript->RegisterSelf();
 
     pNewScript = new Script;
@@ -274,4 +312,6 @@ void AddSC_boss_ormorok()
     pNewScript->pEffectDummyNPC = &EffectDummyCreature_npc_crystal_spike_trigger;
     pNewScript->pEffectAuraDummy = &EffectAuraDummy_spell_aura_dummy_crystal_spike_visual;
     pNewScript->RegisterSelf();
+
+    RegisterSpellScript<spell_crystal_spikes>("spell_crystal_spikes");
 }

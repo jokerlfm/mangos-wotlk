@@ -44,9 +44,6 @@ MapManager::~MapManager()
     for (auto& i_map : i_maps)
         delete i_map.second;
 
-    for (auto m_Transport : m_Transports)
-        delete m_Transport;
-
     DeleteStateMachine();
 }
 
@@ -206,9 +203,6 @@ void MapManager::Update(uint32 diff)
     if (m_updater.activated())
         m_updater.wait();
 
-    for (Transport* m_Transport : m_Transports)
-        m_Transport->Update((uint32)i_timer.GetCurrent());
-
     // remove all maps which can be unloaded
     MapMapType::iterator iter = i_maps.begin();
     while (iter != i_maps.end())
@@ -296,24 +290,6 @@ uint32 MapManager::GetNumPlayersInInstances()
     return ret;
 }
 
-uint32 MapManager::GetMapUpdateMinTime(uint32 mapId, uint32 instance)
-{
-    std::lock_guard<std::mutex> lock(m_lock);
-    return i_maps[MapID(mapId, instance)]->GetUpdateTimeMin();
-}
-
-uint32 MapManager::GetMapUpdateMaxTime(uint32 mapId, uint32 instance)
-{
-    std::lock_guard<std::mutex> lock(m_lock);
-    return i_maps[MapID(mapId, instance)]->GetUpdateTimeMax();
-}
-
-uint32 MapManager::GetMapUpdateAvgTime(uint32 mapId, uint32 instance)
-{
-    std::lock_guard<std::mutex> lock(m_lock);
-    return i_maps[MapID(mapId, instance)]->GetUpdateTimeAvg();
-}
-
 ///// returns a new or existing Instance
 ///// in case of battlegrounds it will only return an existing map, those maps are created by bg-system
 Map* MapManager::CreateInstance(uint32 id, Player* player)
@@ -338,7 +314,7 @@ Map* MapManager::CreateInstance(uint32 id, Player* player)
         map = FindMap(id, NewInstanceId);
         // it is possible that the save exists but the map doesn't
         if (!map)
-            pNewMap = CreateDungeonMap(id, NewInstanceId, pSave->GetDifficulty(), pSave);
+            pNewMap = CreateDungeonMap(id, NewInstanceId, pSave->GetDifficulty(), pSave, player->GetTeam());
     }
     else
     {
@@ -347,7 +323,7 @@ Map* MapManager::CreateInstance(uint32 id, Player* player)
         NewInstanceId = sObjectMgr.GenerateInstanceLowGuid();
 
         Difficulty diff = player->GetGroup() ? player->GetGroup()->GetDifficulty(entry->IsRaid()) : player->GetDifficulty(entry->IsRaid());
-        pNewMap = CreateDungeonMap(id, NewInstanceId, diff);
+        pNewMap = CreateDungeonMap(id, NewInstanceId, diff, nullptr, player->GetTeam());
     }
 
     // add a new map object into the registry
@@ -360,7 +336,7 @@ Map* MapManager::CreateInstance(uint32 id, Player* player)
     return map;
 }
 
-DungeonMap* MapManager::CreateDungeonMap(uint32 id, uint32 InstanceId, Difficulty difficulty, DungeonPersistentState* save)
+DungeonMap* MapManager::CreateDungeonMap(uint32 id, uint32 InstanceId, Difficulty difficulty, DungeonPersistentState* save, Team ownerTeam)
 {
     // make sure we have a valid map id
     if (!sMapStore.LookupEntry(id))
@@ -382,6 +358,9 @@ DungeonMap* MapManager::CreateDungeonMap(uint32 id, uint32 InstanceId, Difficult
 
     DungeonMap* map = new DungeonMap(id, i_gridCleanUpDelay, InstanceId, difficulty);
 
+    // Set owner team before initializing
+    map->SetInstanceTeam(ownerTeam);
+
     // Dungeons can have saved instance data
     bool load_data = save != nullptr;
     map->Initialize(load_data);
@@ -391,7 +370,7 @@ DungeonMap* MapManager::CreateDungeonMap(uint32 id, uint32 InstanceId, Difficult
 
 BattleGroundMap* MapManager::CreateBattleGroundMap(uint32 id, uint32 InstanceId, BattleGround* bg)
 {
-    DEBUG_LOG("MapInstanced::CreateBattleGroundMap: instance:%d for map:%d and bgType:%d created.", InstanceId, id, bg->GetTypeID());
+    DEBUG_LOG("MapInstanced::CreateBattleGroundMap: instance:%d for map:%d and bgType:%d created.", InstanceId, id, bg->GetTypeId());
 
     PvPDifficultyEntry const* bracketEntry = GetBattlegroundBracketByLevel(bg->GetMapId(), bg->GetMinLevel());
 

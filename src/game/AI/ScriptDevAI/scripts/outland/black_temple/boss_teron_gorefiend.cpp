@@ -95,6 +95,10 @@ struct boss_teron_gorefiendAI : public ScriptedAI, public CombatActions
         AddCombatAction(GOREFIEND_ACTION_SHADOW_OF_DEATH, 0u);
         AddCombatAction(GOREFIEND_ACTION_CRUSHING_SHADOWS, 0u);
         AddCombatAction(GOREFIEND_ACTION_BERSERK, 0u);
+        m_creature->GetCombatManager().SetLeashingCheck([&](Unit*, float x, float y, float z)
+            {
+                return x < 516.8f && y > 402.7f;
+            });
         Reset();
     }
 
@@ -143,13 +147,13 @@ struct boss_teron_gorefiendAI : public ScriptedAI, public CombatActions
         }
     }
 
-    void JustReachedHome() override
+    void EnterEvadeMode() override
     {
         if (m_instance)
             m_instance->SetData(TYPE_GOREFIEND, FAIL);
-
         DespawnSummons();
         DoCastSpellIfCan(nullptr, SPELL_DESTROY_ALL_SPIRITS);
+        ScriptedAI::EnterEvadeMode();
     }
 
     void Aggro(Unit* /*pWho*/) override
@@ -292,9 +296,9 @@ struct boss_teron_gorefiendAI : public ScriptedAI, public CombatActions
 
     void UpdateAI(const uint32 diff) override
     {
-        UpdateTimers(diff, m_creature->isInCombat());
+        UpdateTimers(diff, m_creature->IsInCombat());
 
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         ExecuteActions();
@@ -389,13 +393,13 @@ struct npc_shadow_constructAI : public ScriptedAI, public TimerManager
     {
         UpdateTimers(diff);
 
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_atrophyTimer <= diff)
         {
             m_atrophyTimer = 0;
-            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_ATROPHY) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_ATROPHY) == CAST_OK)
                 m_atrophyTimer = 2500;
         }
         else m_atrophyTimer -= diff;
@@ -406,9 +410,12 @@ struct npc_shadow_constructAI : public ScriptedAI, public TimerManager
 
 bool AreaTrigger_at_teron_gorefiend(Player* player, AreaTriggerEntry const* /*at*/)
 {
+    if (player->IsGameMaster())
+        return false;
+
     instance_black_temple* temple = static_cast<instance_black_temple*>(player->GetMap()->GetInstanceData());
     if (Creature* teron = temple->GetSingleCreatureFromStorage(NPC_TERON_GOREFIEND))
-        if (teron->isAlive())
+        if (teron->IsAlive())
             teron->AI()->SendAIEvent(AI_EVENT_CUSTOM_A, player, teron);
 
     return false;
@@ -463,7 +470,7 @@ struct SummonBlossomMoveTarget : public SpellScript
 {
     void OnDestTarget(Spell* spell) const override
     {
-        spell->m_targets.m_destZ += 12.f;
+        spell->m_targets.m_destPos.z += 12.f;
     }
 };
 

@@ -74,7 +74,7 @@ UnitAI* GetAI_npc_floating_spirit(Creature* pCreature)
 
 bool EffectDummyCreature_npc_restless_frostborn(Unit* pCaster, uint32 uiSpellId, SpellEffectIndex uiEffIndex, Creature* pCreatureTarget, ObjectGuid /*originalCasterGuid*/)
 {
-    if (uiSpellId == SPELL_BLOW_HODIRS_HORN && uiEffIndex == EFFECT_INDEX_0 && !pCreatureTarget->isAlive() && pCaster->GetTypeId() == TYPEID_PLAYER)
+    if (uiSpellId == SPELL_BLOW_HODIRS_HORN && uiEffIndex == EFFECT_INDEX_0 && !pCreatureTarget->IsAlive() && pCaster->GetTypeId() == TYPEID_PLAYER)
     {
         uint32 uiCredit = 0;
         uint32 uiSpawnSpell = 0;
@@ -138,9 +138,9 @@ struct npc_injured_minerAI : public npc_escortAI
 
             // set alternative waypoints if required
             if (m_creature->GetPositionX() > 6650.0f)
-                SetCurrentWaypoint(7);
+                SetCurrentWaypoint(8);
             else if (m_creature->GetPositionX() > 6635.0f)
-                SetCurrentWaypoint(35);
+                SetCurrentWaypoint(36);
 
             DoScriptText(SAY_MINER_READY, m_creature);
             m_creature->SetStandState(UNIT_STAND_STATE_STAND);
@@ -159,7 +159,7 @@ struct npc_injured_minerAI : public npc_escortAI
     {
         switch (uiPointId)
         {
-            case 33:
+            case 34:
                 DoScriptText(SAY_MINER_COMPLETE, m_creature);
                 if (Player* pPlayer = GetPlayerForEscort())
                 {
@@ -167,13 +167,13 @@ struct npc_injured_minerAI : public npc_escortAI
                     m_creature->SetFacingToObject(pPlayer);
                 }
                 break;
-            case 34:
+            case 35:
                 m_creature->ForcedDespawn();
                 break;
-            case 46:
+            case 47:
                 // merge with the other wp path
                 SetEscortPaused(true);
-                SetCurrentWaypoint(13);
+                SetCurrentWaypoint(14);
                 SetEscortPaused(false);
                 break;
         }

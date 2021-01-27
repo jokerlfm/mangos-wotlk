@@ -97,7 +97,8 @@ enum ActionFeedback
     FEEDBACK_NONE            = 0,
     FEEDBACK_PET_DEAD        = 1,
     FEEDBACK_NOTHING_TO_ATT  = 2,
-    FEEDBACK_CANT_ATT_TARGET = 3
+    FEEDBACK_CANT_ATT_TARGET = 3,
+    FEEDBACK_NO_PATH         = 4,
 };
 
 enum PetTalk
@@ -180,9 +181,10 @@ class Pet : public Creature
 
         bool CanSwim() const
         {
-            Unit const* owner = GetOwner();
-            if (owner)
-                return owner->GetTypeId() == TYPEID_PLAYER ? true : ((Creature const*)owner)->CanSwim();
+            if (HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED))
+                return true;
+            if (Unit const* owner = GetOwner())
+                return static_cast<Creature const*>(owner)->CanSwim();
             return Creature::CanSwim();
         }
 
@@ -198,9 +200,6 @@ class Pet : public Creature
         uint32 GetCurrentFoodBenefitLevel(uint32 itemlevel) const;
         void SetDuration(int32 dur) { m_duration = dur; }
         int32 GetDuration() const { return m_duration; }
-
-        int32 GetBonusDamage() const { return m_bonusdamage; }
-        void SetBonusDamage(int32 damage) { m_bonusdamage = damage; }
 
         bool UpdateStats(Stats stat) override;
         bool UpdateAllStats() override;
@@ -279,11 +278,13 @@ class Pet : public Creature
 
         virtual void RegenerateHealth() override;
 
+        void ResetCorpseRespawn();
+
+        void ForcedDespawn(uint32 timeMSToDespawn = 0, bool onlyAlive = false) override;
     protected:
         uint32  m_happinessTimer;
         PetType m_petType;
         int32   m_duration;                                 // time until unsummon (used mostly for summoned guardians and not used for controlled pets)
-        int32   m_bonusdamage;
         bool    m_loading;
 
         DeclinedName* m_declinedname;
@@ -291,6 +292,7 @@ class Pet : public Creature
     private:
         PetModeFlags m_petModeFlags;
         CharmInfo*   m_originalCharminfo;
+        bool m_inStatsUpdate;
 
         void SaveToDB(uint32, uint8, uint32) override       // overwrite of Creature::SaveToDB     - don't must be called
         {

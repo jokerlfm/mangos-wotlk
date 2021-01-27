@@ -88,6 +88,7 @@ HostileReference::HostileReference(Unit* unit, ThreatManager* threatManager, flo
     link(unit, threatManager);
     iUnitGuid = unit->GetObjectGuid();
     m_online = true;
+    m_suppresabilityToggle = false;
     iAccessible = true;
 }
 
@@ -303,15 +304,24 @@ void ThreatContainer::modifyAllThreatPercent(int32 threatPercent)
 //============================================================
 // Check if the list is dirty and sort if necessary
 
-void ThreatContainer::update(bool force)
+void ThreatContainer::update(bool force, bool isPlayer)
 {
-    if ((iDirty || force) && iThreatList.size() > 1)
+    if ((iDirty || force || isPlayer) && iThreatList.size() > 1)
     {
         iThreatList.sort([&](const HostileReference* lhs, const HostileReference* rhs)->bool
         {
+            Unit* owner = lhs->getSource()->getOwner();
+            if (isPlayer)
+            {
+                Unit* left = lhs->getTarget();
+                Unit* right = rhs->getTarget();
+                if (left->IsPlayer() && !right->IsPlayer())
+                    return true;
+                if (owner->CanAttack(left) && !owner->CanAttack(right))
+                    return true;
+            }
             if (lhs->GetTauntState() != rhs->GetTauntState())
                 return lhs->GetTauntState() > rhs->GetTauntState();
-            Unit* owner = lhs->getSource()->getOwner();
             if (force)
             {
                 bool first = owner->CanReachWithMeleeAttack(lhs->getTarget());
@@ -350,7 +360,7 @@ HostileReference* ThreatContainer::selectNextVictim(Unit* attacker, HostileRefer
         currentRef = (*iter);
 
         Unit* target = currentRef->getTarget();
-        MANGOS_ASSERT(target);                             // if the ref has status online the target must be there!
+        MANGOS_ASSERT(target); // if the ref has status online the target must be there!
 
         bool isInMelee = attacker->CanReachWithMeleeAttack(target);
         if (currentVictim) // select 1.3/1.1 better target in comparison current target
@@ -456,11 +466,11 @@ void ThreatManager::addThreat(Unit* victim, float threat, bool crit, SpellSchool
         return;
 
     // not to GM
-    if (!victim || (victim->GetTypeId() == TYPEID_PLAYER && static_cast<Player*>(victim)->isGameMaster()))
+    if (!victim || (victim->GetTypeId() == TYPEID_PLAYER && static_cast<Player*>(victim)->IsGameMaster()))
         return;
 
     // not to dead and not for dead
-    if (!victim->isAlive() || !getOwner()->isAlive())
+    if (!victim->IsAlive() || !getOwner()->IsAlive())
         return;
 
     float calculatedThreat = ThreatCalcHelper::CalcThreat(victim, iOwner, threat, crit, schoolMask, threatSpell, assist);
@@ -471,7 +481,7 @@ void ThreatManager::addThreat(Unit* victim, float threat, bool crit, SpellSchool
         {
             if (Unit* redirectedTarget = victim->getHostileRefManager().GetThreatRedirectionTarget())
             {
-                if (redirectedTarget != getOwner() && redirectedTarget->isAlive())
+                if (redirectedTarget != getOwner() && redirectedTarget->IsAlive())
                 {
                     float redirectedThreat = threat * redirectedMod;
                     addThreatDirectly(redirectedTarget, redirectedThreat);
@@ -500,10 +510,10 @@ void ThreatManager::addThreatDirectly(Unit* victim, float threat)
         hostileReference->addThreat(threat); // now we add the real threat
         iUpdateNeed = true;
         getOwner()->TriggerAggroLinkingEvent(victim);
-        Unit* victim_owner = victim->GetOwner();
-        if (victim_owner && victim_owner->isAlive() && getOwner()->CanAttack(victim_owner) && !victim_owner->hasUnitState(UNIT_STAT_FEIGN_DEATH))
-            addThreat(victim_owner, 0.0f);     // create a threat to the owner of a pet, if the pet attacks
-        if (victim->GetTypeId() == TYPEID_PLAYER && static_cast<Player*>(victim)->isGameMaster())
+        Unit* victim_owner = victim->GetMaster();
+        if (victim_owner && victim_owner->IsAlive() && victim_owner->CanJoinInAttacking(getOwner()) && !victim_owner->hasUnitState(UNIT_STAT_FEIGN_DEATH))
+            addThreat(victim_owner, 0.0f); // create a threat to the owner of a pet, if the pet attacks
+        if (victim->GetTypeId() == TYPEID_PLAYER && static_cast<Player*>(victim)->IsGameMaster())
             hostileReference->setOnlineOfflineState(false); // GM is always offline
     }
 }
@@ -519,13 +529,14 @@ void ThreatManager::modifyThreatPercent(Unit* victim, int32 threatPercent)
 void ThreatManager::modifyAllThreatPercent(int32 threatPercent)
 {
     iThreatContainer.modifyAllThreatPercent(threatPercent);
+    iUpdateNeed = true;
 }
 
 //============================================================
 
 void ThreatManager::UpdateContainers()
 {
-    iThreatContainer.update(getOwner()->IsIgnoringRangedTargets());
+    iThreatContainer.update(getOwner()->IsIgnoringRangedTargets(), getOwner()->IsPlayer());
 }
 
 Unit* ThreatManager::getHostileTarget()
@@ -550,6 +561,18 @@ float ThreatManager::getThreat(Unit* victim, bool alsoSearchOfflineList)
         threat = iThreatOfflineContainer.getReferenceByTarget(victim)->getThreat();
 
     return threat;
+}
+
+float ThreatManager::GetHighestThreat()
+{
+    float value = 0.f;
+    for (auto& ref : iThreatContainer.getThreatList())
+        if (ref->getThreat() > value)
+            value = ref->getThreat();
+    for (auto& ref : iThreatOfflineContainer.getThreatList())
+        if (ref->getThreat() > value)
+            value = ref->getThreat();
+    return value;
 }
 
 bool ThreatManager::HasThreat(Unit * victim, bool alsoSearchOfflineList)
@@ -701,6 +724,22 @@ void ThreatManager::ClearSuppressed(HostileReference* except)
     for (HostileReference* const curRef : iThreatContainer.getThreatList())
         if (curRef->GetHostileState() == STATE_SUPPRESSED && curRef != except && !getOwner()->IsSuppressedTarget(curRef->getTarget()))
             curRef->SetHostileState(STATE_NORMAL);
+}
+
+void ThreatManager::DeleteOutOfRangeReferences()
+{
+    std::vector<HostileReference*> m_refs;
+    for (auto& ref : iThreatContainer.getThreatList())
+        if (ref->getTarget()->GetDistance(getOwner(), true, DIST_CALC_COMBAT_REACH) > 60.f)
+            m_refs.push_back(ref);
+    for (auto& ref : iThreatOfflineContainer.getThreatList())
+        if (ref->getTarget()->GetDistance(getOwner(), true, DIST_CALC_COMBAT_REACH) > 60.f)
+            m_refs.push_back(ref);
+    for (auto& ref : m_refs)
+    {
+        ref->removeReference();
+        delete ref;
+    }
 }
 
 void ThreatManager::SetTargetSuppressed(Unit* target)

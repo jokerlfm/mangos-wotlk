@@ -73,12 +73,12 @@ struct boss_volkhanAI : public ScriptedAI
 {
     boss_volkhanAI(Creature* pCreature) : ScriptedAI(pCreature)
     {
-        m_pInstance = (ScriptedInstance*)pCreature->GetInstanceData();
+        m_pInstance = static_cast<instance_halls_of_lightning*>(pCreature->GetInstanceData());
         m_bIsRegularMode = pCreature->GetMap()->IsRegularDifficulty();
         Reset();
     }
 
-    ScriptedInstance* m_pInstance;
+    instance_halls_of_lightning* m_pInstance;
 
     GuidList m_lGolemGUIDList;
 
@@ -142,7 +142,7 @@ struct boss_volkhanAI : public ScriptedAI
         {
             if (Creature* pTemp = m_creature->GetMap()->GetCreature(*itr))
             {
-                if (pTemp->isAlive())
+                if (pTemp->IsAlive())
                     pTemp->ForcedDespawn();
             }
         }
@@ -200,7 +200,7 @@ struct boss_volkhanAI : public ScriptedAI
     void UpdateAI(const uint32 uiDiff) override
     {
         // Return since we have no target
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         // he shatters only one time, at 25%
@@ -243,6 +243,7 @@ struct boss_volkhanAI : public ScriptedAI
                     {
                         float fX, fY, fZ;
                         pAnvil->GetContactPoint(m_creature, fX, fY, fZ, INTERACTION_DISTANCE);
+                        m_creature->SetWalk(false);
                         m_creature->GetMotionMaster()->MovePoint(1, fX, fY, fZ);
                     }
                     else
@@ -267,11 +268,6 @@ struct boss_volkhanAI : public ScriptedAI
         DoMeleeAttackIfReady();
     }
 };
-
-UnitAI* GetAI_boss_volkhan(Creature* pCreature)
-{
-    return new boss_volkhanAI(pCreature);
-}
 
 bool EffectDummyCreature_boss_volkhan(Unit* pCaster, uint32 uiSpellId, SpellEffectIndex uiEffIndex, Creature* pCreatureTarget, ObjectGuid /*originalCasterGuid*/)
 {
@@ -306,10 +302,10 @@ bool EffectDummyCreature_npc_volkhan_anvil(Unit* pCaster, uint32 uiSpellId, Spel
         pCreatureTarget->CastSpell(pCaster, SPELL_TEMPER_DUMMY, TRIGGERED_NONE);
         // ToDo: research how the visual spell is used
 
-        if (pCaster->getVictim())
+        if (pCaster->GetVictim())
         {
             pCaster->GetMotionMaster()->Clear();
-            pCaster->GetMotionMaster()->MoveChase(pCaster->getVictim());
+            pCaster->GetMotionMaster()->MoveChase(pCaster->GetVictim());
         }
 
         // always return true when we are handling this spell and effect
@@ -327,12 +323,12 @@ struct mob_molten_golemAI : public ScriptedAI
 {
     mob_molten_golemAI(Creature* pCreature) : ScriptedAI(pCreature)
     {
-        m_pInstance = (ScriptedInstance*)pCreature->GetInstanceData();
+        m_pInstance = static_cast<instance_halls_of_lightning*>(pCreature->GetInstanceData());
         m_bIsRegularMode = pCreature->GetMap()->IsRegularDifficulty();
         Reset();
     }
 
-    ScriptedInstance* m_pInstance;
+    instance_halls_of_lightning* m_pInstance;
 
     bool m_bIsRegularMode;
 
@@ -386,7 +382,7 @@ struct mob_molten_golemAI : public ScriptedAI
     void UpdateAI(const uint32 uiDiff) override
     {
         // Return since we have no target or if we are frozen
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_uiBlastTimer < uiDiff)
@@ -399,7 +395,7 @@ struct mob_molten_golemAI : public ScriptedAI
 
         if (m_uiImmolationTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), m_bIsRegularMode ? SPELL_IMMOLATION_STRIKE : SPELL_IMMOLATION_STRIKE_H) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), m_bIsRegularMode ? SPELL_IMMOLATION_STRIKE : SPELL_IMMOLATION_STRIKE_H) == CAST_OK)
                 m_uiImmolationTimer = 5000;
         }
         else
@@ -409,16 +405,11 @@ struct mob_molten_golemAI : public ScriptedAI
     }
 };
 
-UnitAI* GetAI_mob_molten_golem(Creature* pCreature)
-{
-    return new mob_molten_golemAI(pCreature);
-}
-
 void AddSC_boss_volkhan()
 {
     Script* pNewScript = new Script;
     pNewScript->Name = "boss_volkhan";
-    pNewScript->GetAI = &GetAI_boss_volkhan;
+    pNewScript->GetAI = &GetNewAIInstance<boss_volkhanAI>;
     pNewScript->pEffectDummyNPC = &EffectDummyCreature_boss_volkhan;
     pNewScript->RegisterSelf();
 
@@ -429,6 +420,6 @@ void AddSC_boss_volkhan()
 
     pNewScript = new Script;
     pNewScript->Name = "mob_molten_golem";
-    pNewScript->GetAI = &GetAI_mob_molten_golem;
+    pNewScript->GetAI = &GetNewAIInstance<mob_molten_golemAI>;
     pNewScript->RegisterSelf();
 }

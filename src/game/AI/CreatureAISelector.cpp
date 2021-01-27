@@ -58,6 +58,8 @@ namespace FactorySelector
             else                            // For guardians and creature pets in general
                 ai_factory = ai_registry.GetRegistryItem("GuardianAI");
         }
+        else if(creature->HasCharmer() && !creature->IsTemporarySummon()) // for charmed creatures but not possessed tempspawns
+            ai_factory = ai_registry.GetRegistryItem("PetAI");
         else if (creature->IsTotem())
             ai_factory = ai_registry.GetRegistryItem("TotemAI");
         else if (!ainame.empty())           // select by script name
@@ -97,7 +99,13 @@ namespace FactorySelector
         CreatureAIRegistry& ai_registry(CreatureAIRepository::Instance());
         const CreatureAICreator* ai_factory = ai_registry.GetRegistryItem(ainame);
         if (unit->GetTypeId() == TYPEID_UNIT)
-            return  ai_factory->Create(static_cast<Creature*>(unit));
+        {
+            // use the scripted AI if provided
+            if (UnitAI* scriptedAI = sScriptDevAIMgr.GetCreatureAI(static_cast<Creature*>(unit)))
+                return scriptedAI;
+
+            return ai_factory->Create(static_cast<Creature*>(unit));
+        }
         if (ainame == "PetAI")
             return GetClassAI(Classes(unit->getClass()), static_cast<Player*>(unit));
         if (ainame == "PossessedAI")

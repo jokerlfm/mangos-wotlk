@@ -85,7 +85,7 @@ int32 CalculateSpellDuration(SpellEntry const* spellInfo, Unit const* caster)
         int32 maxduration = GetSpellMaxDuration(spellInfo);
 
         if (duration != maxduration && caster->GetTypeId() == TYPEID_PLAYER)
-            duration += int32((maxduration - duration) * ((Player*)caster)->GetComboPoints() / 5);
+            duration += int32((maxduration - duration) * caster->GetComboPoints() / 5);
 
         if (Player* modOwner = caster->GetSpellModOwner())
         {
@@ -364,105 +364,26 @@ bool IsPassiveSpell(SpellEntry const* spellInfo)
     return spellInfo->HasAttribute(SPELL_ATTR_PASSIVE);
 }
 
-bool IsNoStackAuraDueToAura(uint32 spellId_1, uint32 spellId_2)
-{
-    SpellEntry const* spellInfo_1 = sSpellTemplate.LookupEntry<SpellEntry>(spellId_1);
-    SpellEntry const* spellInfo_2 = sSpellTemplate.LookupEntry<SpellEntry>(spellId_2);
-    if (!spellInfo_1 || !spellInfo_2) return false;
-    if (spellInfo_1->Id == spellId_2) return false;
-
-    for (int32 i = 0; i < MAX_EFFECT_INDEX; ++i)
-    {
-        for (int32 j = 0; j < MAX_EFFECT_INDEX; ++j)
-        {
-            if (spellInfo_1->Effect[i] == spellInfo_2->Effect[j]
-                    && spellInfo_1->EffectApplyAuraName[i] == spellInfo_2->EffectApplyAuraName[j]
-                    && spellInfo_1->EffectMiscValue[i] == spellInfo_2->EffectMiscValue[j]
-                    && spellInfo_1->EffectItemType[i] == spellInfo_2->EffectItemType[j]
-                    && (spellInfo_1->Effect[i] != 0 || spellInfo_1->EffectApplyAuraName[i] != 0 ||
-                        spellInfo_1->EffectMiscValue[i] != 0 || spellInfo_1->EffectItemType[i] != 0))
-                return true;
-        }
-    }
-
-    return false;
-}
-
-int32 CompareAuraRanks(uint32 spellId_1, uint32 spellId_2)
-{
-    SpellEntry const* spellInfo_1 = sSpellTemplate.LookupEntry<SpellEntry>(spellId_1);
-    SpellEntry const* spellInfo_2 = sSpellTemplate.LookupEntry<SpellEntry>(spellId_2);
-    if (!spellInfo_1 || !spellInfo_2) return 0;
-    if (spellId_1 == spellId_2) return 0;
-
-    for (int32 i = 0; i < MAX_EFFECT_INDEX; ++i)
-    {
-        if (spellInfo_1->Effect[i] != 0 && spellInfo_2->Effect[i] != 0 && spellInfo_1->Effect[i] == spellInfo_2->Effect[i])
-        {
-            int32 diff = spellInfo_1->EffectBasePoints[i] - spellInfo_2->EffectBasePoints[i];
-            if (spellInfo_1->CalculateSimpleValue(SpellEffectIndex(i)) < 0 && spellInfo_2->CalculateSimpleValue(SpellEffectIndex(i)) < 0)
-                return -diff;
-            return diff;
-        }
-    }
-    return 0;
-}
-
 SpellSpecific GetSpellSpecific(uint32 spellId)
 {
     SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
     if (!spellInfo)
         return SPELL_NORMAL;
 
+    if (SpellSpecific food = sSpellMgr.GetSpellFoodSpecific(spellInfo))
+        return food;
+
     switch (spellInfo->SpellFamilyName)
     {
-        case SPELLFAMILY_GENERIC:
-        {
-            // Food / Drinks (mostly)
-            if (spellInfo->AuraInterruptFlags & AURA_INTERRUPT_FLAG_NOT_SEATED)
-            {
-                bool food = false;
-                bool drink = false;
-                for (unsigned int i : spellInfo->EffectApplyAuraName)
-                {
-                    switch (i)
-                    {
-                        // Food
-                        case SPELL_AURA_MOD_REGEN:
-                        case SPELL_AURA_OBS_MOD_HEALTH:
-                            food = true;
-                            break;
-                        // Drink
-                        case SPELL_AURA_MOD_POWER_REGEN:
-                        case SPELL_AURA_OBS_MOD_MANA:
-                            drink = true;
-                            break;
-                        default:
-                            break;
-                    }
-                }
-
-                if (food && drink)
-                    return SPELL_FOOD_AND_DRINK;
-                if (food)
-                    return SPELL_FOOD;
-                if (drink)
-                    return SPELL_DRINK;
-            }
-            else
-            {
-                // Well Fed buffs (must be exclusive with Food / Drink replenishment effects, or else Well Fed will cause them to be removed)
-                // SpellIcon 2560 is Spell 46687, does not have this flag
-                if (spellInfo->HasAttribute(SPELL_ATTR_EX2_FOOD_BUFF) || spellInfo->SpellIconID == 2560)
-                    return SPELL_WELL_FED;
-            }
-            break;
-        }
         case SPELLFAMILY_MAGE:
         {
             // family flags 18(Molten), 25(Frost/Ice), 28(Mage)
             if (spellInfo->SpellFamilyFlags & uint64(0x12040000))
                 return SPELL_MAGE_ARMOR;
+
+            // Arcane Power (using id instead of mask):
+            if (spellInfo->Id == 12042)
+                return SPELL_BUFF_CASTER_POWER;
 
             break;
         }
@@ -483,10 +404,6 @@ SpellSpecific GetSpellSpecific(uint32 spellId)
             if (spellInfo->IsFitToFamilyMask(uint64(0x2000002000000000), 0x00000010))
                 return SPELL_WARLOCK_ARMOR;
 
-            // Drain Soul and Shadowburn
-            if (IsSpellHaveAura(spellInfo, SPELL_AURA_CHANNEL_DEATH_ITEM))
-                return SPELL_SOUL_CAPTURE;
-
             // Corruption and Seed of Corruption
             if (spellInfo->IsFitToFamilyMask(uint64(0x1000000002)))
                 return SPELL_CORRUPTION_DEBUFF;
@@ -498,11 +415,10 @@ SpellSpecific GetSpellSpecific(uint32 spellId)
         }
         case SPELLFAMILY_PRIEST:
         {
-            // "Well Fed" buff from Blessed Sunfruit, Blessed Sunfruit Juice, Alterac Spring Water
-            if (spellInfo->HasAttribute(SPELL_ATTR_CASTABLE_WHILE_SITTING) &&
-                    (spellInfo->InterruptFlags & SPELL_INTERRUPT_FLAG_INTERRUPT) &&
-                    (spellInfo->SpellIconID == 52 || spellInfo->SpellIconID == 79))
-                return SPELL_WELL_FED;
+            // Power Infusion:
+            if (spellInfo->Id == 10060)
+                return SPELL_BUFF_CASTER_POWER;
+
             break;
         }
         case SPELLFAMILY_HUNTER:
@@ -556,7 +472,7 @@ SpellSpecific GetSpellSpecific(uint32 spellId)
     }
 
     // Tracking spells (exclude Well Fed, some other always allowed cases)
-    if (spellInfo->HasAttribute(SPELL_ATTR_EX6_UNK12) && (IsSpellHaveAura(spellInfo, SPELL_AURA_TRACK_CREATURES) ||
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX6_CASTABLE_WHILE_ON_VEHICLE) && (IsSpellHaveAura(spellInfo, SPELL_AURA_TRACK_CREATURES) ||
         IsSpellHaveAura(spellInfo, SPELL_AURA_TRACK_STEALTHED) ||
         IsSpellHaveAura(spellInfo, SPELL_AURA_TRACK_RESOURCES)))
         return SPELL_TRACKER;
@@ -621,7 +537,6 @@ uint32 GetAffectedTargets(SpellEntry const* spellInfo, Unit* caster)
                 case 30541:                                 // Blaze (Magtheridon)
                 case 30769:                                 // Pick Red Riding Hood (Karazhan, Big Bad Wolf)
                 case 30835:                                 // Infernal Relay (Karazhan, Prince Malchezaar)
-                case 31347:                                 // Doom (Hyjal Summit, Azgalor)
                 case 32312:                                 // Move 1 (Karazhan, Chess Event)
                 case 33711:                                 // Murmur's Touch (Shadow Labyrinth, Murmur)
                 case 37388:                                 // Move 2 (Karazhan, Chess Event)
@@ -630,169 +545,37 @@ uint32 GetAffectedTargets(SpellEntry const* spellInfo, Unit* caster)
                 case 39342:                                 // Karazhan - Chess, Medivh CHEAT: Hand of Medivh, Target Alliance
                 case 40834:                                 // Agonizing Flames (BT, Illidan Stormrage)
                 case 41537:                                 // Summon Enslaved Soul (BT, Reliquary of Souls)
-                case 42442:                                 // Vengeance Landing Cannonfire
                 case 44869:                                 // Spectral Blast (SWP, Kalecgos)
                 case 45391:                                 // Summon Demonic Vapor (SWP, Felmyst)
                 case 45785:                                 // Sinister Reflection Clone (SWP, Kil'jaeden)
-                case 45863:                                 // Cosmetic - Incinerate to Random Target (Borean Tundra)
                 case 45892:                                 // Sinister Reflection (SWP, Kil'jaeden)
                 case 45976:                                 // Open Portal (SWP, M'uru)
                 case 46372:                                 // Ice Spear Target Picker (Slave Pens, Ahune)
-                case 47669:                                 // Awaken Subboss (Utgarde Pinnacle)
-                case 48278:                                 // Paralyze (Utgarde Pinnacle)
-                case 50742:                                 // Ooze Combine (Halls of Stone)
-                case 50988:                                 // Glare of the Tribunal (Halls of Stone)
-                case 51003:                                 // Summon Dark Matter Target (Halls of Stone)
-                case 51146:                                 // Summon Searing Gaze Target (Halls Of Stone)
-                case 52438:                                 // Summon Skittering Swarmer (Azjol Nerub,  Krik'thir the Gatewatcher)
-                case 52449:                                 // Summon Skittering Infector (Azjol Nerub,  Krik'thir the Gatewatcher)
-                case 53457:                                 // Impale (Azjol Nerub,  Anub'arak)
-                case 54148:                                 // Ritual of the Sword (Utgarde Pinnacle, Svala)
-                case 55479:                                 // Forced Obedience (Naxxramas, Razovius)
-                case 56140:                                 // Summon Power Spark (Eye of Eternity, Malygos)
-                case 57578:                                 // Lava Strike (Obsidian Sanctum, Sartharion)
-                case 59870:                                 // Glare of the Tribunal (h) (Halls of Stone)
-                case 61588:                                 // Blazing Harpoon
-                case 62016:                                 // Charge Orb (Ulduar, Thorim)
-                case 62042:                                 // Stormhammer (Ulduar, Thorim)
-                case 62166:                                 // Stone Grip (Ulduar, Kologarn)
-                case 62301:                                 // Cosmic Smash (Ulduar, Algalon)
-                case 62374:                                 // Pursued (Ulduar, Flame Leviathan)
-                case 62488:                                 // Activate Construct (Ulduar, Ignis)
-                case 62577:                                 // Blizzard (Ulduar, Thorim)
-                case 62603:                                 // Blizzard (h) (Ulduar, Thorim)
-                case 62797:                                 // Storm Cloud (Ulduar, Hodir)
-                case 62978:                                 // Summon Guardian (Ulduar, Yogg Saron)
-                case 63018:                                 // Searing Light (Ulduar, XT-002)
-                case 63024:                                 // Gravity Bomb (Ulduar, XT-002)
-                case 63545:                                 // Icicle (Ulduar, Hodir)
-                case 63744:                                 // Sara's Anger (Ulduar, Yogg-Saron)
-                case 63745:                                 // Sara's Blessing (Ulduar, Yogg-Saron)
-                case 63747:                                 // Sara's Fervor (Ulduar, Yogg-Saron)
-                case 63795:                                 // Psychosis (Ulduar, Yogg-Saron)
-                case 63820:                                 // Summon Scrap Bot Trigger (Ulduar, Mimiron) use for Scrap Bots, hits npc 33856
-                case 63830:                                 // Malady of the Mind (Ulduar, Yogg-Saron)
-                case 64218:                                 // Overcharge (VoA, Emalon)
-                case 64234:                                 // Gravity Bomb (h) (Ulduar, XT-002)
-                case 64402:                                 // Rocket Strike (Ulduar, Mimiron)
-                case 64425:                                 // Summon Scrap Bot Trigger (Ulduar, Mimiron) use for Assault Bots, hits npc 33856
-                case 64465:                                 // Shadow Beacon (Ulduar, Yogg-Saron)
-                case 64543:                                 // Melt Ice (Ulduar, Hodir)
-                case 64623:                                 // Frost Bomb (Ulduar, Mimiron)
-                case 65121:                                 // Searing Light (h) (Ulduar, XT-002)
-                case 65301:                                 // Psychosis (Ulduar, Yogg-Saron)
-                case 65872:                                 // Pursuing Spikes (ToCrusader, Anub'arak)
-                case 65950:                                 // Touch of Light (ToCrusader, Val'kyr Twins)
-                case 66001:                                 // Touch of Darkness (ToCrusader, Val'kyr Twins)
-                case 66152:                                 // Bullet Controller Summon Periodic Trigger Light (ToCrusader)
-                case 66153:                                 // Bullet Controller Summon Periodic Trigger Dark (ToCrusader)
-                case 66332:                                 // Nerubian Burrower (Mode 0) (ToCrusader, Anub'arak)
-                case 66336:                                 // Mistress' Kiss (ToCrusader, Jaraxxus)
-                case 66339:                                 // Summon Scarab (ToCrusader, Anub'arak)
-                case 67077:                                 // Mistress' Kiss (Mode 2) (ToCrusader, Jaraxxus)
-                case 67281:                                 // Touch of Darkness (Mode 1)
-                case 67282:                                 // Touch of Darkness (Mode 2)
-                case 67283:                                 // Touch of Darkness (Mode 3)
-                case 67296:                                 // Touch of Light (Mode 1)
-                case 67297:                                 // Touch of Light (Mode 2)
-                case 67298:                                 // Touch of Light (Mode 3)
-                case 68912:                                 // Wailing Souls (FoS)
-                case 68950:                                 // Fear (FoS)
-                case 68987:                                 // Pursuit (PoS)
-                case 69048:                                 // Mirrored Soul (FoS)
-                case 69057:                                 // Bone Spike Graveyard (Icecrown Citadel, Lord Marrowgar) 10 man
-                case 72088:
-                case 73142:
-                case 73144:
-                case 69140:                                 // Coldflame (ICC, Marrowgar)
-                case 69674:                                 // Mutated Infection (ICC, Rotface)
-                case 69782:                                 // Ooze Flood (ICC, Rotface) (note: targets should be 2, but the second is handled in script due to complex logic)
-                case 70447:                                 // Volatile Ooze Adhesive (ICC, Putricide 10n)
-                case 70450:                                 // Blood Mirror
-                case 70837:                                 // Blood Mirror
-                case 70882:                                 // Slime Spray Summon Trigger (ICC, Rotface)
-                case 70920:                                 // Unbound Plague Search Effect (ICC, Putricide)
-                case 71224:                                 // Mutated Infection (Mode 1)
-                case 71445:                                 // Twilight Bloodbolt
-                case 71471:                                 // Twilight Bloodbolt
-                case 71837:                                 // Vampiric Bite
-                case 71861:                                 // Swarming Shadows
-                case 72091:                                 // Frozen Orb (Vault of Archavon, Toravon)
-                case 72254:                                 // Mark of Fallen Champion (target selection) (ICC, Deathbringer Saurfang)
-                case 72836:                                 // Volatile Ooze Adhesive (ICC, Putricide 10h)
-                case 72837:                                 // Volatile Ooze Adhesive (ICC, Putricide 25n)
-                case 72838:                                 // Volatile Ooze Adhesive (ICC, Putricide 25h)
-                case 73022:                                 // Mutated Infection (Mode 2)
-                case 73023:                                 // Mutated Infection (Mode 3)
                     return 1;
                 case 10258:                                 // Awaken Vault Warder (Uldaman)
                 case 28542:                                 // Life Drain (Naxx, Sapphiron)
-                case 62476:                                 // Icicle (Ulduar, Hodir)
-                case 63802:                                 // Brain Link (Ulduar, Yogg-Saron)
-                case 66013:                                 // Penetrating Cold (10 man) (ToCrusader, Anub'arak)
-                case 67755:                                 // Nerubian Burrower (Mode 1) (ToCrusader, Anub'arak)
-                case 67756:                                 // Nerubian Burrower (Mode 2) (ToCrusader, Anub'arak)
-                case 68509:                                 // Penetrating Cold (10 man heroic)
-                case 69055:                                 // Bone Slice (ICC, Lord Marrowgar)
-                case 69278:                                 // Gas spore (ICC, Festergut)
-                case 70341:                                 // Slime Puddle (ICC, Putricide)
-                case 71336:                                 // Pact of the Darkfallen
-                case 71390:                                 // Pact of the Darkfallen
-                case 71424:                                 // Slime Puddle Trigger (ICC, Putricide)
                     return 2;
                 case 28796:                                 // Poison Bolt Volley (Naxx, Faerlina)
                 case 29213:                                 // Curse of the Plaguebringer (Naxx, Noth the Plaguebringer)
                 case 30004:                                 // Flame Wreath (Karazhan, Shade of Aran)
-                case 31298:                                 // Sleep (Hyjal Summit, Anetheron)
                 case 39341:                                 // Karazhan - Chess, Medivh CHEAT: Fury of Medivh, Target Horde
                 case 39344:                                 // Karazhan - Chess, Medivh CHEAT: Fury of Medivh, Target Alliance
                 case 39992:                                 // Needle Spine Targeting (BT, Warlord Najentus)
                 case 40869:                                 // Fatal Attraction (BT, Mother Shahraz)
                 case 41303:                                 // Soul Drain (BT, Reliquary of Souls)
                 case 41376:                                 // Spite (BT, Reliquary of Souls)
-                case 51904:                                 // Summon Ghouls On Scarlet Crusade
-                case 54522:                                 // Summon Ghouls On Scarlet Crusade
-                case 60936:                                 // Surge of Power (h) (Malygos)
-                case 61693:                                 // Arcane Storm (Malygos)
-                case 62477:                                 // Icicle (h) (Ulduar, Hodir)
-                case 63981:                                 // StoneGrip (h) (Ulduar, Kologarn)
-                case 64598:                                 // Cosmic Smash (h) (Ulduar, Algalon)
-                case 64620:                                 // Summon Fire Bot Trigger (Ulduar, Mimiron) hits npc 33856
-                case 70814:                                 // Bone Slice (ICC, Lord Marrowgar, heroic)
-                case 72095:                                 // Frozen Orb (h) (Vault of Archavon, Toravon)
-                case 72089:                                 // Bone Spike Graveyard (Icecrown Citadel, Lord Marrowgar) 25 man
-                case 70826:
-                case 73143:
-                case 73145:
                     return 3;
-                case 37676:                                 // Insidious Whisper (SSC, Leotheras the Blind)
-                case 38028:                                 // Watery Grave (SSC, Morogrim Tidewalker)
                 case 46650:                                 // Open Brutallus Back Door (SWP, Felmyst)
-                case 67757:                                 // Nerubian Burrower (Mode 3) (ToCrusader, Anub'arak)
-                case 71221:                                 // Gas spore (Mode 1) (ICC, Festergut)
                     return 4;
-                case 30843:                                 // Enfeeble (Karazhan, Prince Malchezaar)
                 case 40243:                                 // Crushing Shadows (BT, Teron Gorefiend)
                 case 42005:                                 // Bloodboil (BT, Gurtogg Bloodboil)
                 case 45641:                                 // Fire Bloom (SWP, Kil'jaeden)
-                case 55665:                                 // Life Drain (h) (Naxx, Sapphiron)
-                case 58917:                                 // Consume Minions
-                case 64604:                                 // Nature Bomb (Ulduar, Freya)
-                case 67076:                                 // Mistress' Kiss (Mode 1) (ToCrusader, Jaraxxus)
-                case 67078:                                 // Mistress' Kiss (Mode 3) (ToCrusader, Jaraxxus)
-                case 67700:                                 // Penetrating Cold (25 man)
-                case 68510:                                 // Penetrating Cold (25 man, heroic)
                     return 5;
                 case 25676:                                 // Drain Mana (correct number has to be researched)
                 case 25754:
                     return 6;
-                case 61694:                                 // Arcane Storm (h) (Malygos)
-                    return 7;
                 case 38054:                                 // Random Rocket Missile
                     return 8;
-                case 54098:                                 // Poison Bolt Volley (h) (Naxx, Faerlina)
-                case 54835:                                 // Curse of the Plaguebringer (h) (Naxx, Noth the Plaguebringer)
-                    return 10;
                 case 26457:                                 // Drain Mana (correct number has to be researched)
                 case 26559:
                     return 12;
@@ -1322,7 +1105,7 @@ bool IsCastEndProcModifierAura(SpellEntry const* spellInfo, SpellEffectIndex eff
         case SPELL_AURA_MOD_DAMAGE_PERCENT_DONE:
         {
             for (int32 i = 0; i < MAX_EFFECT_INDEX; ++i)
-                if (IsEffectHandledOnDelayedSpellLaunch(procSpell, SpellEffectIndex(i)))
+                if (IsEffectHandledImmediatelySpellLaunch(procSpell, SpellEffectIndex(i)))
                     return true;
 
             return false;
@@ -1684,8 +1467,20 @@ struct DoSpellThreat
         if (ste.threat || ste.ap_bonus != 0.f)
         {
             const uint32* targetA = spell->EffectImplicitTargetA;
-            if ((targetA[EFFECT_INDEX_1] && targetA[EFFECT_INDEX_1] != targetA[EFFECT_INDEX_0]) ||
-                    (targetA[EFFECT_INDEX_2] && targetA[EFFECT_INDEX_2] != targetA[EFFECT_INDEX_0]))
+
+            uint32 target = 0;
+            bool failed = false;
+            for (int i = 0; i < MAX_EFFECT_INDEX; i++)
+            {
+                if (targetA[i] != 0)
+                {
+                    if (target == 0)
+                        target = targetA[i];
+                    else if (targetA[i] != target)
+                        failed = true;
+                }
+            }
+            if (failed)
                 sLog.outErrorDb("Spell %u listed in `spell_threat` has effects with different targets, threat may be assigned incorrectly", spell->Id);
         }
         ++count;
@@ -1740,737 +1535,6 @@ void SpellMgr::LoadSpellThreats()
 
     sLog.outString(">> Loaded %u spell threat entries", rankHelper.worker.count);
     sLog.outString();
-}
-
-bool SpellMgr::IsNoStackSpellDueToSpell(SpellEntry const* spellInfo_1, SpellEntry const* spellInfo_2) const
-{
-    if (!spellInfo_1 || !spellInfo_2)
-        return false;
-
-    if (spellInfo_1->Id == spellInfo_2->Id)
-        return false;
-
-    // Resurrection sickness
-    if ((spellInfo_1->Id == SPELL_ID_PASSIVE_RESURRECTION_SICKNESS) != (spellInfo_2->Id == SPELL_ID_PASSIVE_RESURRECTION_SICKNESS))
-        return false;
-
-    // Allow stack passive and not passive spells
-    if (spellInfo_1->HasAttribute(SPELL_ATTR_PASSIVE) != spellInfo_2->HasAttribute(SPELL_ATTR_PASSIVE))
-        return false;
-
-    // Specific spell family spells
-    switch (spellInfo_1->SpellFamilyName)
-    {
-        case SPELLFAMILY_GENERIC:
-            switch (spellInfo_2->SpellFamilyName)
-            {
-                case SPELLFAMILY_GENERIC:                   // same family case
-                {
-                    // Thunderfury
-                    if ((spellInfo_1->Id == 21992 && spellInfo_2->Id == 27648) ||
-                            (spellInfo_2->Id == 21992 && spellInfo_1->Id == 27648))
-                        return false;
-
-                    // Cannon Prep (stun) and Cannon Prep (transform) - Elwynn Forest
-                    if ((spellInfo_1->Id == 24754 && spellInfo_2->Id == 24743) ||
-                            (spellInfo_2->Id == 24754 && spellInfo_1->Id == 24743))
-                        return false;
-
-                    // Cannon Prep (stun) and Cannon Prep (transform) - Mulgore
-                    if ((spellInfo_1->Id == 24754 && spellInfo_2->Id == 24832) ||
-                            (spellInfo_2->Id == 24754 && spellInfo_1->Id == 24832))
-                        return false;
-
-                    // Cannon Prep (stun) and Cannon Prep (transform) - Terokkar Forest
-                    if ((spellInfo_1->Id == 24754 && spellInfo_2->Id == 42825) ||
-                            (spellInfo_2->Id == 24754 && spellInfo_1->Id == 42825))
-                        return false;
-
-                    // Lightning Speed (Mongoose) and Fury of the Crashing Waves (Tsunami Talisman)
-                    if ((spellInfo_1->Id == 28093 && spellInfo_2->Id == 42084) ||
-                            (spellInfo_2->Id == 28093 && spellInfo_1->Id == 42084))
-                        return false;
-
-                    // Soulstone Resurrection and Twisting Nether (resurrector)
-                    if (spellInfo_1->SpellIconID == 92 && spellInfo_2->SpellIconID == 92 && (
-                                (spellInfo_1->SpellVisual[0] == 99 && spellInfo_2->SpellVisual[0] == 0) ||
-                                (spellInfo_2->SpellVisual[0] == 99 && spellInfo_1->SpellVisual[0] == 0)))
-                        return false;
-
-                    // Heart of the Wild, Agility and various Idol Triggers
-                    if (spellInfo_1->SpellIconID == 240 && spellInfo_2->SpellIconID == 240)
-                        return false;
-
-                    // Personalized Weather (thunder effect should overwrite rainy aura)
-                    if (spellInfo_1->SpellIconID == 2606 && spellInfo_2->SpellIconID == 2606)
-                        return false;
-
-                    // Mirrored Soul (FoS - Devourer) - and other Boss spells
-                    if (spellInfo_1->SpellIconID == 3176 && spellInfo_2->SpellIconID == 3176)
-                        return false;
-
-                    // Brood Affliction: Bronze
-                    if ((spellInfo_1->Id == 23170 && spellInfo_2->Id == 23171) ||
-                            (spellInfo_2->Id == 23170 && spellInfo_1->Id == 23171))
-                        return false;
-
-                    // Male Shadowy Disguise
-                    if ((spellInfo_1->Id == 32756 && spellInfo_2->Id == 38080) ||
-                            (spellInfo_2->Id == 32756 && spellInfo_1->Id == 38080))
-                        return false;
-
-                    // Female Shadowy Disguise
-                    if ((spellInfo_1->Id == 32756 && spellInfo_2->Id == 38081) ||
-                            (spellInfo_2->Id == 32756 && spellInfo_1->Id == 38081))
-                        return false;
-
-                    // Cool Down (See PeriodicAuraTick())
-                    if ((spellInfo_1->Id == 52441 && spellInfo_2->Id == 52443) ||
-                            (spellInfo_2->Id == 52441 && spellInfo_1->Id == 52443))
-                        return false;
-
-                    // See Chapel Invisibility and See Noth Invisibility
-                    if ((spellInfo_1->Id == 52950 && spellInfo_2->Id == 52707) ||
-                            (spellInfo_2->Id == 52950 && spellInfo_1->Id == 52707))
-                        return false;
-
-                    // Regular and Night Elf Ghost
-                    if ((spellInfo_1->Id == 8326 && spellInfo_2->Id == 20584) ||
-                            (spellInfo_2->Id == 8326 && spellInfo_1->Id == 20584))
-                        return false;
-
-                    // Aura of Despair auras
-                    if ((spellInfo_1->Id == 64848 && spellInfo_2->Id == 62692) ||
-                            (spellInfo_2->Id == 64848 && spellInfo_1->Id == 62692))
-                        return false;
-
-                    // Blood Fury and Rage of the Unraveller
-                    if (spellInfo_1->SpellIconID == 1662 && spellInfo_2->SpellIconID == 1662)
-                        return false;
-
-                    // Kindred Spirits
-                    if (spellInfo_1->SpellIconID == 3559 && spellInfo_2->SpellIconID == 3559)
-                        return false;
-
-                    // Vigilance and Damage Reduction (Vigilance triggered spell)
-                    if (spellInfo_1->SpellIconID == 2834 && spellInfo_2->SpellIconID == 2834)
-                        return false;
-
-                    // Unstable Sphere Timer and Unstable Sphere Passive
-                    if ((spellInfo_1->Id == 50758 && spellInfo_2->Id == 50756) ||
-                            (spellInfo_2->Id == 50758 && spellInfo_1->Id == 50756))
-                        return false;
-
-                    // Arcane Beam Periodic and Arcane Beam Visual
-                    if ((spellInfo_1->Id == 51019 && spellInfo_2->Id == 51024) ||
-                            (spellInfo_2->Id == 51019 && spellInfo_1->Id == 51024))
-                        return false;
-
-                    // Crystal Spike Pre-visual and Crystal Spike aura
-                    if ((spellInfo_1->Id == 50442 && spellInfo_2->Id == 47941) ||
-                            (spellInfo_2->Id == 50442 && spellInfo_1->Id == 47941))
-                        return false;
-
-                    // Impale aura and Submerge
-                    if ((spellInfo_1->Id == 53456 && spellInfo_2->Id == 53421) ||
-                            (spellInfo_2->Id == 53456 && spellInfo_1->Id == 53421))
-                        return false;
-
-                    // Summon Anub'ar Champion Periodic and Summon Anub'ar Necromancer Periodic
-                    if ((spellInfo_1->Id == 53035 && spellInfo_2->Id == 53036) ||
-                            (spellInfo_2->Id == 53035 && spellInfo_1->Id == 53036))
-                        return false;
-
-                    // Summon Anub'ar Necromancer Periodic and Summon Anub'ar Crypt Fiend Periodic
-                    if ((spellInfo_1->Id == 53036 && spellInfo_2->Id == 53037) ||
-                            (spellInfo_2->Id == 53036 && spellInfo_1->Id == 53037))
-                        return false;
-
-                    // Summon Anub'ar Crypt Fiend Periodic and Summon Anub'ar Champion Periodic
-                    if ((spellInfo_1->Id == 53037 && spellInfo_2->Id == 53035) ||
-                            (spellInfo_2->Id == 53037 && spellInfo_1->Id == 53035))
-                        return false;
-
-                    // Possess visual and Possess
-                    if ((spellInfo_1->Id == 23014 && spellInfo_2->Id == 19832) ||
-                            (spellInfo_2->Id == 23014 && spellInfo_1->Id == 19832))
-                        return false;
-
-                    // Shade Soul Channel and Akama Soul Channel
-                    if ((spellInfo_1->Id == 40401 && spellInfo_2->Id == 40447) ||
-                            (spellInfo_2->Id == 40401 && spellInfo_1->Id == 40447))
-                        return false;
-
-                    // Eye Blast visual and Eye Blast
-                    if ((spellInfo_1->Id == 39908 && spellInfo_2->Id == 40017) ||
-                            (spellInfo_2->Id == 39908 && spellInfo_1->Id == 40017))
-                        return false;
-
-                    // Encapsulate and Encapsulate (channeled)
-                    if ((spellInfo_1->Id == 45665 && spellInfo_2->Id == 45661) ||
-                            (spellInfo_2->Id == 45665 && spellInfo_1->Id == 45661))
-                        return false;
-
-                    // Flame Tsunami Visual and Flame Tsunami Damage Aura
-                    if ((spellInfo_1->Id == 57494 && spellInfo_2->Id == 57492) ||
-                            (spellInfo_2->Id == 57494 && spellInfo_1->Id == 57492))
-                        return false;
-
-                    // Cyclone Aura 2 and Cyclone Aura
-                    if ((spellInfo_1->Id == 57598 && spellInfo_2->Id == 57560) ||
-                            (spellInfo_2->Id == 57598 && spellInfo_1->Id == 57560))
-                        return false;
-
-                    // Shard of Flame and Mote of Flame
-                    if ((spellInfo_1->SpellIconID == 2302 && spellInfo_1->SpellVisual[0] == 0) ||
-                            (spellInfo_2->SpellIconID == 2302 && spellInfo_2->SpellVisual[0] == 0))
-                        return false;
-
-                    // Felblaze Visual and Fog of Corruption
-                    if ((spellInfo_1->Id == 45068 && spellInfo_2->Id == 45582) ||
-                            (spellInfo_2->Id == 45068 && spellInfo_1->Id == 45582))
-                        return false;
-
-                    // Simon Game START timer, (DND) and Simon Game Pre-game timer
-                    if ((spellInfo_1->Id == 39993 && spellInfo_2->Id == 40041) ||
-                            (spellInfo_2->Id == 39993 && spellInfo_1->Id == 40041))
-                        return false;
-
-                    // Karazhan - Chess: Is Square OCCUPIED aura Karazhan - Chess: Create Move Marker
-                    if ((spellInfo_1->Id == 39400 && spellInfo_2->Id == 32261) ||
-                            (spellInfo_2->Id == 39400 && spellInfo_1->Id == 32261))
-                        return false;
-
-                    // Black Hole (damage) and Black Hole (phase)
-                    if ((spellInfo_1->Id == 62169 && spellInfo_2->Id == 62168) ||
-                            (spellInfo_2->Id == 62169 && spellInfo_1->Id == 62168))
-                        return false;
-
-                    // Black Hole (damage) and Worm Hole (phase)
-                    if ((spellInfo_1->Id == 62169 && spellInfo_2->Id == 65250) ||
-                            (spellInfo_2->Id == 62169 && spellInfo_1->Id == 65250))
-                        return false;
-
-                    // Black Hole (damage) and Phase Punch (phase)
-                    if ((spellInfo_1->Id == 62169 && spellInfo_2->Id == 64417) ||
-                            (spellInfo_2->Id == 62169 && spellInfo_1->Id == 64417))
-                        return false;
-
-                    // Auto Grow and Healthy Spore Visual
-                    if ((spellInfo_1->Id == 62559 && spellInfo_2->Id == 62538) ||
-                            (spellInfo_2->Id == 62559 && spellInfo_1->Id == 62538))
-                        return false;
-
-                    // Phase 2 Transform and Shadowy Barrier
-                    if ((spellInfo_1->Id == 65157 && spellInfo_2->Id == 64775) ||
-                            (spellInfo_2->Id == 65157 && spellInfo_1->Id == 64775))
-                        return false;
-
-                    // Empowered (dummy) and Empowered
-                    if ((spellInfo_1->Id == 64161 && spellInfo_2->Id == 65294) ||
-                            (spellInfo_2->Id == 64161 && spellInfo_1->Id == 65294))
-                        return false;
-
-                    // Spectral Realm (reaction) and Spectral Realm (invisibility)
-                    if ((spellInfo_1->Id == 44852 && spellInfo_2->Id == 46021) ||
-                            (spellInfo_2->Id == 44852 && spellInfo_1->Id == 46021))
-                        return false;
-
-                    // Halls of Reflection Clone
-                    if (spellInfo_1->SpellIconID == 692 && spellInfo_2->SpellIconID == 692)
-                        return false;
-
-                    // Large Ooze Combine and Large Ooze Buff Combine
-                    if ((spellInfo_1->Id == 69552 && spellInfo_2->Id == 69611) ||
-                            (spellInfo_2->Id == 69552 && spellInfo_1->Id == 69611))
-                        return false;
-
-                    // Slime Puddle and Grow Stacker
-                    if ((spellInfo_1->Id == 70343 && spellInfo_2->Id == 70345) ||
-                            (spellInfo_2->Id == 70343 && spellInfo_1->Id == 70345))
-                        return false;
-
-                    // Choking Gas Bomb Periodic Trigger and Choking Gas Bomb Periodic Explosion Trigger
-                    if ((spellInfo_1->Id == 71259 && spellInfo_2->Id == 71280) ||
-                            (spellInfo_2->Id == 71259 && spellInfo_1->Id == 71280))
-                        return false;
-
-                    // Mirror image auras (aura 247) and Copy Weapon
-                    if ((spellInfo_1->EffectApplyAuraName[EFFECT_INDEX_0] == SPELL_AURA_MIRROR_IMAGE && spellInfo_2->Id == 41054) ||
-                            (spellInfo_2->Id == 41054 && spellInfo_1->EffectApplyAuraName[EFFECT_INDEX_0] == SPELL_AURA_MIRROR_IMAGE))
-                        return false;
-
-                    // Mirror image auras (aura 247) and Copy Offhand Weapon
-                    if ((spellInfo_1->EffectApplyAuraName[EFFECT_INDEX_0] == SPELL_AURA_MIRROR_IMAGE && spellInfo_2->Id == 45205) ||
-                            (spellInfo_2->Id == 45205 && spellInfo_1->EffectApplyAuraName[EFFECT_INDEX_0] == SPELL_AURA_MIRROR_IMAGE))
-                        return false;
-
-                    // Mirror image auras (aura 247) and Mirror name auras (aura 279) - auras are always on index 0
-                    if ((spellInfo_1->EffectApplyAuraName[EFFECT_INDEX_0] == SPELL_AURA_MIRROR_IMAGE && spellInfo_2->EffectApplyAuraName[EFFECT_INDEX_0] == SPELL_AURA_MIRROR_NAME) ||
-                        (spellInfo_2->EffectApplyAuraName[EFFECT_INDEX_0] == SPELL_AURA_MIRROR_IMAGE && spellInfo_1->EffectApplyAuraName[EFFECT_INDEX_0] == SPELL_AURA_MIRROR_NAME))
-                        return false;
-                    break;
-                }
-                case SPELLFAMILY_MAGE:
-                    // Arcane Intellect and Insight
-                    if (spellInfo_2->SpellIconID == 125 && spellInfo_1->Id == 18820)
-                        return false;
-                    break;
-                case SPELLFAMILY_WARRIOR:
-                {
-                    // Scroll of Protection and Defensive Stance (multi-family check)
-                    if (spellInfo_1->SpellIconID == 276 && spellInfo_1->SpellVisual[0] == 196 && spellInfo_2->Id == 71)
-                        return false;
-
-                    // Improved Hamstring -> Hamstring (multi-family check)
-                    if ((spellInfo_2->SpellFamilyFlags & uint64(0x2)) && spellInfo_1->Id == 23694)
-                        return false;
-
-                    break;
-                }
-                case SPELLFAMILY_DRUID:
-                {
-                    // Scroll of Stamina and Leader of the Pack (multi-family check)
-                    if (spellInfo_1->SpellIconID == 312 && spellInfo_1->SpellVisual[0] == 216 && spellInfo_2->Id == 24932)
-                        return false;
-
-                    // Dragonmaw Illusion (multi-family check)
-                    if (spellInfo_1->Id == 40216 && spellInfo_2->Id == 42016)
-                        return false;
-
-                    break;
-                }
-                case SPELLFAMILY_ROGUE:
-                {
-                    // Garrote-Silence -> Garrote (multi-family check)
-                    if (spellInfo_1->SpellIconID == 498 && spellInfo_1->SpellVisual[0] == 0 && spellInfo_2->SpellIconID == 498)
-                        return false;
-
-                    break;
-                }
-                case SPELLFAMILY_HUNTER:
-                {
-                    // Concussive Shot and Imp. Concussive Shot (multi-family check)
-                    if (spellInfo_1->Id == 19410 && spellInfo_2->Id == 5116)
-                        return false;
-
-                    // Improved Wing Clip -> Wing Clip (multi-family check)
-                    if ((spellInfo_2->SpellFamilyFlags & uint64(0x40)) && spellInfo_1->Id == 19229)
-                        return false;
-                    break;
-                }
-                case SPELLFAMILY_PALADIN:
-                {
-                    // Unstable Currents and other -> *Sanctity Aura (multi-family check)
-                    if (spellInfo_2->SpellIconID == 502 && spellInfo_1->SpellIconID == 502 && spellInfo_1->SpellVisual[0] == 969)
-                        return false;
-
-                    // *Band of Eternal Champion and Seal of Command(multi-family check)
-                    if (spellInfo_1->Id == 35081 && spellInfo_2->SpellIconID == 561 && spellInfo_2->SpellVisual[0] == 7992)
-                        return false;
-
-                    // Blessing of Sanctuary (multi-family check, some from 16 spell icon spells)
-                    if (spellInfo_1->Id == 67480 && spellInfo_2->Id == 20911)
-                        return false;
-
-                    break;
-                }
-            }
-            // Dragonmaw Illusion, Blood Elf Illusion, Human Illusion, Illidari Agent Illusion, Scarlet Crusade Disguise
-            if (spellInfo_1->SpellIconID == 1691 && spellInfo_2->SpellIconID == 1691)
-                return false;
-            break;
-        case SPELLFAMILY_MAGE:
-            if (spellInfo_2->SpellFamilyName == SPELLFAMILY_MAGE)
-            {
-                // Blizzard & Chilled (and some other stacked with blizzard spells
-                if (((spellInfo_1->SpellFamilyFlags & uint64(0x80)) && (spellInfo_2->SpellFamilyFlags & uint64(0x100000))) ||
-                        ((spellInfo_2->SpellFamilyFlags & uint64(0x80)) && (spellInfo_1->SpellFamilyFlags & uint64(0x100000))))
-                    return false;
-
-                // Blink & Improved Blink
-                if (((spellInfo_1->SpellFamilyFlags & uint64(0x0000000000010000)) && (spellInfo_2->SpellVisual[0] == 72 && spellInfo_2->SpellIconID == 1499)) ||
-                        ((spellInfo_2->SpellFamilyFlags & uint64(0x0000000000010000)) && (spellInfo_1->SpellVisual[0] == 72 && spellInfo_1->SpellIconID == 1499)))
-                    return false;
-
-                // Fingers of Frost effects
-                if (spellInfo_1->SpellIconID == 2947 && spellInfo_2->SpellIconID == 2947)
-                    return false;
-
-                // Living Bomb & Ignite (Dots)
-                if (((spellInfo_1->SpellFamilyFlags & uint64(0x2000000000000)) && (spellInfo_2->SpellFamilyFlags & uint64(0x8000000))) ||
-                        ((spellInfo_2->SpellFamilyFlags & uint64(0x2000000000000)) && (spellInfo_1->SpellFamilyFlags & uint64(0x8000000))))
-                    return false;
-
-                // Fireball & Pyroblast (Dots)
-                if (((spellInfo_1->SpellFamilyFlags & uint64(0x1)) && (spellInfo_2->SpellFamilyFlags & uint64(0x400000))) ||
-                        ((spellInfo_2->SpellFamilyFlags & uint64(0x1)) && (spellInfo_1->SpellFamilyFlags & uint64(0x400000))))
-                    return false;
-            }
-            // Detect Invisibility and Mana Shield (multi-family check)
-            if (spellInfo_2->Id == 132 && spellInfo_1->SpellIconID == 209 && spellInfo_1->SpellVisual[0] == 968)
-                return false;
-
-            // Combustion and Fire Protection Aura (multi-family check)
-            if (spellInfo_1->Id == 11129 && spellInfo_2->SpellIconID == 33 && spellInfo_2->SpellVisual[0] == 321)
-                return false;
-
-            // Arcane Intellect and Insight
-            if (spellInfo_1->SpellIconID == 125 && spellInfo_2->Id == 18820)
-                return false;
-
-            break;
-        case SPELLFAMILY_WARLOCK:
-            if (spellInfo_2->SpellFamilyName == SPELLFAMILY_WARLOCK)
-            {
-                // Siphon Life and Drain Life
-                if ((spellInfo_1->SpellIconID == 152 && spellInfo_2->SpellIconID == 546) ||
-                        (spellInfo_2->SpellIconID == 152 && spellInfo_1->SpellIconID == 546))
-                    return false;
-
-                // Corruption & Seed of corruption
-                if ((spellInfo_1->SpellIconID == 313 && spellInfo_2->SpellIconID == 1932) ||
-                        (spellInfo_2->SpellIconID == 313 && spellInfo_1->SpellIconID == 1932))
-                    if (spellInfo_1->SpellVisual[0] != 0 && spellInfo_2->SpellVisual[0] != 0)
-                        return true;                        // can't be stacked
-
-                // Corruption and Unstable Affliction
-                if ((spellInfo_1->SpellIconID == 313 && spellInfo_2->SpellIconID == 2039) ||
-                        (spellInfo_2->SpellIconID == 313 && spellInfo_1->SpellIconID == 2039))
-                    return false;
-
-                // (Corruption or Unstable Affliction) and (Curse of Agony or Curse of Doom)
-                if (((spellInfo_1->SpellIconID == 313 || spellInfo_1->SpellIconID == 2039) && (spellInfo_2->SpellIconID == 544  || spellInfo_2->SpellIconID == 91)) ||
-                        ((spellInfo_2->SpellIconID == 313 || spellInfo_2->SpellIconID == 2039) && (spellInfo_1->SpellIconID == 544  || spellInfo_1->SpellIconID == 91)))
-                    return false;
-
-                // Shadowflame and Curse of Agony
-                if ((spellInfo_1->SpellIconID == 544 && spellInfo_2->SpellIconID == 3317) ||
-                        (spellInfo_2->SpellIconID == 544 && spellInfo_1->SpellIconID == 3317))
-                    return false;
-
-                // Shadowflame and Curse of Doom
-                if ((spellInfo_1->SpellIconID == 91 && spellInfo_2->SpellIconID == 3317) ||
-                        (spellInfo_2->SpellIconID == 91 && spellInfo_1->SpellIconID == 3317))
-                    return false;
-
-                // Metamorphosis, diff effects
-                if (spellInfo_1->SpellIconID == 3314 && spellInfo_2->SpellIconID == 3314)
-                    return false;
-            }
-            // Detect Invisibility and Mana Shield (multi-family check)
-            if (spellInfo_1->Id == 132 && spellInfo_2->SpellIconID == 209 && spellInfo_2->SpellVisual[0] == 968)
-                return false;
-            break;
-        case SPELLFAMILY_WARRIOR:
-            if (spellInfo_2->SpellFamilyName == SPELLFAMILY_WARRIOR)
-            {
-                // Rend and Deep Wound
-                if (((spellInfo_1->SpellFamilyFlags & uint64(0x20)) && (spellInfo_2->SpellFamilyFlags & uint64(0x1000000000))) ||
-                        ((spellInfo_2->SpellFamilyFlags & uint64(0x20)) && (spellInfo_1->SpellFamilyFlags & uint64(0x1000000000))))
-                    return false;
-
-                // Battle Shout and Rampage
-                if ((spellInfo_1->SpellIconID == 456 && spellInfo_2->SpellIconID == 2006) ||
-                        (spellInfo_2->SpellIconID == 456 && spellInfo_1->SpellIconID == 2006))
-                    return false;
-
-                // Glyph of Revenge (triggered), and Sword and Board (triggered)
-                if ((spellInfo_1->SpellIconID == 856 && spellInfo_2->SpellIconID == 2780) ||
-                        (spellInfo_2->SpellIconID == 856 && spellInfo_1->SpellIconID == 2780))
-                    return false;
-
-                // Defensive/Berserker/Battle stance aura can not stack (needed for dummy auras)
-                if (((spellInfo_1->SpellFamilyFlags & uint64(0x800000)) && (spellInfo_2->SpellFamilyFlags & uint64(0x800000))) ||
-                        ((spellInfo_2->SpellFamilyFlags & uint64(0x800000)) && (spellInfo_1->SpellFamilyFlags & uint64(0x800000))))
-                    return true;
-            }
-
-            // Hamstring -> Improved Hamstring (multi-family check)
-            if ((spellInfo_1->SpellFamilyFlags & uint64(0x2)) && spellInfo_2->Id == 23694)
-                return false;
-
-            // Defensive Stance and Scroll of Protection (multi-family check)
-            if (spellInfo_1->Id == 71 && spellInfo_2->SpellIconID == 276 && spellInfo_2->SpellVisual[0] == 196)
-                return false;
-
-            // Bloodlust and Bloodthirst (multi-family check)
-            if (spellInfo_2->Id == 2825 && spellInfo_1->SpellIconID == 38 && spellInfo_1->SpellVisual[0] == 0)
-                return false;
-
-            break;
-        case SPELLFAMILY_PRIEST:
-            if (spellInfo_2->SpellFamilyName == SPELLFAMILY_PRIEST)
-            {
-                // Devouring Plague and Shadow Vulnerability
-                if (((spellInfo_1->SpellFamilyFlags & uint64(0x2000000)) && (spellInfo_2->SpellFamilyFlags & uint64(0x800000000))) ||
-                        ((spellInfo_2->SpellFamilyFlags & uint64(0x2000000)) && (spellInfo_1->SpellFamilyFlags & uint64(0x800000000))))
-                    return false;
-
-                // StarShards and Shadow Word: Pain
-                if (((spellInfo_1->SpellFamilyFlags & uint64(0x200000)) && (spellInfo_2->SpellFamilyFlags & uint64(0x8000))) ||
-                        ((spellInfo_2->SpellFamilyFlags & uint64(0x200000)) && (spellInfo_1->SpellFamilyFlags & uint64(0x8000))))
-                    return false;
-
-                // Dispersion
-                if ((spellInfo_1->Id == 47585 && spellInfo_2->Id == 60069) ||
-                        (spellInfo_2->Id == 47585 && spellInfo_1->Id == 60069))
-                    return false;
-            }
-            break;
-        case SPELLFAMILY_DRUID:
-            if (spellInfo_2->SpellFamilyName == SPELLFAMILY_DRUID)
-            {
-                // Omen of Clarity and Blood Frenzy
-                if (((spellInfo_1->SpellFamilyFlags.Empty() && spellInfo_1->SpellIconID == 108) && (spellInfo_2->SpellFamilyFlags & uint64(0x20000000000000))) ||
-                        ((spellInfo_2->SpellFamilyFlags.Empty() && spellInfo_2->SpellIconID == 108) && (spellInfo_1->SpellFamilyFlags & uint64(0x20000000000000))))
-                    return false;
-
-                //  Tree of Life (Shapeshift) and 34123 Tree of Life (Passive)
-                if ((spellInfo_1->Id == 33891 && spellInfo_2->Id == 34123) ||
-                        (spellInfo_2->Id == 33891 && spellInfo_1->Id == 34123))
-                    return false;
-
-                // Lifebloom and Wild Growth
-                if ((spellInfo_1->SpellIconID == 2101 && spellInfo_2->SpellIconID == 2864) ||
-                        (spellInfo_2->SpellIconID == 2101 && spellInfo_1->SpellIconID == 2864))
-                    return false;
-
-                //  Innervate and Glyph of Innervate and some other spells
-                if (spellInfo_1->SpellIconID == 62 && spellInfo_2->SpellIconID == 62)
-                    return false;
-
-                // Wrath of Elune and Nature's Grace
-                if ((spellInfo_1->Id == 16886 && spellInfo_2->Id == 46833) ||
-                        (spellInfo_2->Id == 16886 && spellInfo_1->Id == 46833))
-                    return false;
-
-                // Bear Rage (Feral T4 (2)) and Omen of Clarity
-                if ((spellInfo_1->Id == 16864 && spellInfo_2->Id == 37306) ||
-                        (spellInfo_2->Id == 16864 && spellInfo_1->Id == 37306))
-                    return false;
-
-                // Cat Energy (Feral T4 (2)) and Omen of Clarity
-                if ((spellInfo_1->Id == 16864 && spellInfo_2->Id == 37311) ||
-                        (spellInfo_2->Id == 16864 && spellInfo_1->Id == 37311))
-                    return false;
-
-                // Survival Instincts and Survival Instincts
-                if ((spellInfo_1->Id == 61336 && spellInfo_2->Id == 50322) ||
-                        (spellInfo_2->Id == 61336 && spellInfo_1->Id == 50322))
-                    return false;
-
-                // Savage Roar and Savage Roar (triggered)
-                if (spellInfo_1->SpellIconID == 2865 && spellInfo_2->SpellIconID == 2865)
-                    return false;
-
-                // Frenzied Regeneration and Savage Defense
-                if ((spellInfo_1->Id == 22842 && spellInfo_2->Id == 62606) ||
-                        (spellInfo_2->Id == 22842 && spellInfo_1->Id == 62606))
-                    return false;
-            }
-
-            // Leader of the Pack and Scroll of Stamina (multi-family check)
-            if (spellInfo_1->Id == 24932 && spellInfo_2->SpellIconID == 312 && spellInfo_2->SpellVisual[0] == 216)
-                return false;
-
-            // Dragonmaw Illusion (multi-family check)
-            if (spellInfo_1->Id == 42016 && spellInfo_2->Id == 40216)
-                return false;
-
-            break;
-        case SPELLFAMILY_ROGUE:
-            if (spellInfo_2->SpellFamilyName == SPELLFAMILY_ROGUE)
-            {
-                // Master of Subtlety
-                if ((spellInfo_1->Id == 31665 && spellInfo_2->Id == 31666) ||
-                        (spellInfo_2->Id == 31666 && spellInfo_1->Id == 31665))
-                    return false;
-
-                // Sprint & Sprint (waterwalk)
-                if (spellInfo_1->SpellIconID == 516 && spellInfo_2->SpellIconID == 516 &&
-                        ((spellInfo_1->Category == 44 && spellInfo_2->Category == 0) ||
-                         (spellInfo_2->Category == 44 && spellInfo_1->Category == 0)))
-                    return false;
-            }
-
-            // Overkill
-            if (spellInfo_1->SpellIconID == 2285 && spellInfo_2->SpellIconID == 2285)
-                return false;
-
-            // Garrote -> Garrote-Silence (multi-family check)
-            if (spellInfo_1->SpellIconID == 498 && spellInfo_2->SpellIconID == 498 && spellInfo_2->SpellVisual[0] == 0)
-                return false;
-            break;
-        case SPELLFAMILY_HUNTER:
-            if (spellInfo_2->SpellFamilyName == SPELLFAMILY_HUNTER)
-            {
-                // Rapid Fire & Quick Shots
-                if (((spellInfo_1->SpellFamilyFlags & uint64(0x20)) && (spellInfo_2->SpellFamilyFlags & uint64(0x20000000000))) ||
-                        ((spellInfo_2->SpellFamilyFlags & uint64(0x20)) && (spellInfo_1->SpellFamilyFlags & uint64(0x20000000000))))
-                    return false;
-
-                // Serpent Sting & (Immolation/Explosive Trap Effect)
-                if (((spellInfo_1->SpellFamilyFlags & uint64(0x4)) && (spellInfo_2->SpellFamilyFlags & uint64(0x00000004000))) ||
-                        ((spellInfo_2->SpellFamilyFlags & uint64(0x4)) && (spellInfo_1->SpellFamilyFlags & uint64(0x00000004000))))
-                    return false;
-
-                // Deterrence
-                if (spellInfo_1->SpellIconID == 83 && spellInfo_2->SpellIconID == 83)
-                    return false;
-
-                // Bestial Wrath
-                if (spellInfo_1->SpellIconID == 1680 && spellInfo_2->SpellIconID == 1680)
-                    return false;
-
-                // Aspect of the Viper & Vicious Viper
-                if (spellInfo_1->SpellIconID == 2227 && spellInfo_2->SpellIconID == 2227)
-                    return false;
-            }
-
-            // Wing Clip -> Improved Wing Clip (multi-family check)
-            if ((spellInfo_1->SpellFamilyFlags & uint64(0x40)) && spellInfo_2->Id == 19229)
-                return false;
-
-            // Concussive Shot and Imp. Concussive Shot (multi-family check)
-            if (spellInfo_2->Id == 19410 && spellInfo_1->Id == 5116)
-                return false;
-            break;
-        case SPELLFAMILY_PALADIN:
-            if (spellInfo_2->SpellFamilyName == SPELLFAMILY_PALADIN)
-            {
-                // Paladin Seals
-                if (IsSealSpell(spellInfo_1) && IsSealSpell(spellInfo_2))
-                    return true;
-
-                // Swift Retribution / Improved Devotion Aura (talents) and Paladin Auras
-                if ((spellInfo_1->IsFitToFamilyMask(uint64(0x0), 0x00000020) && (spellInfo_2->SpellIconID == 291 || spellInfo_2->SpellIconID == 3028)) ||
-                        (spellInfo_2->IsFitToFamilyMask(uint64(0x0), 0x00000020) && (spellInfo_1->SpellIconID == 291 || spellInfo_1->SpellIconID == 3028)))
-                    return false;
-
-                // Beacon of Light and Light's Beacon
-                if ((spellInfo_1->SpellIconID == 3032) && (spellInfo_2->SpellIconID == 3032))
-                    return false;
-
-                // Concentration Aura and Improved Concentration Aura and Aura Mastery
-                if ((spellInfo_1->SpellIconID == 1487) && (spellInfo_2->SpellIconID == 1487))
-                    return false;
-
-                // Seal of Corruption (caster/target parts stacking allow, other stacking checked by spell specs)
-                if (spellInfo_1->SpellIconID == 2292 && spellInfo_2->SpellIconID == 2292)
-                    return false;
-
-                // Divine Sacrifice and Divine Guardian
-                if (spellInfo_1->SpellIconID == 3837 && spellInfo_2->SpellIconID == 3837)
-                    return false;
-
-                // Blood Corruption, Holy Vengeance, Righteous Vengeance
-                if ((spellInfo_1->SpellIconID == 2292 && spellInfo_2->SpellIconID == 3025) ||
-                        (spellInfo_2->SpellIconID == 2292 && spellInfo_1->SpellIconID == 3025))
-                    return false;
-            }
-
-            // Blessing of Sanctuary (multi-family check, some from 16 spell icon spells)
-            if (spellInfo_2->Id == 67480 && spellInfo_1->Id == 20911)
-                return false;
-
-            // Combustion and Fire Protection Aura (multi-family check)
-            if (spellInfo_2->Id == 11129 && spellInfo_1->SpellIconID == 33 && spellInfo_1->SpellVisual[0] == 321)
-                return false;
-
-            // *Sanctity Aura -> Unstable Currents and other (multi-family check)
-            if (spellInfo_1->SpellIconID == 502 && spellInfo_2->SpellFamilyName == SPELLFAMILY_GENERIC && spellInfo_2->SpellIconID == 502 && spellInfo_2->SpellVisual[0] == 969)
-                return false;
-
-            // *Seal of Command and Band of Eternal Champion (multi-family check)
-            if (spellInfo_1->SpellIconID == 561 && spellInfo_1->SpellVisual[0] == 7992 && spellInfo_2->Id == 35081)
-                return false;
-            break;
-        case SPELLFAMILY_SHAMAN:
-            if (spellInfo_2->SpellFamilyName == SPELLFAMILY_SHAMAN)
-            {
-                // Windfury weapon
-                if (spellInfo_1->SpellIconID == 220 && spellInfo_2->SpellIconID == 220 &&
-                        !spellInfo_1->IsFitToFamilyMask(spellInfo_2->SpellFamilyFlags))
-                    return false;
-
-                // Ghost Wolf
-                if (spellInfo_1->SpellIconID == 67 && spellInfo_2->SpellIconID == 67)
-                    return false;
-
-                // Totem of Wrath (positive/negative), ranks checked early
-                if (spellInfo_1->SpellIconID == 2019 && spellInfo_2->SpellIconID == 2019)
-                    return false;
-            }
-            // Bloodlust and Bloodthirst (multi-family check)
-            if (spellInfo_1->Id == 2825 && spellInfo_2->SpellIconID == 38 && spellInfo_2->SpellVisual[0] == 0)
-                return false;
-            break;
-        case SPELLFAMILY_DEATHKNIGHT:
-            if (spellInfo_2->SpellFamilyName == SPELLFAMILY_DEATHKNIGHT)
-            {
-                // Lichborne  and Lichborne (triggered)
-                if (spellInfo_1->SpellIconID == 61 && spellInfo_2->SpellIconID == 61)
-                    return false;
-
-                // Frost Presence and Frost Presence (triggered)
-                if (spellInfo_1->SpellIconID == 2632 && spellInfo_2->SpellIconID == 2632)
-                    return false;
-
-                // Unholy Presence and Unholy Presence (triggered)
-                if (spellInfo_1->SpellIconID == 2633 && spellInfo_2->SpellIconID == 2633)
-                    return false;
-
-                // Blood Presence and Blood Presence (triggered)
-                if (spellInfo_1->SpellIconID == 2636 && spellInfo_2->SpellIconID == 2636)
-                    return false;
-            }
-            break;
-        default:
-            break;
-    }
-
-    // more generic checks
-    if (spellInfo_1->SpellIconID == spellInfo_2->SpellIconID &&
-            spellInfo_1->SpellIconID != 0 && spellInfo_2->SpellIconID != 0)
-    {
-        bool isModifier = false;
-        for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
-        {
-            if (spellInfo_1->EffectApplyAuraName[i] == SPELL_AURA_ADD_FLAT_MODIFIER ||
-                    spellInfo_1->EffectApplyAuraName[i] == SPELL_AURA_ADD_PCT_MODIFIER  ||
-                    spellInfo_2->EffectApplyAuraName[i] == SPELL_AURA_ADD_FLAT_MODIFIER ||
-                    spellInfo_2->EffectApplyAuraName[i] == SPELL_AURA_ADD_PCT_MODIFIER)
-                isModifier = true;
-        }
-
-        if (!isModifier)
-            return true;
-    }
-
-    if (IsSpellAnotherRankOfSpell(spellInfo_1->Id, spellInfo_2->Id))
-        return true;
-
-    if (spellInfo_1->SpellFamilyName == 0 || spellInfo_2->SpellFamilyName == 0)
-        return false;
-
-    if (spellInfo_1->SpellFamilyName != spellInfo_2->SpellFamilyName)
-        return false;
-
-    bool dummy_only = true;
-    for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
-    {
-        if (spellInfo_1->Effect[i] != spellInfo_2->Effect[i] ||
-                spellInfo_1->EffectItemType[i] != spellInfo_2->EffectItemType[i] ||
-                spellInfo_1->EffectMiscValue[i] != spellInfo_2->EffectMiscValue[i] ||
-                spellInfo_1->EffectApplyAuraName[i] != spellInfo_2->EffectApplyAuraName[i])
-            return false;
-
-        // ignore dummy only spells
-        if (spellInfo_1->Effect[i] && spellInfo_1->Effect[i] != SPELL_EFFECT_DUMMY && spellInfo_1->EffectApplyAuraName[i] != SPELL_AURA_DUMMY)
-            dummy_only = false;
-    }
-    return !dummy_only;
 }
 
 bool SpellMgr::IsSpellCanAffectSpell(SpellEntry const* spellInfo_1, SpellEntry const* spellInfo_2) const
@@ -3292,6 +2356,18 @@ void SpellMgr::LoadSpellScriptTarget()
                 }
                 break;
             }
+            case SPELL_TARGET_TYPE_GAMEOBJECT_GUID:
+            {
+                if (!itr->targetEntry)
+                    break;
+
+                if (!sObjectMgr.GetGOData(itr->targetEntry))
+                {
+                    sLog.outErrorDb("Table `spell_script_target`: gameobject entry %u does not exist.", itr->targetEntry);
+                    sSpellScriptTargetStorage.EraseEntry(itr->spellId);
+                }
+                break;
+            }
             case SPELL_TARGET_TYPE_CREATURE_GUID:
             {
                 if (!sObjectMgr.GetCreatureData(itr->targetEntry))
@@ -3583,7 +2659,7 @@ void SpellMgr::LoadPetDefaultSpells()
                     continue;
 
                 PetDefaultSpellsEntry petDefSpells;
-                if (CreatureTemplateSpells const* templateSpells = sCreatureTemplateSpellsStorage.LookupEntry<CreatureTemplateSpells>(cInfo->Entry))
+                if (CreatureTemplateSpells const* templateSpells = sObjectMgr.GetCreatureTemplateSpellSet(cInfo->Entry, 0))
                     for (int j = 0; j < MAX_CREATURE_SPELL_DATA_SLOT; ++j)
                         petDefSpells.spellid[j] = templateSpells->spells[j];
 
@@ -3774,7 +2850,7 @@ void SpellMgr::LoadSpellAreas()
             continue;
         }
 
-        if (spellArea.conditionId && !sConditionStorage.LookupEntry<PlayerCondition>(spellArea.conditionId))
+        if (spellArea.conditionId && !sConditionStorage.LookupEntry<ConditionEntry>(spellArea.conditionId))
         {
             sLog.outErrorDb("Spell %u listed in `spell_area` have wrong conditionId (%u) requirement", spell, spellArea.conditionId);
             continue;
@@ -3931,7 +3007,7 @@ SpellCastResult SpellMgr::GetSpellAllowedInLocationError(SpellEntry const* spell
     }
 
     // continent limitation (virtual continent), ignore for GM
-    if (spellInfo->HasAttribute(SPELL_ATTR_EX4_CAST_ONLY_IN_OUTLAND) && !(player && player->isGameMaster()))
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX4_CAST_ONLY_IN_OUTLAND) && !(player && player->IsGameMaster()))
     {
         uint32 v_map = GetVirtualMapForMapAndZone(map_id, zone_id);
         MapEntry const* mapEntry = sMapStore.LookupEntry(v_map);
@@ -3993,10 +3069,7 @@ SpellCastResult SpellMgr::GetSpellAllowedInLocationError(SpellEntry const* spell
             return map_id == 566 && player && player->InBattleGround() ? SPELL_CAST_OK : SPELL_FAILED_REQUIRES_AREA;
         case 2584:                                          // Waiting to Resurrect
         case 42792:                                         // Recently Dropped Flag
-        case 43681:                                         // Inactive
-        {
-            return player && player->InBattleGround() ? SPELL_CAST_OK : SPELL_FAILED_ONLY_BATTLEGROUNDS;
-        }
+        case 44521:                                         // Preparation
         case 22011:                                         // Spirit Heal Channel
         case 22012:                                         // Spirit Heal
         case 24171:                                         // Resurrection Impact Visual
@@ -4005,15 +3078,7 @@ SpellCastResult SpellMgr::GetSpellAllowedInLocationError(SpellEntry const* spell
             MapEntry const* mapEntry = sMapStore.LookupEntry(map_id);
             if (!mapEntry)
                 return SPELL_FAILED_INCORRECT_AREA;
-            return mapEntry->IsBattleGround() ? SPELL_CAST_OK : SPELL_FAILED_ONLY_BATTLEGROUNDS;
-        }
-        case 44521:                                         // Preparation
-        {
-            if (!player)
-                return SPELL_FAILED_REQUIRES_AREA;
-
-            BattleGround* bg = player->GetBattleGround();
-            return bg && bg->GetStatus() == STATUS_WAIT_JOIN ? SPELL_CAST_OK : SPELL_FAILED_ONLY_BATTLEGROUNDS;
+            return mapEntry->IsBattleGround() || zone_id == 4197 ? SPELL_CAST_OK : SPELL_FAILED_ONLY_BATTLEGROUNDS;
         }
         case 32724:                                         // Gold Team (Alliance)
         case 32725:                                         // Green Team (Alliance)
@@ -4040,7 +3105,7 @@ SpellCastResult SpellMgr::GetSpellAllowedInLocationError(SpellEntry const* spell
                 return SPELL_FAILED_ONLY_BATTLEGROUNDS;
 
             BattleGround* bg = player->GetBattleGround();
-            return bg && !bg->isArena() ? SPELL_CAST_OK : SPELL_FAILED_ONLY_BATTLEGROUNDS;
+            return bg && !bg->IsArena() ? SPELL_CAST_OK : SPELL_FAILED_ONLY_BATTLEGROUNDS;
         }
     }
 
@@ -4518,6 +3583,15 @@ bool IsDiminishingReturnsGroupDurationLimited(DiminishingGroup group)
     }
 }
 
+bool IsDiminishingReturnsGroupDurationDiminished(DiminishingGroup group, bool pvp)
+{
+    switch (group)
+    {
+        default:
+            return true;
+    }
+}
+
 DiminishingReturnsType GetDiminishingReturnsGroupType(DiminishingGroup group)
 {
     switch (group)
@@ -4559,7 +3633,7 @@ bool SpellArea::IsFitToRequirements(Player const* player, uint32 newZone, uint32
 {
     if (conditionId)
     {
-        if (!player || !sObjectMgr.IsPlayerMeetToCondition(conditionId, player, player->GetMap(), nullptr, CONDITION_FROM_SPELL_AREA))
+        if (!player || !sObjectMgr.IsConditionSatisfied(conditionId, player, player->GetMap(), nullptr, CONDITION_FROM_SPELL_AREA))
             return false;
     }
     else                                                    // This block will be removed

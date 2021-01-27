@@ -14,7 +14,7 @@ enum
     TYPE_KRYSTALLUS         = 2,
     TYPE_SJONNIR            = 3,
 
-    // NPC_BRANN            = 28070,
+    NPC_BRANN               = 28070,
 
     NPC_KADDRAK             = 30898,
     NPC_ABEDNEUM            = 30899,
@@ -23,8 +23,19 @@ enum
     NPC_WORLDTRIGGER        = 22515,
     NPC_DARK_MATTER         = 28235,                        // used by the Tribunal event
     NPC_LIGHTNING_STALKER   = 28130,                        // used by the Tribunal event as spawn point for the dwarfs
-    NPC_IRON_SLUDGE         = 28165,                        // checked in the Sjonnir achiev
+    NPC_DARK_MATTER_TARGET  = 28237,
+    NPC_SEARING_GAZE_TARGET = 28265,
+    NPC_RUNE_PROTECTOR      = 27983,
+    NPC_RUNE_STORMCALLER    = 27984,
+    NPC_GOLEM_CUSTODIAN     = 27985,
+
+    // Sjonnir mobs
     NPC_SJONNIR             = 27978,
+    NPC_IRON_TROGG          = 27979,
+    NPC_IRON_DWARF          = 27982,
+    NPC_MALFORMED_OOZE      = 27981,
+    NPC_EARTHEN_DWARF       = 27980,
+    NPC_IRON_SLUDGE         = 28165,                        // checked in the Sjonnir achiev
 
     GO_DOOR_MAIDEN          = 191292,
     GO_DOOR_TRIBUNAL        = 191294,                       // possibly closed during event?
@@ -42,6 +53,8 @@ enum
     GO_TRIBUNAL_FLOOR       = 191527,
 
     GO_SJONNIR_CONSOLE      = 193906,
+    // GO_LEFT_PIPE         = 192163,                       // pipes used for animation purpose only
+    // GO_RIGHT_PIPE        = 192164,
 
     SPELL_DARK_MATTER_START = 51001,                        // Channeled spells used by the Tribunal event
 
@@ -78,7 +91,7 @@ class instance_halls_of_stone : public ScriptedInstance
 
         void OnCreatureCreate(Creature* pCreature) override;
         void OnObjectCreate(GameObject* pGo) override;
-
+        void OnCreatureRespawn(Creature* pCreature) override;
         void OnCreatureDeath(Creature* pCreature) override;
 
         void SetData(uint32 uiType, uint32 uiData) override;
@@ -119,6 +132,7 @@ class instance_halls_of_stone : public ScriptedInstance
         GuidList m_lMarnakGUIDs;
         GuidList m_lTribunalGUIDs;
         GuidList m_lWorldtriggerGUIDs;
+        GuidList m_lRuneDwarfGUIDs;
 };
 
 #endif

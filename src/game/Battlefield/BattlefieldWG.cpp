@@ -21,6 +21,7 @@
 #include "Entities/GameObject.h"
 #include "Entities/Player.h"
 #include "Entities/Unit.h"
+#include "Entities/Vehicle.h"
 #include "Spells/SpellAuras.h"
 #include "Globals/ObjectMgr.h"
 
@@ -204,6 +205,13 @@ void BattlefieldWG::HandlePlayerEnterZone(Player* player, bool isMainZone)
     if (GetDefender() != TEAM_NONE)
         player->CastSpell(player, wgTeamControlAuras[GetTeamIndexByTeamId(GetDefender())], TRIGGERED_OLD_TRIGGERED);
 
+    // remove all buff auras first; will be added back shortly
+    player->RemoveAurasDueToSpell(SPELL_ESSENCE_WINTERGRASP_ZONE);
+    player->RemoveAurasDueToSpell(SPELL_TOWER_CONTROL);
+    player->RemoveAurasDueToSpell(SPELL_RECRUIT);
+    player->RemoveAurasDueToSpell(SPELL_CORPORAL);
+    player->RemoveAurasDueToSpell(SPELL_LIEUTENANT);
+
     // defenders are phased and get increase XP
     if (GetBattlefieldStatus() == BF_STATUS_COOLDOWN && GetDefender() == player->GetTeam())
         player->CastSpell(player, SPELL_ESSENCE_WINTERGRASP_ZONE, TRIGGERED_OLD_TRIGGERED);
@@ -218,8 +226,9 @@ void BattlefieldWG::HandlePlayerEnterZone(Player* player, bool isMainZone)
             player->CastSpell(player, SPELL_TOWER_CONTROL, TRIGGERED_OLD_TRIGGERED);
     }
 
-    // update score upon entering
-    UpdatePlayerScore(player);
+    // update score upon entering when battle is in progress
+    if (GetBattlefieldStatus() == BF_STATUS_IN_PROGRESS)
+        UpdatePlayerScore(player);
 }
 
 void BattlefieldWG::HandlePlayerLeaveZone(Player* player, bool isMainZone)
@@ -498,10 +507,12 @@ void BattlefieldWG::HandleGameObjectCreate(GameObject* go)
         case GO_WG_FORTRESS_COLLISION_WALL:
             m_fortressDoorWallGuid = go->GetObjectGuid();
             return;
-        case GO_WINTERGRASP_ALLIANCE_BANNER:
+        case GO_WINTERGRASP_BANNER_DEFENSE_ALLIANCE:
+        case GO_WINTERGRASP_BANNER_OFFENSE_ALLIANCE:
             m_towerBannersGuids[TEAM_INDEX_ALLIANCE].push_back(go->GetObjectGuid());
             return;
-        case GO_WINTERGRASP_HORDE_BANNER:
+        case GO_WINTERGRASP_BANNER_DEFENSE_HORDE:
+        case GO_WINTERGRASP_BANNER_OFFENSE_HORDE:
             m_towerBannersGuids[TEAM_INDEX_HORDE].push_back(go->GetObjectGuid());
             return;
     }
@@ -526,7 +537,7 @@ bool BattlefieldWG::HandleEvent(uint32 eventId, GameObject* go, Unit* invoker)
         returnValue = HandleCapturePointEvent(eventId, go);
     // handle destructible buildings
     else if (go->GetGoType() == GAMEOBJECT_TYPE_DESTRUCTIBLE_BUILDING)
-        returnValue = HandleDestructibleBuildingEvent(eventId, go);
+        returnValue = HandleDestructibleBuildingEvent(eventId, go, invoker);
 
     return returnValue;
 }
@@ -599,7 +610,7 @@ bool BattlefieldWG::HandleCapturePointEvent(uint32 eventId, GameObject* go)
 }
 
 // Function that handles all destructible buildings events
-bool BattlefieldWG::HandleDestructibleBuildingEvent(uint32 eventId, GameObject* go)
+bool BattlefieldWG::HandleDestructibleBuildingEvent(uint32 eventId, GameObject* go, Unit* invoker)
 {
     // special event for the fortress door
     if (go->GetEntry() == GO_WG_FORTRESS_DOOR && eventId == EVENT_KEEP_DOOR_DESTROY)
@@ -633,6 +644,8 @@ bool BattlefieldWG::HandleDestructibleBuildingEvent(uint32 eventId, GameObject* 
             {
                 tower->SetGoState(GetDefender() == ALLIANCE ? BF_GO_STATE_ALLIANCE_DESTROYED : BF_GO_STATE_HORDE_DESTROYED);
                 SendWintergraspWarning(wgFortressTowersData[index].messagedDestroyed, go);
+
+                invoker->CastSpell(invoker, SPELL_ACHIEV_LEAN_TOWER_DEFENSE, TRIGGERED_OLD_TRIGGERED);
 
                 ++m_destroyedTowers[GetTeamIndexByTeamId(GetDefender())];
                 // ToDo: handle possible yell
@@ -679,6 +692,8 @@ bool BattlefieldWG::HandleDestructibleBuildingEvent(uint32 eventId, GameObject* 
 
                 // award quest credit
                 QuestCreditTeam(NPC_QUEST_CREDIT_KILL_SOUTHERN_TOWER, GetDefender(), go);
+
+                invoker->CastSpell(invoker, SPELL_ACHIEV_LEAN_TOWER_OFFENSE, TRIGGERED_OLD_TRIGGERED);
 
                 ++m_destroyedTowers[GetTeamIndexByTeamId(GetAttacker())];
 
@@ -806,6 +821,8 @@ void BattlefieldWG::EndBattle(Team winner)
     // get player reference in order to end the battlefield
     if (Player* player = GetPlayerInZone())
         CleanupBattlefield(player, winner);
+
+    // ToDo: does the fortress rebuild immediately after battle end?
 
     // must be called after cleanup
     Battlefield::EndBattle(winner);
@@ -1246,7 +1263,9 @@ void BattlefieldWG::OnBattlefieldPlayersUpdate()
 void BattlefieldWG::InitPlayerBattlefieldData(Player* player)
 {
     m_activePlayers[player->GetObjectGuid()] = new WintergraspPlayer();
-    UpdatePlayerScore(player);
+
+    if (GetBattlefieldStatus() == BF_STATUS_IN_PROGRESS)
+        UpdatePlayerScore(player);
 }
 
 void BattlefieldWG::SetupPlayerPosition(Player* player)
@@ -1322,12 +1341,14 @@ void BattlefieldWG::UpdateTenacities(const WorldObject* objRef)
                 player->CastSpell(player, SPELL_TENACITY, TRIGGERED_OLD_TRIGGERED);
 
             // outnumbered team also get more honor
-            if (playerDiff > 10)
-                player->CastSpell(player, SPELL_GREATEST_HONOR, TRIGGERED_OLD_TRIGGERED);
+            if (playerDiff > 15)
+                player->CastSpell(player, player->GetTeam() == ALLIANCE ? SPELL_GREATEST_HONOR : SPELL_LOKTAR_OGAR, TRIGGERED_OLD_TRIGGERED);
+            else if (playerDiff > 10)
+                player->CastSpell(player, player->GetTeam() == ALLIANCE ? SPELL_GREATER_HONOR : SPELL_LOKTAR, TRIGGERED_OLD_TRIGGERED);
             else if (playerDiff > 5)
-                player->CastSpell(player, SPELL_GREATER_HONOR, TRIGGERED_OLD_TRIGGERED);
+                player->CastSpell(player, player->GetTeam() == ALLIANCE ? SPELL_GREAT_HONOR : SPELL_LOKNARASH, TRIGGERED_OLD_TRIGGERED);
             else
-                player->CastSpell(player, SPELL_GREAT_HONOR, TRIGGERED_OLD_TRIGGERED);
+                player->CastSpell(player, player->GetTeam() == ALLIANCE ? SPELL_HONORABLE : SPELL_LOKREGAR, TRIGGERED_OLD_TRIGGERED);
         }
     }
 
@@ -1426,6 +1447,29 @@ bool BattlefieldWG::IsConditionFulfilled(Player const* source, uint32 conditionI
                     return source->GetTeam() == workshop->GetOwner();
             }
             break;
+    }
+
+    return false;
+}
+
+bool BattlefieldWG::CheckAchievementCriteriaMeet(uint32 criteria_id, Player const* source, Unit const* target, uint32 miscvalue1)
+{
+    switch (criteria_id)
+    {
+        case ACHIEV_CRIT_WG_NO_CHANCE:
+            return source->IsBoarded() && source->GetTransportInfo()->GetTransport()->GetEntry() == NPC_WINTERGRASP_TOWER_CANNON && target->IsMounted();
+        case ACHIEV_CRIT_WG_WITHIN_GRASP:
+            return GetTimer() <= 10 * MINUTE * IN_MILLISECONDS;
+        case ACHIEV_CRIT_VEH_SLAUGHTER_CANNON:
+            return source->IsBoarded() && source->GetTransportInfo()->GetTransport()->GetEntry() == NPC_WINTERGRASP_TOWER_CANNON;
+        case ACHIEV_CRIT_VEH_SLAUGHTER_SIEGE_A:
+            return source->IsBoarded() && source->GetTransportInfo()->GetTransport()->GetEntry() == NPC_WINTERGRASP_SIEGE_ENGINE_A;
+        case ACHIEV_CRIT_VEH_SLAUGHTER_SIEGE_H:
+            return source->IsBoarded() && source->GetTransportInfo()->GetTransport()->GetEntry() == NPC_WINTERGRASP_SIEGE_ENGINE_H;
+        case ACHIEV_CRIT_VEH_SLAUGHTER_DEMOLISHER:
+            return source->IsBoarded() && source->GetTransportInfo()->GetTransport()->GetEntry() == NPC_WINTERGRASP_DEMOLISHER;
+        case ACHIEV_CRIT_VEH_SLAUGHTER_CATAPULT:
+            return source->IsBoarded() && source->GetTransportInfo()->GetTransport()->GetEntry() == NPC_WINTERGRASP_CATAPULT;
     }
 
     return false;

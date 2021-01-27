@@ -15,786 +15,464 @@
  */
 
 /* ScriptData
-SDName: Halls_of_Stone
+SDName: Instance_Halls_of_Stone
 SD%Complete: 50%
-SDComment: Just base mechanics in script, timers and stuff is very uncertain, event-spells are not working
+SDComment:
 SDCategory: Halls of Stone
 EndScriptData */
 
 #include "AI/ScriptDevAI/include/sc_common.h"
 #include "halls_of_stone.h"
-#include "AI/ScriptDevAI/base/escort_ai.h"
-
-/* Notes
- * The timers and handling of texts is not confirmed, but should also not be too far off
- * The spells "of the statues" (handled in instance script), need quite much of core support
- */
 
 enum
 {
-    SAY_KILL_1                          = -1599012,
-    SAY_KILL_2                          = -1599013,
-    SAY_KILL_3                          = -1599014,
-    SAY_LOW_HEALTH                      = -1599015,
-    SAY_DEATH                           = -1599016,
-    SAY_PLAYER_DEATH_1                  = -1599017,
-    SAY_PLAYER_DEATH_2                  = -1599018,
-    SAY_PLAYER_DEATH_3                  = -1599019,
-    SAY_ESCORT_START                    = -1599020,
+    // KADDRAK
+    SPELL_GLARE_OF_THE_TRIBUNAL         = 50988,
+    SPELL_GLARE_OF_THE_TRIBUNAL_H       = 59870,
 
-    SAY_SPAWN_DWARF                     = -1599021,
-    SAY_SPAWN_TROGG                     = -1599022,
-    SAY_SPAWN_OOZE                      = -1599023,
-    SAY_SPAWN_EARTHEN                   = -1599024,
+    // MARNAK
+    // Spells are handled in individual script
 
-    SAY_EVENT_INTRO_1                   = -1599025,
-    SAY_EVENT_INTRO_2                   = -1599026,
-    SAY_EVENT_INTRO_3_ABED              = -1599027,
+    // ABEDNEUM
+    SPELL_SUMMON_SEARING_GAZE_TARGET    = 51146,                // The other spells are handled in individual script
 
-    SAY_EVENT_A_1                       = -1599028,
-    SAY_EVENT_A_2_KADD                  = -1599029,
-    SAY_EVENT_A_3                       = -1599030,
-
-    SAY_EVENT_B_1                       = -1599031,
-    SAY_EVENT_B_2_MARN                  = -1599032,
-    SAY_EVENT_B_3                       = -1599033,
-
-    SAY_EVENT_C_1                       = -1599034,
-    SAY_EVENT_C_2_ABED                  = -1599035,
-    SAY_EVENT_C_3                       = -1599036,
-
-    SAY_EVENT_D_1                       = -1599037,
-    SAY_EVENT_D_2_ABED                  = -1599038,
-    SAY_EVENT_D_3                       = -1599039,
-    SAY_EVENT_D_4_ABED                  = -1599040,
-
-    SAY_EVENT_END_01                    = -1599041,
-    SAY_EVENT_END_02                    = -1599042,
-    SAY_EVENT_END_03_ABED               = -1599043,
-    SAY_EVENT_END_04                    = -1599044,
-    SAY_EVENT_END_05_ABED               = -1599045,
-    SAY_EVENT_END_06                    = -1599046,
-    SAY_EVENT_END_07_ABED               = -1599047,
-    SAY_EVENT_END_08                    = -1599048,
-    SAY_EVENT_END_09_KADD               = -1599049,
-    SAY_EVENT_END_10                    = -1599050,
-    SAY_EVENT_END_11_KADD               = -1599051,
-    SAY_EVENT_END_12                    = -1599052,
-    SAY_EVENT_END_13_KADD               = -1599053,
-    SAY_EVENT_END_14                    = -1599054,
-    SAY_EVENT_END_15_MARN               = -1599055,
-    SAY_EVENT_END_16                    = -1599056,
-    SAY_EVENT_END_17_MARN               = -1599057,
-    SAY_EVENT_END_18                    = -1599058,
-    SAY_EVENT_END_19_MARN               = -1599059,
-    SAY_EVENT_END_20                    = -1599060,
-    SAY_EVENT_END_21_ABED               = -1599061,
-
-    SAY_VICTORY_SJONNIR_1               = -1599062,
-    SAY_VICTORY_SJONNIR_2               = -1599063,
-
-    SAY_ENTRANCE_MEET                   = -1599064,
-
-    GOSSIP_ITEM_ID_START                = -3599000,
-    GOSSIP_ITEM_ID_PROGRESS             = -3599001,
-
-    TEXT_ID_START                       = 13100,
-    TEXT_ID_PROGRESS                    = 13101,
-
-    SPELL_SUMMON_PROTECTOR              = 51780,                // all spells are casted by stalker npcs 28130
-    SPELL_SUMMON_STORMCALLER            = 51050,
-    SPELL_SUMMON_CUSTODIAN              = 51051,
-
-    SPELL_STEALTH                       = 58506,
-
-    NPC_DARK_RUNE_PROTECTOR             = 27983,
-    NPC_DARK_RUNE_STORMCALLER           = 27984,
-    NPC_IRON_GOLEM_CUSTODIAN            = 27985,
-
-    QUEST_HALLS_OF_STONE                = 13207,
+    SPELL_KILL_TRIBUNAL_ADD             = 51289,                // Cleanup event on finish
+    SPELL_ACHIEVEMENT_CHECK             = 59046,                // Doesn't exist in client dbc - added in spell_template
 };
 
-/*######
-## npc_brann_hos
-######*/
-
-struct npc_brann_hosAI : public npc_escortAI
+instance_halls_of_stone::instance_halls_of_stone(Map* pMap) : ScriptedInstance(pMap),
+    m_uiIronSludgeKilled(0),
+    m_bIsBrannSpankin(false)
 {
-    npc_brann_hosAI(Creature* pCreature) : npc_escortAI(pCreature)
-    {
-        m_pInstance = (instance_halls_of_stone*)pCreature->GetInstanceData();
-        m_bIsRegularMode = pCreature->GetMap()->IsRegularDifficulty();
-        Reset();
-    }
-
-    instance_halls_of_stone* m_pInstance;
-    bool m_bIsRegularMode;
-
-    bool m_bHasContinued;
-    bool m_bIsBattle;
-    bool m_bIsLowHP;
-
-    uint32 m_uiStep;
-    uint32 m_uiPhaseTimer;
-
-    GuidList m_luiDwarfGUIDs;
-
-    void Reset() override
-    {
-        if (!HasEscortState(STATE_ESCORT_ESCORTING))
-        {
-            m_bIsLowHP = false;
-            m_bIsBattle = false;
-            m_bHasContinued = false;
-
-            m_uiStep = 0;
-            m_uiPhaseTimer = 0;
-        }
-    }
-
-    void KilledUnit(Unit* /*pVictim*/) override                          // TODO - possible better as SummonedJustDied
-    {
-        switch (urand(0, 2))
-        {
-            case 0: DoScriptText(SAY_KILL_1, m_creature); break;
-            case 1: DoScriptText(SAY_KILL_2, m_creature); break;
-            case 2: DoScriptText(SAY_KILL_3, m_creature); break;
-        }
-    }
-
-    void JustDied(Unit* /*pKiller*/) override
-    {
-        DoScriptText(SAY_DEATH, m_creature);
-
-        if (m_pInstance)
-        {
-            m_pInstance->SetData(TYPE_TRIBUNAL, FAIL);
-            // Continue at right state after respawn
-            if (m_bHasContinued)
-                m_pInstance->SetData(TYPE_TRIBUNAL, IN_PROGRESS);
-        }
-
-        for (GuidList::const_iterator itr = m_luiDwarfGUIDs.begin(); itr != m_luiDwarfGUIDs.end(); ++itr)
-        {
-            if (Creature* pDwarf = m_creature->GetMap()->GetCreature(*itr))
-                pDwarf->ForcedDespawn();
-        }
-        m_luiDwarfGUIDs.clear();
-    }
-
-    void AttackStart(Unit* pWho) override
-    {
-        if (!pWho)
-            return;
-
-        if (!m_bIsBattle)
-            return;
-
-        npc_escortAI::AttackStart(pWho);
-    }
-
-    void DamageTaken(Unit* /*pDealer*/, uint32& uiDamage, DamageEffectType /*damagetype*/, SpellEntry const* spellInfo) override
-    {
-        // If Brann takes damage, mark the achiev as failed
-        if (uiDamage && m_pInstance)
-            m_pInstance->SetBrannSpankin(false);
-    }
-
-    void ContinueEvent()
-    {
-        if (!m_pInstance || m_pInstance->GetData(TYPE_TRIBUNAL) != IN_PROGRESS)
-            return;
-
-        // Set the achiev in progress
-        m_pInstance->SetBrannSpankin(true);
-
-        m_creature->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
-        SetRun(true);
-        SetEscortPaused(false);
-        m_bHasContinued = true;
-    }
-
-    void JustStartedEscort() override
-    {
-        if (m_pInstance)
-            m_pInstance->SetData(TYPE_TRIBUNAL, IN_PROGRESS);
-
-        DoScriptText(SAY_ESCORT_START, m_creature);
-    }
-
-    void WaypointReached(uint32 uiPointId) override
-    {
-        switch (uiPointId)
-        {
-            case 13:                                        // Before Tribunal Event, Continue with Gossip Interaction
-                DoScriptText(SAY_EVENT_INTRO_1, m_creature);
-                SetEscortPaused(true);
-                m_creature->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
-                break;
-            case 17:                                        // Reach Tribunal
-                SetEscortPaused(true);
-                m_uiPhaseTimer = 500;
-                break;
-            case 18:                                        // Reach Floor Event
-                SetEscortPaused(true);
-                if (m_pInstance)
-                {
-                    if (GameObject* pKonsole = m_pInstance->GetSingleGameObjectFromStorage(GO_TRIBUNAL_CONSOLE))
-                        m_creature->SetFacingToObject(pKonsole);
-                    m_pInstance->DoUseDoorOrButton(GO_TRIBUNAL_FLOOR);
-                }
-                m_uiPhaseTimer = 1000;
-                break;
-        }
-    }
-
-    void SpawnDwarf(uint32 uEntry)
-    {
-        if (!m_pInstance)
-            return;
-
-        // each case has an individual spawn stalker
-        switch (uEntry)
-        {
-            case NPC_DARK_RUNE_PROTECTOR:
-            {
-                Creature* pStalker = m_creature->GetMap()->GetCreature(m_pInstance->GetProtectorStalkerGuid());
-                if (!pStalker)
-                    return;
-
-                uint32 uiSpawnNumber = (m_bIsRegularMode ? 2 : 3);
-                for (uint8 i = 0; i < uiSpawnNumber; ++i)
-                    pStalker->CastSpell(pStalker, SPELL_SUMMON_PROTECTOR, TRIGGERED_OLD_TRIGGERED, nullptr, nullptr, m_creature->GetObjectGuid());
-                pStalker->CastSpell(pStalker, SPELL_SUMMON_STORMCALLER, TRIGGERED_OLD_TRIGGERED, nullptr, nullptr, m_creature->GetObjectGuid());
-                break;
-            }
-            case NPC_DARK_RUNE_STORMCALLER:
-            {
-                Creature* pStalker = m_creature->GetMap()->GetCreature(m_pInstance->GeStormcallerStalkerGuid());
-                if (!pStalker)
-                    return;
-
-                for (uint8 i = 0; i < 2; ++i)
-                    pStalker->CastSpell(pStalker, SPELL_SUMMON_STORMCALLER, TRIGGERED_OLD_TRIGGERED, nullptr, nullptr, m_creature->GetObjectGuid());
-                break;
-            }
-            case NPC_IRON_GOLEM_CUSTODIAN:
-            {
-                Creature* pStalker = m_creature->GetMap()->GetCreature(m_pInstance->GetCustodianStalkerGuid());
-                if (!pStalker)
-                    return;
-
-                pStalker->CastSpell(pStalker, SPELL_SUMMON_CUSTODIAN, TRIGGERED_OLD_TRIGGERED, nullptr, nullptr, m_creature->GetObjectGuid());
-                break;
-            }
-        }
-    }
-
-    void JustSummoned(Creature* pSummoned) override
-    {
-        m_luiDwarfGUIDs.push_back(pSummoned->GetObjectGuid());
-
-        pSummoned->AI()->AttackStart(m_creature);
-    }
-
-    void UpdateEscortAI(const uint32 uiDiff) override
-    {
-        if (m_uiPhaseTimer && m_uiPhaseTimer <= uiDiff)
-        {
-            switch (m_uiStep)
-            {
-                // Begin Event
-                case 0:
-                    // TODO, this is wrong, must be "using or similar"
-                    m_creature->SetStandState(UNIT_STAND_STATE_KNEEL);
-                    m_uiPhaseTimer = 1500;
-                    break;
-                case 1:
-                    DoScriptText(SAY_EVENT_INTRO_2, m_creature);
-                    m_uiPhaseTimer = 2500;
-                    break;
-                case 2:
-                    if (m_pInstance)
-                        m_pInstance->DoUseDoorOrButton(GO_TRIBUNAL_CONSOLE);
-                    m_uiPhaseTimer = 6500;
-                    break;
-                case 3:
-                    if (m_pInstance)
-                        m_pInstance->DoFaceSpeak(FACE_ABEDNEUM, SAY_EVENT_INTRO_3_ABED);
-                    m_uiPhaseTimer = 8500;
-                    break;
-
-                // Activate Kaddrak
-                case 4:
-                    DoScriptText(SAY_EVENT_A_1, m_creature);
-                    m_uiPhaseTimer = 6500;
-                    break;
-                case 5:
-                    if (m_pInstance)
-                        m_pInstance->DoFaceSpeak(FACE_KADDRAK, SAY_EVENT_A_2_KADD);
-                    m_uiPhaseTimer = 12500;
-                    break;
-                case 6:
-                    DoScriptText(SAY_EVENT_A_3, m_creature);
-                    m_uiPhaseTimer = 6000;
-                    break;
-                case 7:
-                    if (m_pInstance)
-                        m_pInstance->ActivateFace(FACE_KADDRAK, false);
-                    m_uiPhaseTimer = 5000;
-                    break;
-                case 8:
-                    SpawnDwarf(NPC_DARK_RUNE_PROTECTOR);
-                    m_uiPhaseTimer = 20000;
-                    break;
-
-                // Activate Marnak
-                case 9:
-                    DoScriptText(SAY_EVENT_B_1, m_creature);
-                    m_uiPhaseTimer = 6000;
-                    break;
-                case 10:
-                    if (m_pInstance)
-                        m_pInstance->DoFaceSpeak(FACE_MARNAK, SAY_EVENT_B_2_MARN);
-                    SpawnDwarf(NPC_DARK_RUNE_PROTECTOR);
-                    m_uiPhaseTimer = 20000;
-                    break;
-                case 11:
-                    DoScriptText(SAY_EVENT_B_3, m_creature);
-                    m_uiPhaseTimer = 5000;
-                    break;
-                case 12:
-                    if (m_pInstance)
-                        m_pInstance->ActivateFace(FACE_MARNAK, false);
-                    m_uiPhaseTimer = 10000;
-                    break;
-                case 13:
-                    SpawnDwarf(NPC_DARK_RUNE_PROTECTOR);
-                    m_uiPhaseTimer = 10000;
-                    break;
-                case 14:
-                    SpawnDwarf(NPC_DARK_RUNE_STORMCALLER);
-                    m_uiPhaseTimer = (20000);
-                    break;
-                case 15:
-                    DoScriptText(SAY_EVENT_C_1, m_creature);
-                    SpawnDwarf(NPC_DARK_RUNE_PROTECTOR);
-                    m_uiPhaseTimer = 10000;
-                    break;
-                case 16:
-                    SpawnDwarf(NPC_DARK_RUNE_STORMCALLER);
-                    m_uiPhaseTimer = 20000;
-                    break;
-
-                // Activate Abedneum
-                case 17:
-                    if (m_pInstance)
-                        m_pInstance->DoFaceSpeak(FACE_ABEDNEUM, SAY_EVENT_C_2_ABED);
-                    SpawnDwarf(NPC_DARK_RUNE_PROTECTOR);
-                    m_uiPhaseTimer = 20000;
-                    break;
-                case 18:
-                    DoScriptText(SAY_EVENT_C_3, m_creature);
-                    m_uiPhaseTimer = 5000;
-                    break;
-                case 19:
-                    if (m_pInstance)
-                        m_pInstance->ActivateFace(FACE_ABEDNEUM, false);
-                    m_uiPhaseTimer = 5000;
-                    break;
-                case 20:
-                    SpawnDwarf(NPC_DARK_RUNE_STORMCALLER);
-                    m_uiPhaseTimer = 10000;
-                    break;
-                case 21:
-                    SpawnDwarf(NPC_DARK_RUNE_PROTECTOR);
-                    m_uiPhaseTimer = 15000;
-                    break;
-
-                case 22:
-                    DoScriptText(SAY_EVENT_D_1, m_creature);
-                    SpawnDwarf(NPC_IRON_GOLEM_CUSTODIAN);
-                    m_uiPhaseTimer = 20000;
-                    break;
-                case 23:
-                    if (m_pInstance)
-                        m_pInstance->DoFaceSpeak(FACE_ABEDNEUM, SAY_EVENT_D_2_ABED);
-                    SpawnDwarf(NPC_DARK_RUNE_PROTECTOR);
-                    m_uiPhaseTimer = 5000;
-                    break;
-                case 24:
-                    SpawnDwarf(NPC_DARK_RUNE_STORMCALLER);
-                    m_uiPhaseTimer = 15000;
-                    break;
-                case 25:
-                    DoScriptText(SAY_EVENT_D_3, m_creature);
-                    SpawnDwarf(NPC_IRON_GOLEM_CUSTODIAN);
-                    m_uiPhaseTimer = 5000;
-                    break;
-                case 26:
-                    SpawnDwarf(NPC_DARK_RUNE_PROTECTOR);
-                    m_uiPhaseTimer = 5000;
-                    break;
-                case 27:
-                    SpawnDwarf(NPC_DARK_RUNE_STORMCALLER);
-                    m_uiPhaseTimer = 10000;
-                    break;
-                case 28:
-                    if (m_pInstance)
-                        m_pInstance->DoFaceSpeak(FACE_ABEDNEUM, SAY_EVENT_D_4_ABED);
-                    SpawnDwarf(NPC_DARK_RUNE_PROTECTOR);
-                    m_uiPhaseTimer = 10000;
-                    break;
-
-                // End Event
-                case 29:
-                    DoScriptText(SAY_EVENT_END_01, m_creature);
-                    m_creature->SetStandState(UNIT_STAND_STATE_STAND);// TODO TODO
-                    if (m_pInstance)
-                        m_pInstance->SetData(TYPE_TRIBUNAL, SPECIAL); // Kill remaining npcs
-
-                    // ToDo: the loot and the achiev should be triggered at this point
-                    // Brann should get the gossip option "There will be plenty of time for this later Brann, we need to get moving!"
-                    // This will allow Brann to continue the escort to the last encounter
-                    // When reaching the last door he has the gossip "We're with you Brann! Open it!"
-
-                    SetEscortPaused(false);
-                    m_uiPhaseTimer = 3000;
-                    // break;
-                    // case 30:
-                    if (m_pInstance)
-                        m_pInstance->ActivateFace(FACE_ABEDNEUM, true);
-                    m_uiPhaseTimer = 0;
-                    break;
-                case 30:
-                    DoScriptText(SAY_EVENT_END_02, m_creature);
-                    m_uiPhaseTimer = 5500;
-                    break;
-                case 31:
-                    if (m_pInstance)
-                        m_pInstance->DoFaceSpeak(FACE_ABEDNEUM, SAY_EVENT_END_03_ABED);
-                    m_uiPhaseTimer = 8500;
-                    break;
-                case 32:
-                    DoScriptText(SAY_EVENT_END_04, m_creature);
-                    m_uiPhaseTimer = 11500;
-                    break;
-                case 33:
-                    if (m_pInstance)
-                        m_pInstance->DoFaceSpeak(FACE_ABEDNEUM, SAY_EVENT_END_05_ABED);
-                    m_uiPhaseTimer = 11500;
-                    break;
-                case 34:
-                    DoScriptText(SAY_EVENT_END_06, m_creature);
-                    m_uiPhaseTimer = 4500;
-                    break;
-                case 35:
-                    if (m_pInstance)
-                        m_pInstance->DoFaceSpeak(FACE_ABEDNEUM, SAY_EVENT_END_07_ABED);
-                    m_uiPhaseTimer = 22500;
-                    break;
-                case 36:
-                    DoScriptText(SAY_EVENT_END_08, m_creature);
-                    m_uiPhaseTimer = 7500;
-                    break;
-                case 37:
-                    if (m_pInstance)
-                        m_pInstance->DoFaceSpeak(FACE_KADDRAK, SAY_EVENT_END_09_KADD);
-                    m_uiPhaseTimer = 18500;
-                    break;
-                case 38:
-                    DoScriptText(SAY_EVENT_END_10, m_creature);
-                    m_uiPhaseTimer = 5500;
-                    break;
-                case 39:
-                    if (m_pInstance)
-                        m_pInstance->DoFaceSpeak(FACE_KADDRAK, SAY_EVENT_END_11_KADD);
-                    m_uiPhaseTimer = 20500;
-                    break;
-                case 40:
-                    DoScriptText(SAY_EVENT_END_12, m_creature);
-                    m_uiPhaseTimer = 2500;
-                    break;
-                case 41:
-                    if (m_pInstance)
-                        m_pInstance->DoFaceSpeak(FACE_KADDRAK, SAY_EVENT_END_13_KADD);
-                    m_uiPhaseTimer = 19500;
-                    break;
-                case 42:
-                    DoScriptText(SAY_EVENT_END_14, m_creature);
-                    m_uiPhaseTimer = 10500;
-                    break;
-                case 43:
-                    if (m_pInstance)
-                        m_pInstance->DoFaceSpeak(FACE_MARNAK, SAY_EVENT_END_15_MARN);
-                    m_uiPhaseTimer = 6500;
-                    break;
-                case 44:
-                    DoScriptText(SAY_EVENT_END_16, m_creature);
-                    m_uiPhaseTimer = 6500;
-                    break;
-                case 45:
-                    if (m_pInstance)
-                        m_pInstance->DoFaceSpeak(FACE_MARNAK, SAY_EVENT_END_17_MARN);
-                    m_uiPhaseTimer = 25500;
-                    break;
-                case 46:
-                    DoScriptText(SAY_EVENT_END_18, m_creature);
-                    m_uiPhaseTimer = 23500;
-                    break;
-                case 47:
-                    if (m_pInstance)
-                        m_pInstance->DoFaceSpeak(FACE_MARNAK, SAY_EVENT_END_19_MARN);
-                    m_uiPhaseTimer = 3500;
-                    break;
-                case 48:
-                    DoScriptText(SAY_EVENT_END_20, m_creature);
-                    m_uiPhaseTimer = 8500;
-                    break;
-                case 49:
-                    if (m_pInstance)
-                        m_pInstance->DoFaceSpeak(FACE_ABEDNEUM, SAY_EVENT_END_21_ABED);
-                    m_uiPhaseTimer = 5500;
-                    break;
-                case 50:
-                {
-                    if (m_pInstance)
-                    {
-                        m_pInstance->DoUseDoorOrButton(GO_TRIBUNAL_FLOOR);
-                        m_pInstance->SetData(TYPE_TRIBUNAL, DONE);
-                    }
-
-                    Player* pPlayer = GetPlayerForEscort();
-                    if (pPlayer)
-                        pPlayer->RewardPlayerAndGroupAtEventExplored(QUEST_HALLS_OF_STONE, m_creature);
-
-                    m_creature->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_GOSSIP);
-                    m_creature->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER);
-
-                    m_uiPhaseTimer = 180000;
-                    break;
-                }
-                case 51:
-                    SetEscortPaused(false);
-                    break;
-            }
-            ++m_uiStep;
-        }
-        else if (m_uiPhaseTimer)
-            m_uiPhaseTimer -= uiDiff;
-
-        if (!m_bIsLowHP && m_creature->GetHealthPercent() < 30)
-        {
-            DoScriptText(SAY_LOW_HEALTH, m_creature);
-            m_bIsLowHP = true;
-        }
-        else if (m_bIsLowHP && m_creature->GetHealthPercent() > 30)
-            m_bIsLowHP = false;
-
-        // No Combat abilities needed here
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
-            return;
-    }
-
-    // Respawn Handling: Relocate and Set Escort to WP 13
-    void JustRespawned() override
-    {
-        if (!m_pInstance)
-            return;
-
-        Reset();
-
-        if (m_pInstance->GetData(TYPE_TRIBUNAL) == IN_PROGRESS)
-        {
-            SetEscortPaused(true);
-
-            m_uiStep = 0;
-            m_uiPhaseTimer = 0;
-
-            m_creature->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER);
-
-            // Relocate to position of WP 13
-            m_creature->GetMap()->CreatureRelocation(m_creature, 941.101563f, 377.373413f, 207.421f, 3.85f);
-
-            SetCurrentWaypoint(13);
-        }
-    }
-};
-
-bool GossipHello_npc_brann_hos(Player* pPlayer, Creature* pCreature)
-{
-    if (pCreature->isQuestGiver())
-        pPlayer->PrepareQuestMenu(pCreature->GetObjectGuid());
-
-    if (instance_halls_of_stone* pInstance = (instance_halls_of_stone*)(pCreature->GetInstanceData()))
-    {
-        if (pInstance->GetData(TYPE_TRIBUNAL) == NOT_STARTED || pInstance->GetData(TYPE_TRIBUNAL) == FAIL)
-        {
-            pPlayer->ADD_GOSSIP_ITEM_ID(GOSSIP_ICON_CHAT, GOSSIP_ITEM_ID_START, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 1);
-            pPlayer->SEND_GOSSIP_MENU(TEXT_ID_START, pCreature->GetObjectGuid());
-        }
-        else if (pInstance->GetData(TYPE_TRIBUNAL) == IN_PROGRESS)
-        {
-            pPlayer->ADD_GOSSIP_ITEM_ID(GOSSIP_ICON_CHAT, GOSSIP_ITEM_ID_PROGRESS, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 2);
-            pPlayer->SEND_GOSSIP_MENU(TEXT_ID_PROGRESS, pCreature->GetObjectGuid());
-        }
-    }
-
-    return true;
+    Initialize();
 }
 
-bool GossipSelect_npc_brann_hos(Player* pPlayer, Creature* pCreature, uint32 /*uiSender*/, uint32 uiAction)
+void instance_halls_of_stone::Initialize()
 {
-    switch (uiAction)
-    {
-        case GOSSIP_ACTION_INFO_DEF + 1:
-            if (npc_brann_hosAI* pBrannAi = dynamic_cast<npc_brann_hosAI*>(pCreature->AI()))
-                pBrannAi->Start(false, pPlayer);
-            break;
-        case GOSSIP_ACTION_INFO_DEF + 2:
-            if (npc_brann_hosAI* pBrannAi = dynamic_cast<npc_brann_hosAI*>(pCreature->AI()))
-                pBrannAi->ContinueEvent();
-            break;
-    }
-    pPlayer->CLOSE_GOSSIP_MENU();
-
-    return true;
+    memset(&m_auiEncounter, 0, sizeof(m_auiEncounter));
 }
 
-UnitAI* GetAI_npc_brann_hos(Creature* pCreature)
+void instance_halls_of_stone::OnCreatureCreate(Creature* pCreature)
 {
-    return new npc_brann_hosAI(pCreature);
-}
-
-enum
-{
-    SPELL_SUMMON_DARK_MATTER_TARGET     = 51003,
-    SPELL_DARK_MATTER                   = 51012,
-    SPELL_DARK_MATTER_H                 = 59868,
-    NPC_DARK_MATTER_TARGET              = 28237,
-
-    SPELL_SEARING_GAZE                  = 51136,
-    SPELL_SEARING_GAZE_H                = 59867,
-    // NPC_SEARING_GAZE_TARGET          = 28265,
-};
-
-/*######
-## npc_dark_matter
-######*/
-
-struct npc_dark_matterAI : public ScriptedAI
-{
-    npc_dark_matterAI(Creature* pCreature) : ScriptedAI(pCreature)
+    switch (pCreature->GetEntry())
     {
-        m_bIsRegularMode = pCreature->GetMap()->IsRegularDifficulty();
-        Reset();
-    }
-
-    bool m_bIsRegularMode;
-
-    uint32 m_uiSummonTimer;
-
-    void Reset() override
-    {
-        m_uiSummonTimer = 0;
-    }
-
-    void AttackStart(Unit* /*pWho*/) override { }
-    void MoveInLineOfSight(Unit* /*pWho*/) override { }
-
-    void SpellHit(Unit* /*pCaster*/, const SpellEntry* pSpell) override
-    {
-        if (pSpell->Id == SPELL_DARK_MATTER_START)
-            m_uiSummonTimer = 5000;
-    }
-
-    void JustSummoned(Creature* pSummoned) override
-    {
-        if (pSummoned->GetEntry() == NPC_DARK_MATTER_TARGET)
-            m_creature->GetMotionMaster()->MovePoint(1, pSummoned->GetPositionX(), pSummoned->GetPositionY(), pSummoned->GetPositionZ());
-    }
-
-    void MovementInform(uint32 uiMoveType, uint32 uiPointId) override
-    {
-        if (uiMoveType != POINT_MOTION_TYPE || !uiPointId)
-            return;
-
-        // Cast the Dark Matter spell and despawn for reset
-        if (DoCastSpellIfCan(m_creature,  m_bIsRegularMode ? SPELL_DARK_MATTER : SPELL_DARK_MATTER_H) == CAST_OK)
-        {
-            m_creature->SetRespawnDelay(3);
-            m_creature->ForcedDespawn(1000);
-        }
-    }
-
-    void UpdateAI(const uint32 uiDiff) override
-    {
-        if (m_uiSummonTimer)
-        {
-            if (m_uiSummonTimer <= uiDiff)
-            {
-                if (DoCastSpellIfCan(m_creature, SPELL_SUMMON_DARK_MATTER_TARGET) == CAST_OK)
-                    m_uiSummonTimer = 0;
-            }
+        case NPC_KADDRAK:          m_lKaddrakGUIDs.push_back(pCreature->GetObjectGuid());      break;
+        case NPC_ABEDNEUM:         m_lAbedneumGUIDs.push_back(pCreature->GetObjectGuid());     break;
+        case NPC_MARNAK:           m_lMarnakGUIDs.push_back(pCreature->GetObjectGuid());       break;
+        case NPC_TRIBUNAL_OF_AGES: m_lTribunalGUIDs.push_back(pCreature->GetObjectGuid());     break;
+        case NPC_WORLDTRIGGER:     m_lWorldtriggerGUIDs.push_back(pCreature->GetObjectGuid()); break;
+        case NPC_LIGHTNING_STALKER:
+            // Sort the dwarf summoning stalkers
+            if (pCreature->GetPositionY() > 400.0f)
+                m_protectorStalkerGuid = pCreature->GetObjectGuid();
+            else if (pCreature->GetPositionY() > 380.0f)
+                m_stormcallerStalkerGuid = pCreature->GetObjectGuid();
             else
-                m_uiSummonTimer -= uiDiff;
+                m_custodianStalkerGuid = pCreature->GetObjectGuid();
+            break;
+        case NPC_RUNE_PROTECTOR:
+        case NPC_RUNE_STORMCALLER:
+        case NPC_GOLEM_CUSTODIAN:
+            m_lRuneDwarfGUIDs.push_back(pCreature->GetObjectGuid());
+            break;
+        case NPC_BRANN:
+        case NPC_DARK_MATTER:
+        case NPC_SJONNIR:
+            m_npcEntryGuidStore[pCreature->GetEntry()] = pCreature->GetObjectGuid();
+            break;
+    }
+}
+
+void instance_halls_of_stone::OnCreatureRespawn(Creature* pCreature)
+{
+    switch (pCreature->GetEntry())
+    {
+        // WP movement for these creatures
+        case NPC_IRON_TROGG:
+        case NPC_IRON_DWARF:
+        case NPC_EARTHEN_DWARF:
+        case NPC_MALFORMED_OOZE:
+            pCreature->SetWalk(false);
+            pCreature->GetMotionMaster()->MoveWaypoint(pCreature->GetPositionY() > 700 ? 0 : 1, 0, 1000);
+            break;
+        // passive behavior
+        case NPC_SEARING_GAZE_TARGET:
+        case NPC_LIGHTNING_STALKER:
+        case NPC_TRIBUNAL_OF_AGES:
+        case NPC_KADDRAK:
+        case NPC_ABEDNEUM:
+        case NPC_MARNAK:
+        case NPC_WORLDTRIGGER:
+            pCreature->AI()->SetReactState(REACT_PASSIVE);
+            pCreature->SetCanEnterCombat(false);
+            break;
+        // special movement
+        case NPC_DARK_MATTER_TARGET:
+            pCreature->AI()->SetReactState(REACT_PASSIVE);
+            pCreature->SetCanEnterCombat(false);
+
+            if (Creature* pDarkMatter = GetSingleCreatureFromStorage(NPC_DARK_MATTER))
+            {
+                pDarkMatter->SetWalk(false);
+                pDarkMatter->GetMotionMaster()->MovePoint(1, pCreature->GetPositionX(), pCreature->GetPositionY(), pCreature->GetPositionZ());
+            }
+            break;
+        // attack Bran
+        case NPC_RUNE_PROTECTOR:
+        case NPC_RUNE_STORMCALLER:
+        case NPC_GOLEM_CUSTODIAN:
+            if (Creature* pBrann = GetSingleCreatureFromStorage(NPC_BRANN))
+                pCreature->AI()->AttackStart(pBrann);
+            break;
+    }
+}
+
+void instance_halls_of_stone::OnObjectCreate(GameObject* pGo)
+{
+    switch (pGo->GetEntry())
+    {
+        case GO_TRIBUNAL_CHEST:
+        case GO_TRIBUNAL_CHEST_H:
+            if (m_auiEncounter[TYPE_TRIBUNAL] == DONE)
+                pGo->RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_NO_INTERACT);
+            break;
+        case GO_TRIBUNAL_HEAD_RIGHT:
+            m_aFaces[FACE_MARNAK].m_goFaceGuid = pGo->GetObjectGuid();
+            return;
+        case GO_TRIBUNAL_HEAD_CENTER:
+            m_aFaces[FACE_ABEDNEUM].m_goFaceGuid = pGo->GetObjectGuid();
+            return;
+        case GO_TRIBUNAL_HEAD_LEFT:
+            m_aFaces[FACE_KADDRAK].m_goFaceGuid = pGo->GetObjectGuid();
+            return;
+        case GO_DOOR_TO_TRIBUNAL:
+        case GO_DOOR_MAIDEN:
+        case GO_DOOR_SJONNIR:
+        case GO_DOOR_TRIBUNAL:
+        case GO_TRIBUNAL_CONSOLE:
+        case GO_TRIBUNAL_FLOOR:
+        case GO_SJONNIR_CONSOLE:
+            break;
+
+        default:
+            return;
+    }
+    m_goEntryGuidStore[pGo->GetEntry()] = pGo->GetObjectGuid();
+}
+
+void instance_halls_of_stone::SetData(uint32 uiType, uint32 uiData)
+{
+    switch (uiType)
+    {
+        case TYPE_TRIBUNAL:
+            m_auiEncounter[uiType] = uiData;
+            switch (uiData)
+            {
+                case IN_PROGRESS:
+                    SortFaces();
+                    break;
+                case DONE:
+                    // Cast achiev check spell - Note: it's not clear who casts this spell, but for the moment we'll use Abedneum
+                    if (Creature* pEye = instance->GetCreature(m_aFaces[1].m_leftEyeGuid))
+                        pEye->CastSpell(pEye, SPELL_ACHIEVEMENT_CHECK, TRIGGERED_OLD_TRIGGERED);
+                    // Spawn the loot
+                    DoRespawnGameObject(instance->IsRegularDifficulty() ? GO_TRIBUNAL_CHEST : GO_TRIBUNAL_CHEST_H, 30 * MINUTE);
+                    DoToggleGameObjectFlags(instance->IsRegularDifficulty() ? GO_TRIBUNAL_CHEST : GO_TRIBUNAL_CHEST_H, GO_FLAG_NO_INTERACT, false);
+                    // Door workaround because of the missing Bran event
+                    DoUseDoorOrButton(GO_DOOR_SJONNIR);
+                    break;
+                case FAIL:
+                    for (auto& m_aFace : m_aFaces)
+                    {
+                        // Shut down the faces
+                        if (m_aFace.m_bIsActive)
+                            DoUseDoorOrButton(m_aFace.m_goFaceGuid);
+                        m_aFace.m_bIsActive = false;
+                        m_aFace.m_uiTimer = 1000;
+
+                        // despawn drawfs
+                        for (const auto& guid : m_lRuneDwarfGUIDs)
+                            if (Creature* pDwarf = instance->GetCreature(guid))
+                                pDwarf->ForcedDespawn();
+
+                        m_lRuneDwarfGUIDs.clear();
+                    }
+                    break;
+                case SPECIAL:
+                    for (auto& m_aFace : m_aFaces)
+                    {
+                        m_aFace.m_bIsActive = false;
+                        m_aFace.m_uiTimer = 1000;
+                        // TODO - Check which stay red and how long (also find out how they get red..)
+
+                        // Cleanup when finished
+                        if (Creature* pEye = instance->GetCreature(m_aFace.m_leftEyeGuid))
+                            pEye->CastSpell(pEye, SPELL_KILL_TRIBUNAL_ADD, TRIGGERED_OLD_TRIGGERED);
+                        if (Creature* pEye = instance->GetCreature(m_aFace.m_rightEyeGuid))
+                            pEye->CastSpell(pEye, SPELL_KILL_TRIBUNAL_ADD, TRIGGERED_OLD_TRIGGERED);
+                    }
+                    break;
+            }
+            break;
+        case TYPE_MAIDEN:
+            m_auiEncounter[uiType] = uiData;
+            if (uiData == IN_PROGRESS)
+                DoStartTimedAchievement(ACHIEVEMENT_CRITERIA_TYPE_KILL_CREATURE, ACHIEV_START_MAIDEN_ID);
+            break;
+        case TYPE_KRYSTALLUS:
+            m_auiEncounter[uiType] = uiData;
+            break;
+        case TYPE_SJONNIR:
+            m_auiEncounter[uiType] = uiData;
+            DoUseDoorOrButton(GO_DOOR_SJONNIR);
+            if (uiData == IN_PROGRESS)
+                m_uiIronSludgeKilled = 0;
+            break;
+    }
+
+    if (uiData == DONE)
+    {
+        OUT_SAVE_INST_DATA;
+
+        std::ostringstream saveStream;
+        saveStream << m_auiEncounter[0] << " " << m_auiEncounter[1] << " " << m_auiEncounter[2] << " " << m_auiEncounter[3];
+
+        m_strInstData = saveStream.str();
+
+        SaveToDB();
+        OUT_SAVE_INST_DATA_COMPLETE;
+    }
+}
+
+uint32 instance_halls_of_stone::GetData(uint32 uiType) const
+{
+    if (uiType < MAX_ENCOUNTER)
+        return m_auiEncounter[uiType];
+
+    return 0;
+}
+
+bool instance_halls_of_stone::CheckAchievementCriteriaMeet(uint32 uiCriteriaId, Player const* /*pSource*/, Unit const* /*pTarget*/, uint32 /*uiMiscValue1 = 0*/) const
+{
+    switch (uiCriteriaId)
+    {
+        case ACHIEV_CRIT_BRANN:
+            return m_bIsBrannSpankin;
+        case ACHIEV_CRIT_ABUSE_OOZE:
+            return m_uiIronSludgeKilled >= MAX_ACHIEV_SLUDGES;
+
+        default:
+            return false;
+    }
+}
+
+struct SortHelper
+{
+    SortHelper(WorldObject const* pRef): m_pRef(pRef) {}
+    bool operator()(WorldObject* pLeft, WorldObject* pRight)
+    {
+        return m_pRef->GetDistanceOrder(pLeft, pRight);
+    }
+    WorldObject const* m_pRef;
+};
+
+// Small Helper-function
+static void GetValidNPCsOfList(Map* pMap, GuidList& lGUIDs, CreatureList& lNPCs)
+{
+    lNPCs.clear();
+    for (GuidList::const_iterator itr = lGUIDs.begin(); itr != lGUIDs.end(); ++itr)
+    {
+        if (Creature* pMob = pMap->GetCreature(*itr))
+            lNPCs.push_back(pMob);
+    }
+}
+
+void instance_halls_of_stone::SortFaces()
+{
+    CreatureList lPossibleEyes;
+    GameObject* pFace = instance->GetGameObject(m_aFaces[FACE_MARNAK].m_goFaceGuid);
+
+    // FACE_MARNAK
+    if (pFace)
+    {
+        // Find Marnak NPCs
+        GetValidNPCsOfList(instance, m_lMarnakGUIDs, lPossibleEyes);
+        if (lPossibleEyes.size() > 1)
+        {
+            lPossibleEyes.sort(SortHelper(pFace));
+            CreatureList::const_iterator itr = lPossibleEyes.begin();
+            m_aFaces[FACE_MARNAK].m_leftEyeGuid = (*itr)->GetObjectGuid();
+            ++itr;
+            m_aFaces[FACE_MARNAK].m_speakerGuid = (*itr)->GetObjectGuid();
+        }
+        // Find Worldtrigger NPC
+        GetValidNPCsOfList(instance, m_lWorldtriggerGUIDs, lPossibleEyes);
+        if (!lPossibleEyes.empty())
+        {
+            lPossibleEyes.sort(SortHelper(pFace));
+            m_aFaces[FACE_MARNAK].m_rightEyeGuid = (*lPossibleEyes.begin())->GetObjectGuid();
         }
     }
-};
 
-UnitAI* GetAI_npc_dark_matter(Creature* pCreature)
-{
-    return new npc_dark_matterAI(pCreature);
-}
-
-/*######
-## npc_searing_gaze
-######*/
-
-// TODO Move this 'script' to eventAI when combat can be proper prevented from core-side
-struct npc_searing_gazeAI : public Scripted_NoMovementAI
-{
-    npc_searing_gazeAI(Creature* pCreature) : Scripted_NoMovementAI(pCreature)
+    // FACE_ABEDNEUM
+    pFace = instance->GetGameObject(m_aFaces[FACE_ABEDNEUM].m_goFaceGuid);
+    if (pFace)
     {
-        m_bIsRegularMode = pCreature->GetMap()->IsRegularDifficulty();
-        Reset();
+        // Find Abedneum NPCs
+        GetValidNPCsOfList(instance, m_lAbedneumGUIDs, lPossibleEyes);
+        if (lPossibleEyes.size() > 1)
+        {
+            lPossibleEyes.sort(SortHelper(pFace));
+            CreatureList::const_iterator itr = lPossibleEyes.begin();
+            m_aFaces[FACE_ABEDNEUM].m_leftEyeGuid = (*itr)->GetObjectGuid();
+            ++itr;
+            m_aFaces[FACE_ABEDNEUM].m_speakerGuid = (*itr)->GetObjectGuid();
+        }
+        // Find Worldtrigger NPC
+        GetValidNPCsOfList(instance, m_lWorldtriggerGUIDs, lPossibleEyes);
+        if (!lPossibleEyes.empty())
+        {
+            lPossibleEyes.sort(SortHelper(pFace));
+            m_aFaces[FACE_ABEDNEUM].m_rightEyeGuid = (*lPossibleEyes.begin())->GetObjectGuid();
+        }
     }
 
-    bool m_bIsRegularMode;
-
-    void Reset() override
+    // FACE_KADDRAK
+    pFace = instance->GetGameObject(m_aFaces[FACE_KADDRAK].m_goFaceGuid);
+    if (pFace)
     {
-        DoCastSpellIfCan(m_creature, m_bIsRegularMode ? SPELL_SEARING_GAZE : SPELL_SEARING_GAZE_H);
-        // despawn manually because of combat bug
-        m_creature->ForcedDespawn(30000);
+        // Find Marnak NPCs
+        GetValidNPCsOfList(instance, m_lKaddrakGUIDs, lPossibleEyes);
+        if (lPossibleEyes.size() > 1)
+        {
+            lPossibleEyes.sort(SortHelper(pFace));
+            CreatureList::const_iterator itr = lPossibleEyes.begin();
+            m_aFaces[FACE_KADDRAK].m_leftEyeGuid = (*itr)->GetObjectGuid();
+            ++itr;
+            m_aFaces[FACE_KADDRAK].m_speakerGuid = (*itr)->GetObjectGuid();
+        }
+        // Find Tribunal NPC
+        GetValidNPCsOfList(instance, m_lTribunalGUIDs, lPossibleEyes);
+        if (!lPossibleEyes.empty())
+        {
+            lPossibleEyes.sort(SortHelper(pFace));
+            m_aFaces[FACE_KADDRAK].m_rightEyeGuid = (*lPossibleEyes.begin())->GetObjectGuid();
+        }
     }
 
-    void AttackStart(Unit* /*pWho*/) override { }
-    void MoveInLineOfSight(Unit* /*pWho*/) override { }
-    void UpdateAI(const uint32 /*uiDiff*/) override { }
-};
-
-UnitAI* GetAI_npc_searing_gaze(Creature* pCreature)
-{
-    return new npc_searing_gazeAI(pCreature);
+    // Clear GUIDs
+    m_lKaddrakGUIDs.clear();
+    m_lAbedneumGUIDs.clear();
+    m_lMarnakGUIDs.clear();
+    m_lTribunalGUIDs.clear();
+    m_lWorldtriggerGUIDs.clear();
 }
 
-void AddSC_halls_of_stone()
+void instance_halls_of_stone::ActivateFace(uint8 uiFace, bool bAfterEvent)
+{
+    if (uiFace >= MAX_FACES)
+        return;
+
+    if (bAfterEvent)
+        DoUseDoorOrButton(m_aFaces[uiFace].m_goFaceGuid);
+    else
+    {
+        // TODO: How to get them red?
+        DoUseDoorOrButton(m_aFaces[uiFace].m_goFaceGuid);
+        m_aFaces[uiFace].m_bIsActive = true;
+    }
+}
+
+void instance_halls_of_stone::DoFaceSpeak(uint8 uiFace, int32 iTextId)
+{
+    if (uiFace >= MAX_FACES)
+        return;
+
+    if (Creature* pSpeaker = instance->GetCreature(m_aFaces[uiFace].m_speakerGuid))
+        DoScriptText(iTextId, pSpeaker);
+}
+
+void instance_halls_of_stone::OnCreatureDeath(Creature* pCreature)
+{
+    if (pCreature->GetEntry() == NPC_IRON_SLUDGE && GetData(TYPE_SJONNIR) == IN_PROGRESS)
+        ++m_uiIronSludgeKilled;
+}
+
+void instance_halls_of_stone::Update(uint32 uiDiff)
+{
+    if (m_auiEncounter[TYPE_TRIBUNAL] == IN_PROGRESS)
+    {
+        for (uint8 i = 0; i < MAX_FACES; ++i)
+        {
+            if (!m_aFaces[i].m_bIsActive)
+                continue;
+
+            if (m_aFaces[i].m_uiTimer < uiDiff)
+                ProcessFace(i);
+            else
+                m_aFaces[i].m_uiTimer -= uiDiff;
+        }
+    }
+}
+
+void instance_halls_of_stone::Load(const char* chrIn)
+{
+    if (!chrIn)
+    {
+        OUT_LOAD_INST_DATA_FAIL;
+        return;
+    }
+
+    OUT_LOAD_INST_DATA(chrIn);
+
+    std::istringstream loadStream(chrIn);
+    loadStream >> m_auiEncounter[0] >> m_auiEncounter[1] >> m_auiEncounter[2] >> m_auiEncounter[3];
+
+    for (uint32& i : m_auiEncounter)
+    {
+        if (i == IN_PROGRESS)
+            i = NOT_STARTED;
+    }
+
+    OUT_LOAD_INST_DATA_COMPLETE;
+}
+
+void instance_halls_of_stone::ProcessFace(uint8 uiFace)
+{
+    // Cast dmg spell from face eyes, and reset timer for face
+    switch (uiFace)
+    {
+        case FACE_KADDRAK:
+            if (Creature* pEye = instance->GetCreature(m_aFaces[uiFace].m_leftEyeGuid))
+                pEye->CastSpell(pEye, instance->IsRegularDifficulty() ? SPELL_GLARE_OF_THE_TRIBUNAL : SPELL_GLARE_OF_THE_TRIBUNAL_H, TRIGGERED_OLD_TRIGGERED);
+            if (Creature* pEye = instance->GetCreature(m_aFaces[uiFace].m_rightEyeGuid))
+                pEye->CastSpell(pEye, instance->IsRegularDifficulty() ? SPELL_GLARE_OF_THE_TRIBUNAL : SPELL_GLARE_OF_THE_TRIBUNAL_H, TRIGGERED_OLD_TRIGGERED);
+            m_aFaces[uiFace].m_uiTimer = urand(1000, 2000);
+            break;
+        case FACE_MARNAK:
+            if (Creature* pDarkMatter = GetSingleCreatureFromStorage(NPC_DARK_MATTER))
+                pDarkMatter->CastSpell(pDarkMatter, SPELL_DARK_MATTER_START, TRIGGERED_OLD_TRIGGERED);
+            m_aFaces[uiFace].m_uiTimer = urand(21000, 30000);
+            break;
+        case FACE_ABEDNEUM:
+            if (Creature* pEye = instance->GetCreature(m_aFaces[uiFace].m_leftEyeGuid))
+                pEye->CastSpell(pEye, SPELL_SUMMON_SEARING_GAZE_TARGET, TRIGGERED_OLD_TRIGGERED);
+            m_aFaces[uiFace].m_uiTimer = urand(30000, 35000);
+            break;
+        default:
+            return;
+    }
+}
+
+InstanceData* GetInstanceData_instance_halls_of_stone(Map* pMap)
+{
+    return new instance_halls_of_stone(pMap);
+}
+
+void AddSC_instance_halls_of_stone()
 {
     Script* pNewScript = new Script;
-    pNewScript->Name = "npc_brann_hos";
-    pNewScript->GetAI = &GetAI_npc_brann_hos;
-    pNewScript->pGossipHello = &GossipHello_npc_brann_hos;
-    pNewScript->pGossipSelect = &GossipSelect_npc_brann_hos;
-    pNewScript->RegisterSelf();
-
-    pNewScript = new Script;
-    pNewScript->Name = "npc_dark_matter";
-    pNewScript->GetAI = &GetAI_npc_dark_matter;
-    pNewScript->RegisterSelf();
-
-    pNewScript = new Script;
-    pNewScript->Name = "npc_searing_gaze";
-    pNewScript->GetAI = &GetAI_npc_searing_gaze;
+    pNewScript->Name = "instance_halls_of_stone";
+    pNewScript->GetInstanceData = &GetInstanceData_instance_halls_of_stone;
     pNewScript->RegisterSelf();
 }

@@ -90,6 +90,9 @@ bool AchievementCriteriaRequirement::IsValid(AchievementCriteriaEntry const* cri
         case ACHIEVEMENT_CRITERIA_TYPE_WIN_DUEL:
         case ACHIEVEMENT_CRITERIA_TYPE_LOOT_TYPE:
         case ACHIEVEMENT_CRITERIA_TYPE_CAST_SPELL2:
+        case ACHIEVEMENT_CRITERIA_TYPE_BG_OBJECTIVE_CAPTURE:
+        case ACHIEVEMENT_CRITERIA_TYPE_HONORABLE_KILL:
+        case ACHIEVEMENT_CRITERIA_TYPE_GET_KILLING_BLOWS:
             break;
         default:
             sLog.outErrorDb("Table `achievement_criteria_requirement` have not supported data for criteria %u (Not supported as of its criteria type: %u), ignore.", criteria->ID, criteria->requiredType);
@@ -286,7 +289,7 @@ bool AchievementCriteriaRequirement::Meets(uint32 criteria_id, Player const* sou
                 return false;
             return target->GetHealth() * 100 <= health.percent * target->GetMaxHealth();
         case ACHIEVEMENT_CRITERIA_REQUIRE_T_PLAYER_DEAD:
-            if (!target || target->GetTypeId() != TYPEID_PLAYER || target->isAlive() || ((Player*)target)->GetDeathTimer() == 0)
+            if (!target || target->GetTypeId() != TYPEID_PLAYER || target->IsAlive() || ((Player*)target)->GetDeathTimer() == 0)
                 return false;
             // flag set == must be same team, not set == different team
             return (((Player*)target)->GetTeam() == source->GetTeam()) == (player_dead.own_team_flag != 0);
@@ -451,8 +454,12 @@ void AchievementMgr::ResetAchievementCriteria(AchievementCriteriaTypes type, uin
         AchievementEntry const* achievement = sAchievementStore.LookupEntry(achievementCriteria->referredAchievement);
         // Checked in LoadAchievementCriteriaList
 
-        // don't update already completed criteria
-        if (IsCompletedCriteria(achievementCriteria, achievement))
+        // don't reset completed achievs
+        if (IsCompletedAchievement(achievement))
+            continue;
+
+        // don't update already completed criteria; exception for criterias that can fail
+        if (IsCompletedCriteria(achievementCriteria, achievement) && !(achievementCriteria->completionFlag & ACHIEVEMENT_CRITERIA_FLAG_FAIL_ACHIEVEMENT))
             continue;
 
         switch (type)
@@ -466,6 +473,52 @@ void AchievementMgr::ResetAchievementCriteria(AchievementCriteriaTypes type, uin
             case ACHIEVEMENT_CRITERIA_TYPE_WIN_RATED_ARENA: // have total statistic also not expected to be reset
                 // reset only the criteria having the miscvalue1 condition
                 if (achievementCriteria->win_rated_arena.flag == miscvalue1)
+                    SetCriteriaProgress(achievementCriteria, achievement, 0, PROGRESS_SET);
+                break;
+            case ACHIEVEMENT_CRITERIA_TYPE_BE_SPELL_TARGET:
+                if (achievementCriteria->be_spell_target.condFlag1 == miscvalue1 &&
+                    achievementCriteria->be_spell_target.condVal1 == miscvalue2)
+                    SetCriteriaProgress(achievementCriteria, achievement, 0, PROGRESS_SET);
+                break;
+            case ACHIEVEMENT_CRITERIA_TYPE_CAST_SPELL:
+                if (achievementCriteria->cast_spell.condFlag1 == miscvalue1 &&
+                    achievementCriteria->cast_spell.condVal1 == miscvalue2)
+                    SetCriteriaProgress(achievementCriteria, achievement, 0, PROGRESS_SET);
+                break;
+            case ACHIEVEMENT_CRITERIA_TYPE_SPECIAL_PVP_KILL:                                // reset only achievements that have a map condition; they need to be completed as part of one single pvp match
+                if (achievementCriteria->special_pvp_kill.flag1 == miscvalue1 &&
+                    achievementCriteria->special_pvp_kill.mapId1 == miscvalue2)
+                    SetCriteriaProgress(achievementCriteria, achievement, 0, PROGRESS_SET);
+                break;
+            case ACHIEVEMENT_CRITERIA_TYPE_HONORABLE_KILL_AT_AREA:                          // reset only achievements that have a map condition; they need to be completed as part of one single pvp match
+                if (achievementCriteria->honorable_kill_at_area.condFlag1 == miscvalue1 &&
+                    achievementCriteria->honorable_kill_at_area.condVal1 == miscvalue2)
+                    SetCriteriaProgress(achievementCriteria, achievement, 0, PROGRESS_SET);
+                break;
+            case ACHIEVEMENT_CRITERIA_TYPE_HONORABLE_KILL:                                  // reset only achievements that have a no death condition;
+                if (achievementCriteria->honorable_kill_battleground.condFlag2 == miscvalue1)
+                    SetCriteriaProgress(achievementCriteria, achievement, 0, PROGRESS_SET);
+                break;
+            case ACHIEVEMENT_CRITERIA_TYPE_WIN_BG:                                          // reset only achievements that have a map condition; they need to be completed as part of one single pvp match
+                if (achievementCriteria->win_bg.additionalRequirement1_type == miscvalue1 &&
+                    achievementCriteria->win_bg.additionalRequirement1_value == miscvalue2)
+                    SetCriteriaProgress(achievementCriteria, achievement, 0, PROGRESS_SET);
+                break;
+            case ACHIEVEMENT_CRITERIA_TYPE_GET_KILLING_BLOWS:                               // reset only achievements that have a map / no death condition; they need to be completed as part of one single pvp match
+                if ((achievementCriteria->honorable_kill_battleground.condFlag1 == miscvalue1 &&
+                    achievementCriteria->honorable_kill_battleground.condVal1 == miscvalue2) ||
+                    achievementCriteria->honorable_kill_battleground.condFlag2 == miscvalue1)
+                    SetCriteriaProgress(achievementCriteria, achievement, 0, PROGRESS_SET);
+                break;
+            case ACHIEVEMENT_CRITERIA_TYPE_BG_OBJECTIVE_CAPTURE:                            // reset only achievements that have a map / no death condition; they need to be completed as part of one single pvp match
+                if ((achievementCriteria->capture_bg_objective.condFlag1 == miscvalue1 &&
+                    achievementCriteria->capture_bg_objective.condVal1 == miscvalue2) ||
+                    achievementCriteria->capture_bg_objective.condFlag2 == miscvalue1)
+                    SetCriteriaProgress(achievementCriteria, achievement, 0, PROGRESS_SET);
+                break;
+            case ACHIEVEMENT_CRITERIA_TYPE_KILL_CREATURE:                                   // reset only achievements that have a map / no spell hit condition;
+                if (achievementCriteria->kill_creature.condFlag2 == miscvalue1 &&
+                    achievementCriteria->kill_creature.condVal2 == miscvalue2)
                     SetCriteriaProgress(achievementCriteria, achievement, 0, PROGRESS_SET);
                 break;
             default:                                        // reset all cases
@@ -638,13 +691,19 @@ void AchievementMgr::SendAchievementEarned(AchievementEntry const* achievement) 
 
     if (achievement->flags & (ACHIEVEMENT_FLAG_REALM_FIRST_KILL | ACHIEVEMENT_FLAG_REALM_FIRST_REACH))
     {
+        uint32 team = GetPlayer()->GetTeam();
+
         // broadcast realm first reached
         WorldPacket data(SMSG_SERVER_FIRST_ACHIEVEMENT, strlen(GetPlayer()->GetName()) + 1 + 8 + 4 + 4);
         data << GetPlayer()->GetName();
         data << GetPlayer()->GetObjectGuid();
         data << uint32(achievement->ID);
-        data << uint32(0);                                  // 1=link supplied string as player name, 0=display plain string
-        sWorld.SendGlobalMessage(data);
+        std::size_t linkTypePos = data.wpos();
+        data << uint32(1);                                  // display name as clickable link in chat
+        sWorld.SendGlobalMessage(data, team);
+
+        data.put<uint32>(linkTypePos, 0);                   // display name as plain string in chat
+        sWorld.SendGlobalMessage(data, team == ALLIANCE ? HORDE : ALLIANCE);
     }
     // if player is in world he can tell his friends about new achievement
     else if (GetPlayer()->IsInWorld())
@@ -901,42 +960,10 @@ void AchievementMgr::UpdateAchievementCriteria(AchievementCriteriaTypes type, ui
                 if (achievementCriteria->win_bg.bgMapID != GetPlayer()->GetMapId())
                     continue;
 
-                if (achievementCriteria->win_bg.additionalRequirement1_type || achievementCriteria->win_bg.additionalRequirement2_type)
-                {
-                    // those requirements couldn't be found in the dbc
-                    AchievementCriteriaRequirementSet const* data = sAchievementMgr.GetCriteriaRequirementSet(achievementCriteria);
-                    if (!data || !data->Meets(GetPlayer(), unit))
-                        continue;
-                }
-                // some hardcoded requirements
-                else
-                {
-                    BattleGround* bg = GetPlayer()->GetBattleGround();
-                    if (!bg)
-                        continue;
-
-                    switch (achievementCriteria->referredAchievement)
-                    {
-                        case 161:                           // AB, Overcome a 500 resource disadvantage
-                        {
-                            if (bg->GetTypeID() != BATTLEGROUND_AB)
-                                continue;
-                            if (!((BattleGroundAB*)bg)->IsTeamScores500Disadvantage(GetPlayer()->GetTeam()))
-                                continue;
-                            break;
-                        }
-                        case 156:                           // AB, win while controlling all 5 flags (all nodes)
-                        case 784:                           // EY, win while holding 4 bases (all nodes)
-                        {
-                            if (!bg->IsAllNodesControlledByTeam(GetPlayer()->GetTeam()))
-                                continue;
-                            break;
-                        }
-                        case 1762:                          // SA, win without losing any siege vehicles
-                        case 2192:                          // SA, win without losing any siege vehicles
-                            continue;                       // not implemented
-                    }
-                }
+                // check possible pvp script requirement
+                AchievementCriteriaRequirementSet const* data = sAchievementMgr.GetCriteriaRequirementSet(achievementCriteria);
+                if (data && !data->Meets(GetPlayer(), unit))
+                    continue;
 
                 change = miscvalue1;
                 progressType = PROGRESS_ACCUMULATE;
@@ -949,6 +976,13 @@ void AchievementMgr::UpdateAchievementCriteria(AchievementCriteriaTypes type, ui
                     continue;
                 if (achievementCriteria->kill_creature.creatureID != miscvalue1)
                     continue;
+
+                // check DBC map condition (required for some pvp kills); when this is provided condVal1 = condVal2 so we only check the first one
+                if (achievementCriteria->kill_creature.condFlag1 == ACHIEVEMENT_CRITERIA_CONDITION_MAP)
+                    if (GetPlayer()->GetMapId() != achievementCriteria->kill_creature.condVal1)
+                        continue;
+
+                // ToDo: implement the additional criteria ACHIEVEMENT_CRITERIA_CONDITION_NO_SPELL_HIT and ACHIEVEMENT_CRITERIA_CONDITION_UNK3
 
                 // those requirements couldn't be found in the dbc
                 AchievementCriteriaRequirementSet const* data = sAchievementMgr.GetCriteriaRequirementSet(achievementCriteria);
@@ -1077,7 +1111,7 @@ void AchievementMgr::UpdateAchievementCriteria(AchievementCriteriaTypes type, ui
                     if (achievIdByArenaSlot[j] == achievement->ID)
                     {
                         BattleGround* bg = GetPlayer()->GetBattleGround();
-                        if (!bg || !bg->isArena() || ArenaTeam::GetSlotByType(bg->GetArenaType()) != j)
+                        if (!bg || !bg->IsArena() || ArenaTeam::GetSlotByType(bg->GetArenaType()) != j)
                             notfit = true;
 
                         break;
@@ -1188,6 +1222,11 @@ void AchievementMgr::UpdateAchievementCriteria(AchievementCriteriaTypes type, ui
                 break;
             case ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_QUEST:
             {
+                // check the no group condition
+                if (achievementCriteria->complete_quest.condFlag == ACHIEVEMENT_CRITERIA_CONDITION_NO_GROUP)
+                    if (GetPlayer() && GetPlayer()->GetGroup())
+                        continue;
+
                 // if miscvalues != 0, it contains the questID.
                 if (miscvalue1)
                 {
@@ -1235,6 +1274,16 @@ void AchievementMgr::UpdateAchievementCriteria(AchievementCriteriaTypes type, ui
                 if (!miscvalue1 || miscvalue1 != achievementCriteria->be_spell_target.spellID)
                     continue;
 
+                // check map condition
+                if (achievementCriteria->be_spell_target.condFlag1 == ACHIEVEMENT_CRITERIA_CONDITION_MAP)
+                    if (GetPlayer()->GetMapId() != achievementCriteria->be_spell_target.condVal1)
+                        continue;
+                if (achievementCriteria->be_spell_target.condFlag2 == ACHIEVEMENT_CRITERIA_CONDITION_MAP)
+                    if (GetPlayer()->GetMapId() != achievementCriteria->be_spell_target.condVal2)
+                        continue;
+
+                // ToDo: implement the additional criteria ACHIEVEMENT_CRITERIA_CONDITION_NO_SPELL_HIT and ACHIEVEMENT_CRITERIA_CONDITION_UNK3
+
                 // those requirements couldn't be found in the dbc
                 AchievementCriteriaRequirementSet const* data = sAchievementMgr.GetCriteriaRequirementSet(achievementCriteria);
                 if (!data)
@@ -1252,6 +1301,11 @@ void AchievementMgr::UpdateAchievementCriteria(AchievementCriteriaTypes type, ui
             {
                 if (!miscvalue1 || miscvalue1 != achievementCriteria->cast_spell.spellID)
                     continue;
+
+                // check map condition; always condVal1 = condVal2 so we only need to check the first one
+                if (achievementCriteria->cast_spell.condFlag1 == ACHIEVEMENT_CRITERIA_CONDITION_MAP)
+                    if (GetPlayer()->GetMapId() != achievementCriteria->cast_spell.condVal1)
+                        continue;
 
                 // those requirements couldn't be found in the dbc
                 AchievementCriteriaRequirementSet const* data = sAchievementMgr.GetCriteriaRequirementSet(achievementCriteria);
@@ -1517,6 +1571,11 @@ void AchievementMgr::UpdateAchievementCriteria(AchievementCriteriaTypes type, ui
                 if (!miscvalue1)
                     continue;
 
+                // Check map id requirement if provided; In wotlk flag1 = flag2 and map1 = map2, so we only need to check the first one
+                if (achievementCriteria->special_pvp_kill.flag1 == ACHIEVEMENT_CRITERIA_CONDITION_MAP)
+                    if (GetPlayer()->GetMapId() != achievementCriteria->special_pvp_kill.mapId1)
+                        continue;
+
                 // those requirements couldn't be found in the dbc
                 AchievementCriteriaRequirementSet const* data = sAchievementMgr.GetCriteriaRequirementSet(achievementCriteria);
                 if (!data)
@@ -1680,6 +1739,67 @@ void AchievementMgr::UpdateAchievementCriteria(AchievementCriteriaTypes type, ui
                 progressType = PROGRESS_ACCUMULATE;
                 break;
             }
+            case ACHIEVEMENT_CRITERIA_TYPE_HONORABLE_KILL:
+            case ACHIEVEMENT_CRITERIA_TYPE_GET_KILLING_BLOWS:
+            {
+                // Check map id requirement if provided; In wotlk flag1 = flag2 and map1 = map2, so we only need to check the first one
+                if (achievementCriteria->honorable_kill_battleground.condFlag1 == ACHIEVEMENT_CRITERIA_CONDITION_MAP)
+                {
+                    if (GetPlayer()->GetMapId() != achievementCriteria->honorable_kill_battleground.condVal1)
+                        continue;
+                }
+                else
+                {
+                    // if no map condition is provided the achiev needs additional conditions
+                    AchievementCriteriaRequirementSet const* data = sAchievementMgr.GetCriteriaRequirementSet(achievementCriteria);
+                    if (!data || !data->Meets(GetPlayer(), unit))
+                        continue;
+                }
+
+                change = 1;
+                progressType = PROGRESS_ACCUMULATE;
+                break;
+            }
+            case ACHIEVEMENT_CRITERIA_TYPE_HONORABLE_KILL_AT_AREA:
+            {
+                // check if area id corresponds with the provided value
+                if (!miscvalue1 || achievementCriteria->honorable_kill_at_area.areaID != miscvalue1)
+                    continue;
+
+                change = 1;
+                progressType = PROGRESS_ACCUMULATE;
+                break;
+            }
+            case ACHIEVEMENT_CRITERIA_TYPE_BG_OBJECTIVE_CAPTURE:
+            {
+                // check if objective id corresponds with the provided value
+                if (!miscvalue1 || achievementCriteria->capture_bg_objective.objectiveId != miscvalue1)
+                    continue;
+
+                // check possible pvp script requirement
+                AchievementCriteriaRequirementSet const* data = sAchievementMgr.GetCriteriaRequirementSet(achievementCriteria);
+                if (data && !data->Meets(GetPlayer(), unit))
+                    continue;
+
+                change = 1;
+                progressType = PROGRESS_ACCUMULATE;
+                break;
+            }
+            case ACHIEVEMENT_CRITERIA_TYPE_WIN_ARENA:
+            {
+                // ToDo: check if player won a specific arena based on map id
+                break;
+            }
+            case ACHIEVEMENT_CRITERIA_TYPE_PLAY_ARENA:
+            {
+                // ToDo: check if player played arena based on map id
+                break;
+            }
+            case ACHIEVEMENT_CRITERIA_TYPE_KILL_CREATURE_TYPE:
+            {
+                // ToDo: check creature kill based on creature type
+                break;
+            }
             // std case: not exist in DBC, not triggered in code as result
             case ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_HEALTH:
             case ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_SPELLPOWER:
@@ -1691,14 +1811,7 @@ void AchievementMgr::UpdateAchievementCriteria(AchievementCriteriaTypes type, ui
             // FIXME: not triggered in code as result, need to implement
             case ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_DAILY_QUEST_DAILY:
             case ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_RAID:
-            case ACHIEVEMENT_CRITERIA_TYPE_BG_OBJECTIVE_CAPTURE:
-            case ACHIEVEMENT_CRITERIA_TYPE_HONORABLE_KILL_AT_AREA:
-            case ACHIEVEMENT_CRITERIA_TYPE_WIN_ARENA:
-            case ACHIEVEMENT_CRITERIA_TYPE_PLAY_ARENA:
-            case ACHIEVEMENT_CRITERIA_TYPE_HONORABLE_KILL:
             case ACHIEVEMENT_CRITERIA_TYPE_OWN_RANK:
-            case ACHIEVEMENT_CRITERIA_TYPE_GET_KILLING_BLOWS:
-            case ACHIEVEMENT_CRITERIA_TYPE_KILL_CREATURE_TYPE:
             case ACHIEVEMENT_CRITERIA_TYPE_EARN_ACHIEVEMENT_POINTS:
             case ACHIEVEMENT_CRITERIA_TYPE_USE_LFD_TO_GROUP_WITH_PLAYERS:
                 break;                                   // Not implemented yet :(
@@ -1848,6 +1961,18 @@ uint32 AchievementMgr::GetCriteriaProgressMaxCounter(AchievementCriteriaEntry co
             break;
         case ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_PERSONAL_RATING:
             resultValue = achievementCriteria->highest_personal_rating.teamrating;
+            break;
+        case ACHIEVEMENT_CRITERIA_TYPE_HONORABLE_KILL:
+            resultValue = achievementCriteria->honorable_kill_battleground.count;
+            break;
+        case ACHIEVEMENT_CRITERIA_TYPE_HONORABLE_KILL_AT_AREA:
+            resultValue = achievementCriteria->honorable_kill_at_area.killCount;
+            break;
+        case ACHIEVEMENT_CRITERIA_TYPE_BG_OBJECTIVE_CAPTURE:
+            resultValue = achievementCriteria->capture_bg_objective.count;
+            break;
+        case ACHIEVEMENT_CRITERIA_TYPE_GET_KILLING_BLOWS:
+            resultValue = achievementCriteria->honorable_kill_battleground.count;
             break;
 
         // handle all statistic-only criteria here
@@ -2748,7 +2873,7 @@ void AchievementGlobalMgr::LoadRewardLocales()
             std::string str = fields[2 + 2 * (i - 1)].GetCppString();
             if (!str.empty())
             {
-                int idx = sObjectMgr.GetOrNewIndexForLocale(LocaleConstant(i));
+                int idx = sObjectMgr.GetOrNewStorageLocaleIndexFor(LocaleConstant(i));
                 if (idx >= 0)
                 {
                     if (data.subject.size() <= size_t(idx))
@@ -2760,7 +2885,7 @@ void AchievementGlobalMgr::LoadRewardLocales()
             str = fields[2 + 2 * (i - 1) + 1].GetCppString();
             if (!str.empty())
             {
-                int idx = sObjectMgr.GetOrNewIndexForLocale(LocaleConstant(i));
+                int idx = sObjectMgr.GetOrNewStorageLocaleIndexFor(LocaleConstant(i));
                 if (idx >= 0)
                 {
                     if (data.text.size() <= size_t(idx))

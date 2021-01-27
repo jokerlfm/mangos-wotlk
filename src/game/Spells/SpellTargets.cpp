@@ -107,7 +107,7 @@ SpellTargetInfo SpellTargetInfoTable[MAX_SPELL_TARGETS] =
     /*[74]*/    { "TARGET_LOCATION_UNIT_RANDOM_SIDE",                     TARGET_TYPE_LOCATION_DEST                                                 },
     /*[75]*/    { "TARGET_LOCATION_UNIT_RANDOM_CIRCUMFERENCE",            TARGET_TYPE_LOCATION_DEST                                                 },
     /*[76]*/    { "TARGET_LOCATION_DYNOBJ_POSITION",                      TARGET_TYPE_LOCATION_DEST                                                 },
-    /*[77]*/    { "TARGET_UNIT_CHANNEL_TARGET",                           TARGET_TYPE_UNIT,             TARGET_NEUTRAL,    TARGET_ENUMERATOR_SINGLE },
+    /*[77]*/    { "TARGET_UNIT_CHANNEL_TARGET",                           TARGET_TYPE_UNIT,             TARGET_HARMFUL,    TARGET_ENUMERATOR_SINGLE },
     /*[78]*/    { "TARGET_LOCATION_NORTH",                                TARGET_TYPE_LOCATION_DEST                                                 },
     /*[79]*/    { "TARGET_LOCATION_SOUTH",                                TARGET_TYPE_LOCATION_DEST                                                 },
     /*[80]*/    { "TARGET_LOCATION_EAST",                                 TARGET_TYPE_LOCATION_DEST                                                 },
@@ -186,8 +186,8 @@ SpellEffectInfo SpellEffectInfoTable[MAX_SPELL_EFFECTS] =
     /*[38]*/     { "SPELL_EFFECT_DISPEL",                       TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[39]*/     { "SPELL_EFFECT_LANGUAGE",                     TARGET_TYPE_NONE,           TARGET_NONE },
     /*[40]*/     { "SPELL_EFFECT_DUAL_WIELD",                   TARGET_TYPE_UNIT,           TARGET_NONE },
-    /*[41]*/     { "SPELL_EFFECT_41",                           TARGET_TYPE_LOCATION_DEST,  TARGET_NONE },
-    /*[42]*/     { "SPELL_EFFECT_42",                           TARGET_TYPE_LOCATION_DEST,  TARGET_NONE },
+    /*[41]*/     { "SPELL_EFFECT_JUMP",                         TARGET_TYPE_UNIT,           TARGET_NONE },
+    /*[42]*/     { "SPELL_EFFECT_JUMP_DEST",                    TARGET_TYPE_LOCATION_DEST,  TARGET_NONE },
     /*[43]*/     { "SPELL_EFFECT_TELEPORT_UNITS_FACE_CASTER",   TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[44]*/     { "SPELL_EFFECT_SKILL_STEP",                   TARGET_TYPE_UNKNOWN,        TARGET_UNIT },
     /*[45]*/     { "SPELL_EFFECT_ADD_HONOR",                    TARGET_TYPE_UNIT,           TARGET_NONE },
@@ -204,13 +204,13 @@ SpellEffectInfo SpellEffectInfoTable[MAX_SPELL_EFFECTS] =
     /*[56]*/     { "SPELL_EFFECT_SUMMON_PET",                   TARGET_TYPE_LOCATION_DEST,  TARGET_NONE },
     /*[57]*/     { "SPELL_EFFECT_LEARN_PET_SPELL",              TARGET_TYPE_UNIT,           TARGET_UNIT_CASTER_PET },
     /*[58]*/     { "SPELL_EFFECT_WEAPON_DAMAGE",                TARGET_TYPE_UNIT,           TARGET_NONE },
-    /*[59]*/     { "SPELL_EFFECT_OPEN_LOCK_ITEM",               TARGET_TYPE_LOCK,           TARGET_NONE },
+    /*[59]*/     { "SPELL_EFFECT_CREATE_RANDOM_ITEM",           TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[60]*/     { "SPELL_EFFECT_PROFICIENCY",                  TARGET_TYPE_NONE,           TARGET_NONE }, // confirmed none
     /*[61]*/     { "SPELL_EFFECT_SEND_EVENT",                   TARGET_TYPE_UNIT,           TARGET_UNIT_CASTER },
     /*[62]*/     { "SPELL_EFFECT_POWER_BURN",                   TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[63]*/     { "SPELL_EFFECT_THREAT",                       TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[64]*/     { "SPELL_EFFECT_TRIGGER_SPELL",                TARGET_TYPE_DYNAMIC,        TARGET_NONE }, // confirmed none
-    /*[65]*/     { "SPELL_EFFECT_HEALTH_FUNNEL",                TARGET_TYPE_UNKNOWN,        TARGET_NONE },
+    /*[65]*/     { "SPELL_EFFECT_APPLY_AREA_AURA_RAID",         TARGET_TYPE_SPECIAL_UNIT,   TARGET_NONE },
     /*[66]*/     { "SPELL_EFFECT_POWER_FUNNEL",                 TARGET_TYPE_UNKNOWN,        TARGET_NONE },
     /*[67]*/     { "SPELL_EFFECT_HEAL_MAX_HEALTH",              TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[68]*/     { "SPELL_EFFECT_INTERRUPT_CAST",               TARGET_TYPE_UNIT,           TARGET_NONE },
@@ -218,8 +218,8 @@ SpellEffectInfo SpellEffectInfoTable[MAX_SPELL_EFFECTS] =
     /*[70]*/     { "SPELL_EFFECT_PULL",                         TARGET_TYPE_UNIT_DEST,      TARGET_NONE }, // implicit guesswork
     /*[71]*/     { "SPELL_EFFECT_PICKPOCKET",                   TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[72]*/     { "SPELL_EFFECT_ADD_FARSIGHT",                 TARGET_TYPE_LOCATION_DEST,  TARGET_NONE },
-    /*[73]*/     { "SPELL_EFFECT_73",                           TARGET_TYPE_LOCATION_DEST,  TARGET_NONE },
-    /*[74]*/     { "SPELL_EFFECT_74",                           TARGET_TYPE_LOCATION_DEST,  TARGET_NONE },
+    /*[73]*/     { "SPELL_EFFECT_UNTRAIN_TALENTS",              TARGET_TYPE_UNIT,           TARGET_NONE },
+    /*[74]*/     { "SPELL_EFFECT_APPLY_GLYPH",                  TARGET_TYPE_NONE,           TARGET_NONE },
     /*[75]*/     { "SPELL_EFFECT_HEAL_MECHANICAL",              TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[76]*/     { "SPELL_EFFECT_SUMMON_OBJECT_WILD",           TARGET_TYPE_LOCATION_DEST,  TARGET_NONE },
     /*[77]*/     { "SPELL_EFFECT_SCRIPT_EFFECT",                TARGET_TYPE_DYNAMIC,        TARGET_NONE },
@@ -232,13 +232,13 @@ SpellEffectInfo SpellEffectInfoTable[MAX_SPELL_EFFECTS] =
     /*[84]*/     { "SPELL_EFFECT_STUCK",                        TARGET_TYPE_NONE,           TARGET_NONE }, // confirmed none
     /*[85]*/     { "SPELL_EFFECT_SUMMON_PLAYER",                TARGET_TYPE_UNIT,           TARGET_UNIT }, // not meant to send anything - TODO: Fix
     /*[86]*/     { "SPELL_EFFECT_ACTIVATE_OBJECT",              TARGET_TYPE_GAMEOBJECT,     TARGET_NONE },
-    /*[87]*/     { "SPELL_EFFECT_87",                           TARGET_TYPE_UNKNOWN,        TARGET_NONE },
-    /*[88]*/     { "SPELL_EFFECT_88",                           TARGET_TYPE_UNKNOWN,        TARGET_NONE },
-    /*[89]*/     { "SPELL_EFFECT_89",                           TARGET_TYPE_UNKNOWN,        TARGET_NONE },
-    /*[90]*/     { "SPELL_EFFECT_90",                           TARGET_TYPE_UNKNOWN,        TARGET_NONE },
+    /*[87]*/     { "SPELL_EFFECT_WMO_DAMAGE",                   TARGET_TYPE_GAMEOBJECT,     TARGET_NONE },
+    /*[88]*/     { "SPELL_EFFECT_WMO_REPAIR",                   TARGET_TYPE_GAMEOBJECT,     TARGET_NONE },
+    /*[89]*/     { "SPELL_EFFECT_WMO_CHANGE",                   TARGET_TYPE_GAMEOBJECT,     TARGET_NONE },
+    /*[90]*/     { "SPELL_EFFECT_KILL_CREDIT_PERSONAL",         TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[91]*/     { "SPELL_EFFECT_THREAT_ALL",                   TARGET_TYPE_UNKNOWN,        TARGET_NONE },
     /*[92]*/     { "SPELL_EFFECT_ENCHANT_HELD_ITEM",            TARGET_TYPE_UNIT,           TARGET_NONE },
-    /*[93]*/     { "SPELL_EFFECT_93",                           TARGET_TYPE_UNKNOWN,        TARGET_NONE },
+    /*[93]*/     { "SPELL_EFFECT_BREAK_PLAYER_TARGETING",       TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[94]*/     { "SPELL_EFFECT_SELF_RESURRECT",               TARGET_TYPE_NONE,           TARGET_NONE }, // confirmed none
     /*[95]*/     { "SPELL_EFFECT_SKINNING",                     TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[96]*/     { "SPELL_EFFECT_CHARGE",                       TARGET_TYPE_UNIT,           TARGET_NONE },
@@ -246,7 +246,7 @@ SpellEffectInfo SpellEffectInfoTable[MAX_SPELL_EFFECTS] =
     /*[98]*/     { "SPELL_EFFECT_KNOCK_BACK",                   TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[99]*/     { "SPELL_EFFECT_DISENCHANT",                   TARGET_TYPE_ITEM,           TARGET_NONE },
     /*[100]*/    { "SPELL_EFFECT_INEBRIATE",                    TARGET_TYPE_UNIT,           TARGET_NONE },
-    /*[101]*/    { "SPELL_EFFECT_FEED_PET",                     TARGET_TYPE_ITEM,           TARGET_NONE },
+    /*[101]*/    { "SPELL_EFFECT_FEED_PET",                     TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[102]*/    { "SPELL_EFFECT_DISMISS_PET",                  TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[103]*/    { "SPELL_EFFECT_REPUTATION",                   TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[104]*/    { "SPELL_EFFECT_SUMMON_OBJECT_SLOT1",          TARGET_TYPE_LOCATION_DEST,  TARGET_NONE },
@@ -291,11 +291,11 @@ SpellEffectInfo SpellEffectInfoTable[MAX_SPELL_EFFECTS] =
     /*[143]*/    { "SPELL_EFFECT_APPLY_AREA_AURA_OWNER",        TARGET_TYPE_SPECIAL_UNIT,   TARGET_NONE },
     /*[144]*/    { "SPELL_EFFECT_KNOCKBACK_FROM_POSITION",      TARGET_TYPE_UNIT_DEST,      TARGET_NONE },
     /*[145]*/    { "SPELL_EFFECT_PULL_TOWARDS_DEST",            TARGET_TYPE_UNIT_DEST,      TARGET_NONE },
-    /*[146]*/    { "SPELL_EFFECT_146",                          TARGET_TYPE_UNKNOWN,        TARGET_NONE },
+    /*[146]*/    { "SPELL_EFFECT_ACTIVATE_RUNE",                TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[147]*/    { "SPELL_EFFECT_QUEST_FAIL",                   TARGET_TYPE_UNIT,           TARGET_NONE },
-    /*[148]*/    { "SPELL_EFFECT_148",                          TARGET_TYPE_UNKNOWN,        TARGET_NONE },
+    /*[148]*/    { "SPELL_EFFECT_TRIGGER_MISSILE_SPELL_WITH_VALUE", TARGET_TYPE_LOCATION_DEST,  TARGET_NONE },
     /*[149]*/    { "SPELL_EFFECT_CHARGE_DEST",                  TARGET_TYPE_LOCATION_DEST,  TARGET_NONE },
-    /*[150]*/    { "SPELL_EFFECT_150",                          TARGET_TYPE_UNKNOWN,        TARGET_NONE },
+    /*[150]*/    { "SPELL_EFFECT_QUEST_OFFER",                  TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[151]*/    { "SPELL_EFFECT_TRIGGER_SPELL_2",              TARGET_TYPE_LOCATION_DEST,  TARGET_NONE },
     /*[152]*/    { "SPELL_EFFECT_SUMMON_RAF_FRIEND",            TARGET_TYPE_NONE,           TARGET_NONE }, // TODO: Investigate when implementing RAF
     /*[153]*/    { "SPELL_EFFECT_CREATE_PET",                   TARGET_TYPE_UNIT,           TARGET_NONE },
@@ -305,7 +305,7 @@ SpellEffectInfo SpellEffectInfoTable[MAX_SPELL_EFFECTS] =
     /*[157]*/    { "SPELL_EFFECT_CREATE_ITEM_2",                TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[158]*/    { "SPELL_EFFECT_MILLING",                      TARGET_TYPE_ITEM,           TARGET_NONE },
     /*[159]*/    { "SPELL_EFFECT_ALLOW_RENAME_PET",             TARGET_TYPE_UNIT,           TARGET_NONE },
-    /*[160]*/    { "SPELL_EFFECT_160",                          TARGET_TYPE_UNIT,           TARGET_NONE },
+    /*[160]*/    { "SPELL_EFFECT_FORCE_CAST_2",                 TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[161]*/    { "SPELL_EFFECT_TALENT_SPEC_COUNT",            TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[162]*/    { "SPELL_EFFECT_TALENT_SPEC_SELECT",           TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[163]*/    { "SPELL_EFFECT_163",                          TARGET_TYPE_UNIT,           TARGET_NONE },
@@ -368,8 +368,13 @@ void SpellTargetMgr::Initialize()
                     data.implicitType[effIdx] = TARGET_TYPE_GAMEOBJECT;
                     continue;
                 }
+                if (SpellTargetInfoTable[targetA].type == TARGET_TYPE_LOCATION_TRAJ || SpellTargetInfoTable[targetB].type == TARGET_TYPE_LOCATION_TRAJ)
+                {
+                    data.implicitType[effIdx] = TARGET_TYPE_LOCATION_TRAJ;
+                    continue;
+                }
                 if ((SpellTargetInfoTable[targetA].type == TARGET_TYPE_LOCATION_DEST && SpellTargetInfoTable[targetB].type == TARGET_TYPE_UNIT)
-                        || SpellTargetInfoTable[targetA].type == TARGET_TYPE_UNIT && SpellTargetInfoTable[targetB].type == TARGET_TYPE_LOCATION_DEST)
+                        || (SpellTargetInfoTable[targetA].type == TARGET_TYPE_UNIT && SpellTargetInfoTable[targetB].type == TARGET_TYPE_LOCATION_DEST))
                 {
                     data.implicitType[effIdx] = TARGET_TYPE_UNIT_DEST;
                     continue;
@@ -453,6 +458,7 @@ void SpellTargetMgr::Initialize()
                                 {
                                     case TARGET_TYPE_LOCATION_SRC:
                                     case TARGET_TYPE_LOCATION_DEST:
+                                    case TARGET_TYPE_LOCATION_TRAJ:
                                     case TARGET_TYPE_LOCK:
                                     case TARGET_TYPE_CORPSE: ignore = true; break; // always ignore subsequent
                                     case TARGET_TYPE_GAMEOBJECT:
@@ -523,6 +529,7 @@ void SpellTargetMgr::Initialize()
                             case TARGET_UNIT_FRIEND_NEAR_CASTER:
                             case TARGET_UNIT_NEAR_CASTER:
                             case TARGET_UNIT_ENEMY: scheme = SCHEME_CLOSEST_CHAIN; break;
+                            case TARGET_UNIT: scheme = SCHEME_RANDOM_CHAIN; break;
                             default: break;
                         }
                     }
@@ -543,6 +550,7 @@ bool SpellTargetMgr::CanEffectBeFilledWithMask(uint32 spellId, uint32 effIdx, ui
     {
         case TARGET_TYPE_SPECIAL_DEST:
         case TARGET_TYPE_LOCATION_DEST: return bool(mask & TARGET_FLAG_DEST_LOCATION);
+        case TARGET_TYPE_LOCATION_TRAJ: return bool(mask & (TARGET_FLAG_SOURCE_LOCATION | TARGET_FLAG_DEST_LOCATION));
         case TARGET_TYPE_GAMEOBJECT: return bool(mask & (TARGET_FLAG_GAMEOBJECT | TARGET_FLAG_LOCKED));
         case TARGET_TYPE_UNIT_DEST: return bool(mask & (TARGET_FLAG_UNIT_ALLY | TARGET_FLAG_UNIT | TARGET_FLAG_UNIT_ENEMY | TARGET_FLAG_UNIT_DEAD | TARGET_FLAG_DEST_LOCATION));
         case TARGET_TYPE_PLAYER:
@@ -573,13 +581,6 @@ SpellTargetFilterScheme SpellTargetMgr::GetSpellTargetingFilterScheme(SpellTarge
 {
     switch (spellId)
     {
-        case 2643:  // Multi-shot - chain spell but behaves like aoe
-        case 14288:
-        case 14289:
-        case 14290:
-        case 25294:
-        case 27021:
-            return SCHEME_RANDOM;
         case 26052: // Poison Bolt Volley (spell hits only the 15 closest targets)
         case 26180: // Wyvern Sting (spell hits only the 10 closest targets)
         case 30284: // Change Facing - Chess event - QOL to pick deterministically closest target
@@ -589,7 +590,6 @@ SpellTargetFilterScheme SpellTargetMgr::GetSpellTargetingFilterScheme(SpellTarge
         case 37151:
         case 37152:
         case 37153:
-        case 30469: // Nether Beam - Netherspite - Picks closest target
         case 41294: // Fixate - Reliquary of Souls - Picks closest target
             return SCHEME_CLOSEST;
         case 28307:

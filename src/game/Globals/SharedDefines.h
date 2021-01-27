@@ -304,7 +304,7 @@ enum SpellAttributes
     SPELL_ATTR_CASTABLE_WHILE_SITTING          = 0x08000000,// 27 castable while sitting
     SPELL_ATTR_CANT_USED_IN_COMBAT             = 0x10000000,// 28 Cannot be used in combat
     SPELL_ATTR_UNAFFECTED_BY_INVULNERABILITY   = 0x20000000,// 29 unaffected by invulnerability (hmm possible not...)
-    SPELL_ATTR_UNK30                           = 0x40000000,// 30 breakable by damage?
+    SPELL_ATTR_HEARTBEAT_RESIST_CHECK          = 0x40000000,// 30 Chance for spell effects to break early (heartbeat resist)
     SPELL_ATTR_CANT_CANCEL                     = 0x80000000,// 31 positive aura can't be canceled
 };
 
@@ -447,7 +447,7 @@ enum SpellAttributesEx4
     SPELL_ATTR_EX4_CAST_ONLY_IN_OUTLAND        = 0x04000000,// 26 Can only be used in Outland.
     SPELL_ATTR_EX4_UNK27                       = 0x08000000,// 27
     SPELL_ATTR_EX4_UNK28                       = 0x10000000,// 28
-    SPELL_ATTR_EX4_UNK29                       = 0x20000000,// 29
+    SPELL_ATTR_EX4_UNK29                       = 0x20000000,// 29 Related to client selfcheck about dispel in 2.4.3 client but no spells, CC seems to have them
     SPELL_ATTR_EX4_UNK30                       = 0x40000000,// 30
     SPELL_ATTR_EX4_UNK31                       = 0x80000000,// 31
 };
@@ -502,7 +502,7 @@ enum SpellAttributesEx6
     SPELL_ATTR_EX6_UNK9                        = 0x00000200,// 9
     SPELL_ATTR_EX6_UNK10                       = 0x00000400,// 10
     SPELL_ATTR_EX6_NOT_IN_RAID_INSTANCE        = 0x00000800,// 11 not usable in raid instance
-    SPELL_ATTR_EX6_UNK12                       = 0x00001000,// 12 for auras SPELL_AURA_TRACK_CREATURES, SPELL_AURA_TRACK_RESOURCES and SPELL_AURA_TRACK_STEALTHED select non-stacking tracking spells
+    SPELL_ATTR_EX6_CASTABLE_WHILE_ON_VEHICLE   = 0x00001000,// 12
     SPELL_ATTR_EX6_UNK13                       = 0x00002000,// 13
     SPELL_ATTR_EX6_UNK14                       = 0x00004000,// 14
     SPELL_ATTR_EX6_UNK15                       = 0x00008000,// 15 not set in 3.0.3
@@ -563,6 +563,7 @@ enum SpellAttributesEx7
 enum SpellAttributesServerside
 {
     SPELL_ATTR_SS_PREVENT_INVIS                = 0x00000001,
+    SPELL_ATTR_AOE_CAP                         = 0x00000002,
 };
 
 #define MAX_TALENT_SPEC_COUNT   2
@@ -639,6 +640,13 @@ enum Team
     TEAM_INVALID        = 1,                                // used to invalidate some team depending checks (means not for both teams)
     HORDE               = 67,
     ALLIANCE            = 469,
+};
+
+enum BattleGroundWinner
+{
+    WINNER_HORDE        = 0,
+    WINNER_ALLIANCE     = 1,
+    WINNER_NONE         = 2
 };
 
 enum PvpTeamIndex
@@ -1227,8 +1235,8 @@ enum GameObjectFlags
     GO_FLAG_TRIGGERED       = 0x00000040,                   // typically, summoned objects. Triggered by spell or other events
     GO_FLAG_UNK_8           = 0x00000080,
     GO_FLAG_UNK_9           = 0x00000100,                   //? Seen on type 33, meaning unknown
-    GO_FLAG_UNK_10          = 0x00000200,                   //? Seen on type 33, likely damaged
-    GO_FLAG_UNK_11          = 0x00000400                    //? Seen on type 33, likely destroyed
+    GO_FLAG_DAMAGED         = 0x00000200,                   //? Seen on type 33, likely damaged
+    GO_FLAG_DESTROYED       = 0x00000400                    //? Seen on type 33, likely destroyed
 };
 
 enum GameObjectDynamicLowFlags
@@ -1237,6 +1245,7 @@ enum GameObjectDynamicLowFlags
     GO_DYNFLAG_LO_ANIMATE           = 0x02,                 // possibly more distinct animation of GO
     GO_DYNFLAG_LO_NO_INTERACT       = 0x04,                 // appears to disable interaction (not fully verified)
     GO_DYNFLAG_LO_SPARKLE           = 0x08,                 // makes GO sparkle
+    GO_DYNFLAG_LO_STOPPED           = 0x10                  // Transport is stopped
 };
 
 enum TextEmotes
@@ -2888,6 +2897,7 @@ static const MaxLevel maxLevelForExpansion[MAX_EXPANSION + 1] = { MAX_LEVEL_CLAS
 
 // This spell is used for general boarding serverside
 #define SPELL_RIDE_VEHICLE_HARDCODED    46598
+#define SPELL_VEHICLE_PARACHUTE         45472
 
 enum TeleportLocation
 {

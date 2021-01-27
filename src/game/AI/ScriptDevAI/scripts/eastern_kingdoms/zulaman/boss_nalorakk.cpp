@@ -100,7 +100,7 @@ struct boss_nalorakkAI : public CombatAI
         if (m_instance && m_instance->IsBearPhaseInProgress())
             return;
 
-        if (who->GetTypeId() == TYPEID_PLAYER && !static_cast<Player*>(who)->isGameMaster() && m_creature->IsWithinDistInMap(who, aBearEventInfo[m_uiCurrentWave].aggroDist))
+        if (who->GetTypeId() == TYPEID_PLAYER && !static_cast<Player*>(who)->IsGameMaster() && m_creature->IsWithinDistInMap(who, aBearEventInfo[m_uiCurrentWave].aggroDist))
         {
             DoScriptText(aBearEventInfo[m_uiCurrentWave].yellId, m_creature);
             if (m_instance)
@@ -204,11 +204,11 @@ struct boss_nalorakkAI : public CombatAI
                 }
                 return;
             case NALORAKK_ACTION_SWIPE:
-                if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_BRUTAL_SWIPE) == CAST_OK)
+                if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_BRUTAL_SWIPE) == CAST_OK)
                     ResetCombatAction(action, urand(7000, 15000));
                 return;
             case NALORAKK_ACTION_MANGLE:
-                if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_MANGLE) == CAST_OK)
+                if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_MANGLE) == CAST_OK)
                     ResetCombatAction(action, urand(3000, 15000));
                 return;
             case NALORAKK_ACTION_SURGE:
@@ -229,13 +229,13 @@ struct boss_nalorakkAI : public CombatAI
             }
             case NALORAKK_ACTION_SLASH:
             {
-                if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_LACERATING_SLASH) == CAST_OK)
+                if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_LACERATING_SLASH) == CAST_OK)
                     ResetCombatAction(action, 20000);
                 return;
             }
             case NALORAKK_ACTION_REND:
             {
-                if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_REND_FLESH) == CAST_OK)
+                if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_REND_FLESH) == CAST_OK)
                     ResetCombatAction(action, urand(6000, 10000));
                 return;
             }
@@ -251,7 +251,7 @@ struct boss_nalorakkAI : public CombatAI
     void UpdateAI(const uint32 diff) override
     {
         CombatAI::UpdateAI(diff);
-        if (m_creature->isInCombat())
+        if (m_creature->IsInCombat())
             EnterEvadeIfOutOfCombatArea(diff);
     }
 };

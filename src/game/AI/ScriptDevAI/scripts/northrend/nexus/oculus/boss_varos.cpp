@@ -60,7 +60,6 @@ enum
     SPELL_ARCANE_BEAM_PERIODIC  = 51019,
     SPELL_ARCANE_BEAM_SPAWN     = 51022,
 
-    NPC_AZURE_RING_CAPTAIN      = 28236,
     NPC_ARCANE_BEAM             = 28239,
 };
 
@@ -86,7 +85,7 @@ struct boss_varosAI : public ScriptedAI
 {
     boss_varosAI(Creature* pCreature) : ScriptedAI(pCreature)
     {
-        m_pInstance = (instance_oculus*)pCreature->GetInstanceData();
+        m_pInstance = static_cast<instance_oculus*>(pCreature->GetInstanceData());
         m_bIsRegularMode = pCreature->GetMap()->IsRegularDifficulty();
         Reset();
     }
@@ -98,6 +97,8 @@ struct boss_varosAI : public ScriptedAI
     uint32 m_uiAmplifyMagicTimer;
     uint32 m_uiEnergizeCoresTimer;
     uint32 m_uiCallCaptainTimer;
+
+    ObjectGuid m_arcaneBeamGuid;
 
     void Reset() override
     {
@@ -135,6 +136,30 @@ struct boss_varosAI : public ScriptedAI
             m_pInstance->SetData(TYPE_VAROS, FAIL);
     }
 
+    void ReceiveAIEvent(AIEventType eventType, Unit* pSender, Unit* /*pInvoker*/, uint32 uiMiscValue) override
+    {
+        if (eventType == AI_EVENT_CUSTOM_A)
+            m_arcaneBeamGuid = pSender->GetObjectGuid();
+    }
+
+    void SummonedCreatureJustDied(Creature* pSummoned) override
+    {
+        // despawn the arcane beam when the ring captain dies
+        if (pSummoned->GetEntry() == NPC_AZURE_RING_CAPTAIN)
+            if (Creature* pTemp = m_creature->GetMap()->GetCreature(m_arcaneBeamGuid))
+                pTemp->ForcedDespawn();
+    }
+
+    void SummonedMovementInform(Creature* pSummoned, uint32 uiType, uint32 uiPointId) override
+    {
+        if (uiType != POINT_MOTION_TYPE || !uiPointId || pSummoned->GetEntry() != NPC_AZURE_RING_CAPTAIN)
+            return;
+
+        // the Azure captain summons arcane bean once in position
+        pSummoned->CastSpell(pSummoned, SPELL_SUMMON_ARCANE_BEAM, TRIGGERED_NONE);
+        pSummoned->ForcedDespawn(11000);
+    }
+
     void UpdateAI(const uint32 uiDiff) override
     {
         if (m_uiShieldTimer)
@@ -159,7 +184,7 @@ struct boss_varosAI : public ScriptedAI
                 m_uiShieldTimer -= uiDiff;
         }
 
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_uiAmplifyMagicTimer < uiDiff)
@@ -213,11 +238,6 @@ struct boss_varosAI : public ScriptedAI
     }
 };
 
-UnitAI* GetAI_boss_varos(Creature* pCreature)
-{
-    return new boss_varosAI(pCreature);
-}
-
 /*######
 ## event_spell_call_captain
 ######*/
@@ -236,10 +256,7 @@ bool ProcessEventId_event_spell_call_captain(uint32 uiEventId, Object* pSource, 
             if (uiEventId == i.uiEventId)
             {
                 if (Creature* pGuardian = pVaros->SummonCreature(NPC_AZURE_RING_CAPTAIN, i.fX, i.fY, i.fZ, i.fO, TEMPSPAWN_DEAD_DESPAWN, 0))
-                {
-                    pGuardian->SetWalk(false);
-                    pGuardian->GetMotionMaster()->MovePoint(1, i.fDestX, i.fDestY, i.fDestZ);
-                }
+                    pGuardian->GetMotionMaster()->MovePoint(1, i.fDestX, i.fDestY, i.fDestZ, FORCED_MOVEMENT_FLIGHT, false);
 
                 return true;
             }
@@ -250,67 +267,20 @@ bool ProcessEventId_event_spell_call_captain(uint32 uiEventId, Object* pSource, 
 }
 
 /*######
-## npc_azure_ring_captain
-######*/
-
-struct npc_azure_ring_captainAI : public ScriptedAI
-{
-    npc_azure_ring_captainAI(Creature* pCreature) : ScriptedAI(pCreature)
-    {
-        SetCombatMovement(false);
-        Reset();
-    }
-
-    ObjectGuid m_arcaneBeamGuid;
-
-    void Reset() override { }
-    void AttackStart(Unit* /*pWho*/) override { }
-    void MoveInLineOfSight(Unit* /*pWho*/) override { }
-
-    void JustSummoned(Creature* pSummoned) override
-    {
-        if (pSummoned->GetEntry() == NPC_ARCANE_BEAM)
-        {
-            pSummoned->SetDisplayId(11686);                     // HACK remove when correct modelid will be taken by core
-
-            pSummoned->CastSpell(pSummoned, SPELL_ARCANE_BEAM_PERIODIC, TRIGGERED_OLD_TRIGGERED);
-            pSummoned->CastSpell(pSummoned, SPELL_ARCANE_BEAM_SPAWN, TRIGGERED_OLD_TRIGGERED);
-            m_arcaneBeamGuid = pSummoned->GetObjectGuid();
-        }
-    }
-
-    void JustDied(Unit* /*pKiller*/) override
-    {
-        // Despawn the arcane beam in case of getting killed
-        if (Creature* pTemp = m_creature->GetMap()->GetCreature(m_arcaneBeamGuid))
-            pTemp->ForcedDespawn();
-    }
-
-    void MovementInform(uint32 uiMoveType, uint32 uiPointId) override
-    {
-        if (uiMoveType != POINT_MOTION_TYPE || !uiPointId)
-            return;
-
-        // Spawn arcane beam when the position is reached. Also prepare to despawn after the beam event is finished
-        if (DoCastSpellIfCan(m_creature, SPELL_SUMMON_ARCANE_BEAM) == CAST_OK)
-            m_creature->ForcedDespawn(11000);
-    }
-
-    void UpdateAI(const uint32 /*uiDiff*/) override { }
-};
-
-UnitAI* GetAI_npc_azure_ring_captain(Creature* pCreature)
-{
-    return new npc_azure_ring_captainAI(pCreature);
-}
-
-/*######
 ## npc_arcane_beam
 ######*/
 
 struct npc_arcane_beamAI : public ScriptedAI
 {
-    npc_arcane_beamAI(Creature* pCreature) : ScriptedAI(pCreature) { Reset(); }
+    npc_arcane_beamAI(Creature* pCreature) : ScriptedAI(pCreature)
+    {
+        m_pInstance = static_cast<instance_oculus*>(pCreature->GetInstanceData());
+        SetReactState(REACT_PASSIVE);
+        m_creature->SetCanEnterCombat(false);
+        Reset();
+    }
+
+    instance_oculus* m_pInstance;
 
     void Reset() override
     {
@@ -321,46 +291,28 @@ struct npc_arcane_beamAI : public ScriptedAI
                 m_creature->GetMotionMaster()->MoveFollow(pSummoner, 0, 0);
         }
 
+        // HACK remove when correct modelid will be taken by core
+        m_creature->SetDisplayId(11686);
+
+        // cast spells
+        DoCastSpellIfCan(m_creature, SPELL_ARCANE_BEAM_PERIODIC, CAST_TRIGGERED);
+        DoCastSpellIfCan(m_creature, SPELL_ARCANE_BEAM_SPAWN, CAST_TRIGGERED);
+
         // despawn manually because of combat bug
         m_creature->ForcedDespawn(10000);
+
+        // Store creature guid in main boss script
+        if (m_pInstance)
+            if (Creature* pVaros = m_pInstance->GetSingleCreatureFromStorage(NPC_VAROS))
+                SendAIEvent(AI_EVENT_CUSTOM_A, m_creature, pVaros);
     }
-
-    void AttackStart(Unit* /*pWho*/) override { }
-    void MoveInLineOfSight(Unit* /*pWho*/) override { }
-    void UpdateAI(const uint32 /*uiDiff*/) override { }
 };
-
-UnitAI* GetAI_npc_arcane_beam(Creature* pCreature)
-{
-    return new npc_arcane_beamAI(pCreature);
-}
-
-/*######
-## npc_centrifuge_core
-######*/
-
-// TODO Remove this 'script' when combat can be proper prevented from core-side
-struct npc_centrifuge_coreAI : public Scripted_NoMovementAI
-{
-    npc_centrifuge_coreAI(Creature* pCreature) : Scripted_NoMovementAI(pCreature) { Reset(); }
-
-    // Note: visual already handled in creature_template_addon
-    void Reset() override { }
-    void AttackStart(Unit* /*pWho*/) override { }
-    void MoveInLineOfSight(Unit* /*pWho*/) override { }
-    void UpdateAI(const uint32 /*uiDiff*/) override { }
-};
-
-UnitAI* GetAI_npc_centrifuge_core(Creature* pCreature)
-{
-    return new npc_centrifuge_coreAI(pCreature);
-}
 
 void AddSC_boss_varos()
 {
     Script* pNewScript = new Script;
     pNewScript->Name = "boss_varos";
-    pNewScript->GetAI = &GetAI_boss_varos;
+    pNewScript->GetAI = &GetNewAIInstance<boss_varosAI>;
     pNewScript->RegisterSelf();
 
     pNewScript = new Script;
@@ -369,17 +321,7 @@ void AddSC_boss_varos()
     pNewScript->RegisterSelf();
 
     pNewScript = new Script;
-    pNewScript->Name = "npc_azure_ring_captain";
-    pNewScript->GetAI = &GetAI_npc_azure_ring_captain;
-    pNewScript->RegisterSelf();
-
-    pNewScript = new Script;
     pNewScript->Name = "npc_arcane_beam";
-    pNewScript->GetAI = &GetAI_npc_arcane_beam;
-    pNewScript->RegisterSelf();
-
-    pNewScript = new Script;
-    pNewScript->Name = "npc_centrifuge_core";
-    pNewScript->GetAI = &GetAI_npc_centrifuge_core;
+    pNewScript->GetAI = &GetNewAIInstance<npc_arcane_beamAI>;
     pNewScript->RegisterSelf();
 }

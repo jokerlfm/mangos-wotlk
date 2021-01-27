@@ -16,8 +16,8 @@
 
 /* ScriptData
 SDName: Boss_Illidan_Stormrage
-SD%Complete: 90
-SDComment: Movement during flight phase NYI. Some other fine details may need adjustments.
+SD%Complete: 100
+SDComment:
 SDCategory: Black Temple
 EndScriptData */
 
@@ -578,15 +578,22 @@ struct boss_illidan_stormrageAI : public CombatAI, private DialogueHelper
         }
         else if (eventType == AI_EVENT_CUSTOM_C) // Demon Transform 2 aura
         {
-            if (miscValue == 2)
+            if (m_phase != PHASE_4_DEMON)
             {
-                if (m_phase != PHASE_4_DEMON)
+                if (miscValue == 2)
                     m_creature->CastSpell(nullptr, SPELL_DEMON_FORM, TRIGGERED_OLD_TRIGGERED);
-                else
-                    m_creature->RemoveAurasDueToSpell(SPELL_DEMON_FORM);
+                else if (miscValue == 3)
+                    m_creature->CastSpell(nullptr, SPELL_DEMON_TRANSFORM_3, TRIGGERED_OLD_TRIGGERED);
             }
-            else if (miscValue == 3)
-                m_creature->CastSpell(nullptr, SPELL_DEMON_TRANSFORM_3, TRIGGERED_OLD_TRIGGERED);
+            else
+            {
+                if (miscValue == 1)
+                    m_creature->RemoveAurasDueToSpell(SPELL_DEMON_FORM);
+                else if (miscValue == 2)
+                    m_creature->CastSpell(nullptr, SPELL_DEMON_TRANSFORM_3, TRIGGERED_OLD_TRIGGERED);
+                else if (miscValue == 3)
+                    SetEquipmentSlots(true);
+            }
         }
         else if (eventType == AI_EVENT_CUSTOM_D) // Demon Transform 3 aura end
         {
@@ -599,7 +606,6 @@ struct boss_illidan_stormrageAI : public CombatAI, private DialogueHelper
             else
             {
                 m_phase = m_prevPhase;
-                SetEquipmentSlots(true);
                 m_creature->CastSpell(nullptr, SPELL_PASSIVE_HIT, TRIGGERED_OLD_TRIGGERED);
             }
             SetCombatScriptStatus(false);
@@ -607,7 +613,7 @@ struct boss_illidan_stormrageAI : public CombatAI, private DialogueHelper
             SetMeleeEnabled(true);
             SetDeathPrevention(true);
             PreparePhaseTimers();
-            DoStartMovement(m_creature->getVictim());
+            DoStartMovement(m_creature->GetVictim());
             // Phase 4 Transition End
             if (Creature* maiev = m_instance->GetSingleCreatureFromStorage(NPC_MAIEV_SHADOWSONG))
                 SendAIEvent(AI_EVENT_CUSTOM_A, maiev, maiev, m_phase);
@@ -622,7 +628,7 @@ struct boss_illidan_stormrageAI : public CombatAI, private DialogueHelper
                 randVal = -1;
             m_curEyeBlastLoc = (m_curEyeBlastLoc + randVal + 4) % 4; // make sure he only goes left or right
             SetCombatScriptStatus(true);
-            m_creature->GetMotionMaster()->MovePoint(POINT_ILLIDAN_FLIGHT_RANDOM, illidanFlightPos[m_curEyeBlastLoc].fX, illidanFlightPos[m_curEyeBlastLoc].fY, illidanFlightPos[m_curEyeBlastLoc].fZ);
+            m_creature->GetMotionMaster()->MovePoint(POINT_ILLIDAN_FLIGHT_RANDOM, illidanFlightPos[m_curEyeBlastLoc].fX, illidanFlightPos[m_curEyeBlastLoc].fY, illidanFlightPos[m_curEyeBlastLoc].fZ, FORCED_MOVEMENT_RUN);
         }
         else if (eventType == AI_EVENT_CUSTOM_F)
         {
@@ -731,7 +737,7 @@ struct boss_illidan_stormrageAI : public CombatAI, private DialogueHelper
                 SetCombatScriptStatus(false);
                 SetCombatMovement(true);
                 SetMeleeEnabled(true);
-                if (Unit* victim = m_creature->getVictim())
+                if (Unit* victim = m_creature->GetVictim())
                 {
                     m_creature->SetTarget(victim);
                     DoStartMovement(victim);
@@ -953,7 +959,7 @@ struct boss_illidan_stormrageAI : public CombatAI, private DialogueHelper
                         }
                         float x, y, z;
                         closestTrigger->GetPosition(x, y, z);
-                        m_creature->GetMotionMaster()->MovePoint(POINT_ILLIDAN_FLIGHT, x, y, z);
+                        m_creature->GetMotionMaster()->MovePoint(POINT_ILLIDAN_FLIGHT, x, y, z, FORCED_MOVEMENT_RUN);
                         break;
                     }
                     case 3:
@@ -1008,7 +1014,7 @@ struct boss_illidan_stormrageAI : public CombatAI, private DialogueHelper
                             //}
                             // m_curEyeBlastLoc = urand(0, 1) ? firstEyeBlastPos : secondEyeBlastPos;
                             m_curEyeBlastLoc = urand(0, 3);
-                            m_creature->GetMotionMaster()->MovePoint(POINT_ILLIDAN_FLIGHT_RANDOM, illidanFlightPos[m_curEyeBlastLoc].fX, illidanFlightPos[m_curEyeBlastLoc].fY, illidanFlightPos[m_curEyeBlastLoc].fZ);
+                            m_creature->GetMotionMaster()->MovePoint(POINT_ILLIDAN_FLIGHT_RANDOM, illidanFlightPos[m_curEyeBlastLoc].fX, illidanFlightPos[m_curEyeBlastLoc].fY, illidanFlightPos[m_curEyeBlastLoc].fZ, FORCED_MOVEMENT_RUN);
                             PreparePhaseTimers();
                         }
                         break;
@@ -1025,7 +1031,7 @@ struct boss_illidan_stormrageAI : public CombatAI, private DialogueHelper
                     {
                         m_creature->SetImmobilizedState(false);
                         m_creature->SetTarget(nullptr);
-                        m_creature->GetMotionMaster()->MovePoint(POINT_ILLIDAN_LANDING, aCenterLoc[0].fX, aCenterLoc[0].fY, aCenterLoc[0].fZ);
+                        m_creature->GetMotionMaster()->MovePoint(POINT_ILLIDAN_LANDING, aCenterLoc[0].fX, aCenterLoc[0].fY, aCenterLoc[0].fZ, FORCED_MOVEMENT_RUN);
                         break;
                     }
                     case 1:
@@ -1074,10 +1080,10 @@ struct boss_illidan_stormrageAI : public CombatAI, private DialogueHelper
                         SetCombatMovement(true);
                         SetMeleeEnabled(true);
                         m_creature->SetImmobilizedState(false);
-                        if (m_creature->getVictim())
+                        if (m_creature->GetVictim())
                         {
-                            m_creature->SetTarget(m_creature->getVictim());
-                            DoStartMovement(m_creature->getVictim());
+                            m_creature->SetTarget(m_creature->GetVictim());
+                            DoStartMovement(m_creature->GetVictim());
                         }
                         m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
                         nextTimer = 0;
@@ -1262,7 +1268,7 @@ struct boss_illidan_stormrageAI : public CombatAI, private DialogueHelper
             }
             case ILLIDAN_ACTION_SHADOW_BLAST:
             {
-                if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_SHADOW_BLAST) == CAST_OK)
+                if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SHADOW_BLAST) == CAST_OK)
                     ResetCombatAction(action, 2500u);
                 return;
             }
@@ -1306,14 +1312,14 @@ struct boss_illidan_stormrageAI : public CombatAI, private DialogueHelper
 #endif // !NO_SHEAR
             case ILLIDAN_ACTION_FLAME_CRASH:
             {
-                if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_FLAME_CRASH) == CAST_OK)
+                if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_FLAME_CRASH) == CAST_OK)
                     ResetCombatAction(action, urand(26000, 35000));
                 return;
             }
 #ifndef NO_SHEAR
             case ILLIDAN_ACTION_SHEAR:
             {
-                if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_SHEAR) == CAST_OK)
+                if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SHEAR) == CAST_OK)
                     ResetCombatAction(action, urand(12000, 15000));
                 return;
             }
@@ -1536,7 +1542,7 @@ struct npc_akama_illidanAI : public CombatAI, private DialogueHelper
                             {
                                 float fX, fY, fZ;
                                 illidan->GetContactPoint(m_creature, fX, fY, fZ);
-                                m_creature->GetMotionMaster()->MovePoint(POINT_AKAMA_ILLIDAN_CLOSE, fX, fY, fZ);
+                                m_creature->GetMotionMaster()->MovePoint(POINT_AKAMA_ILLIDAN_CLOSE, fX, fY, fZ, FORCED_MOVEMENT_RUN);
                             }
                         }
                     }
@@ -1668,7 +1674,7 @@ struct npc_akama_illidanAI : public CombatAI, private DialogueHelper
                 }
                 break;
             case AKAMA_ACTION_CHAIN_LIGHTNING:
-                if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_CHAIN_LIGHTNING) == CAST_OK)
+                if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_CHAIN_LIGHTNING) == CAST_OK)
                         ResetCombatAction(action, urand(2000, 4000));
                 break;
         }
@@ -1785,7 +1791,7 @@ struct boss_maievAI : public CombatAI, private DialogueHelper
             {
                 m_attackDistance = 20.f;
                 m_moveFurther = true;
-                DoStartMovement(m_creature->getVictim());
+                DoStartMovement(m_creature->GetVictim());
                 ResetCombatAction(MAIEV_ACTION_THROW_DAGGER, urand(4000, 8000));
                 DisableCombatAction(MAIEV_ACTION_SHADOW_STRIKE);
             }
@@ -1793,7 +1799,7 @@ struct boss_maievAI : public CombatAI, private DialogueHelper
             {
                 m_attackDistance = 0.f;
                 m_moveFurther = false;
-                DoStartMovement(m_creature->getVictim());
+                DoStartMovement(m_creature->GetVictim());
                 ResetCombatAction(MAIEV_ACTION_SHADOW_STRIKE, urand(4000, 8000));
                 DisableCombatAction(MAIEV_ACTION_THROW_DAGGER);
             }
@@ -1871,13 +1877,13 @@ struct boss_maievAI : public CombatAI, private DialogueHelper
         {
             case MAIEV_ACTION_SHADOW_STRIKE:
             {
-                if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_SHADOW_STRIKE) == CAST_OK)
+                if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SHADOW_STRIKE) == CAST_OK)
                     ResetCombatAction(action, GetSubsequentActionTimer(MaievActions(action)));
                 return;
             }
             case MAIEV_ACTION_THROW_DAGGER:
             {
-                if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_THROW_DAGGER) == CAST_OK)
+                if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_THROW_DAGGER) == CAST_OK)
                     ResetCombatAction(action, GetSubsequentActionTimer(MaievActions(action)));
                 return;
             }
@@ -2062,7 +2068,7 @@ struct npc_flame_of_azzinothAI : public CombatAI
             }
             case FLAME_ACTION_SUMMON_BLAZE:
             {
-                if (Unit* target = m_creature->getVictim())
+                if (Unit* target = m_creature->GetVictim())
                     if (target->CastSpell(nullptr, SPELL_BLAZE, TRIGGERED_OLD_TRIGGERED, nullptr, nullptr, m_creature->GetObjectGuid()) == SPELL_CAST_OK)
                         DisableCombatAction(FLAME_ACTION_SUMMON_BLAZE);
                 return;
@@ -2122,7 +2128,7 @@ struct npc_shadow_demonAI : public ScriptedAI
 
     void ReceiveAIEvent(AIEventType eventType, Unit* /*sender*/, Unit* /*invoker*/, uint32 /*miscValue*/) override
     {
-        if (eventType == AI_EVENT_CUSTOM_A && m_creature->isAlive()) // Channel ended for any reason
+        if (eventType == AI_EVENT_CUSTOM_A && m_creature->IsAlive()) // Channel ended for any reason
             m_targetGuid = ObjectGuid(); // find new target on next AI update
     }
 
@@ -2150,7 +2156,7 @@ struct npc_shadow_demonAI : public ScriptedAI
         if (movementType != POINT_MOTION_TYPE || !pointId)
             return;
 
-        if (!m_creature->isAlive())
+        if (!m_creature->IsAlive())
         {
             sLog.outCustomLog("Why did shadow demon movement trigger?");
             // sLog.traceLog();
@@ -2223,7 +2229,7 @@ struct npc_parasitic_shadowfiendAI : public ScriptedAI, public TimerManager
         {
             if (Creature* illidan = m_instance->GetSingleCreatureFromStorage(NPC_ILLIDAN_STORMRAGE))
             {
-                if (!illidan->isInCombat())
+                if (!illidan->IsInCombat())
                 {
                     m_creature->ForcedDespawn();
                     return;

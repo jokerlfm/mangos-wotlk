@@ -118,7 +118,7 @@ struct npc_nesingwary_trapperAI : public ScriptedAI
 
     void UpdateAI(const uint32 uiDiff) override
     {
-        if (!m_creature->getVictim() && m_uiPhaseTimer)
+        if (!m_creature->GetVictim() && m_uiPhaseTimer)
         {
             if (m_uiPhaseTimer <= uiDiff)
             {
@@ -153,7 +153,7 @@ struct npc_nesingwary_trapperAI : public ScriptedAI
 
                             if (Player* pPlayer = m_creature->GetMap()->GetPlayer(m_playerGuid))
                             {
-                                if (pPlayer->isAlive())
+                                if (pPlayer->IsAlive())
                                     pPlayer->KilledMonsterCredit(m_creature->GetEntry());
                             }
                         }
@@ -216,7 +216,7 @@ struct npc_oil_stained_wolfAI : public ScriptedAI
 
     void UpdateAI(const uint32 uiDiff) override
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
         {
             if (m_uiPooTimer)
             {
@@ -439,7 +439,7 @@ struct npc_lurgglbrAI : public npc_escortAI
     {
         switch (uiPointId)
         {
-            case 1:
+            case 2:
                 if (Player* pPlayer = GetPlayerForEscort())
                     DoScriptText(SAY_START_2, m_creature, pPlayer);
 
@@ -453,14 +453,14 @@ struct npc_lurgglbrAI : public npc_escortAI
     {
         switch (uiPointId)
         {
-            case 0:
+            case 1:
                 if (Player* pPlayer = GetPlayerForEscort())
                 {
                     m_creature->SetFacingToObject(pPlayer);
                     DoScriptText(SAY_START_1, m_creature, pPlayer);
                 }
                 break;
-            case 25:
+            case 26:
                 if (Player* pPlayer = GetPlayerForEscort())
                 {
                     DoScriptText(SAY_END_1, m_creature, pPlayer);
@@ -472,7 +472,7 @@ struct npc_lurgglbrAI : public npc_escortAI
 
     void UpdateEscortAI(const uint32 uiDiff) override
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
         {
             if (m_uiSayTimer)
             {
@@ -660,7 +660,7 @@ struct npc_nexus_drake_hatchlingAI : public FollowerAI
     {
         FollowerAI::MoveInLineOfSight(pWho);
 
-        if (!m_creature->HasAura(SPELL_SUBDUED) || m_creature->getVictim())
+        if (!m_creature->HasAura(SPELL_SUBDUED) || m_creature->GetVictim())
             return;
 
         if (pWho->GetEntry() == NPC_COLDARRA_DRAKE_HUNT_INVISMAN && m_creature->IsWithinDistInMap(pWho, 20.0f))
@@ -717,7 +717,7 @@ struct npc_nexus_drake_hatchlingAI : public FollowerAI
                 m_uiSubduedTimer -= uiDiff;
         }
 
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_uiNetherbreathTimer < uiDiff)
@@ -895,7 +895,7 @@ struct npc_scourged_flamespitterAI : public ScriptedAI
             if (m_uiNetExpireTimer <= uiDiff)
             {
                 // evade when the net root has expired
-                if (!m_creature->getVictim())
+                if (!m_creature->GetVictim())
                     EnterEvadeMode();
 
                 m_uiNetExpireTimer = 0;
@@ -904,7 +904,7 @@ struct npc_scourged_flamespitterAI : public ScriptedAI
                 m_uiNetExpireTimer -= uiDiff;
         }
 
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
         {
             // incinerate visual on OOC timer, unless creature is rooted
             if (!m_uiNetExpireTimer)
@@ -923,7 +923,7 @@ struct npc_scourged_flamespitterAI : public ScriptedAI
 
         if (m_uiIncinerateTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_INCINERATE) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_INCINERATE) == CAST_OK)
                 m_uiIncinerateTimer = urand(3000, 5000);
         }
         else
@@ -999,21 +999,21 @@ struct npc_bonker_togglevoltAI : public npc_escortAI
     {
         switch (uiPointId)
         {
-            case 0:
+            case 1:
                 DoScriptText(SAY_BONKER_START, m_creature);
                 break;
-            case 1:
+            case 2:
                 DoScriptText(SAY_BONKER_GO, m_creature);
                 // WORKAROUND ALERT - temp ignore pathfinding until we pass the pool
                 // creature cannont find a proper swimming path in this area, so ignore pathfinding for the moment
                 m_creature->addUnitState(UNIT_STAT_IGNORE_PATHFINDING);
                 break;
-            case 3:
+            case 4:
                 DoScriptText(SAY_BONKER_LEFT, m_creature);
                 // WORKAROUND END - resume pathfinding
                 m_creature->clearUnitState(UNIT_STAT_IGNORE_PATHFINDING);
                 break;
-            case 32:
+            case 33:
                 if (Player* pPlayer = GetPlayerForEscort())
                 {
                     pPlayer->RewardPlayerAndGroupAtEventExplored(QUEST_ID_GET_ME_OUTA_HERE, m_creature);
@@ -1298,7 +1298,7 @@ enum
 
 bool NpcSpellClick_npc_storm_totem(Player* pPlayer, Creature* pClickedCreature, uint32 /*uiSpellId*/)
 {
-    if (pPlayer->GetQuestStatus(QUEST_MASTER_THE_STORM) == QUEST_STATUS_INCOMPLETE && !pPlayer->isInCombat() && !GetClosestCreatureWithEntry(pPlayer, NPC_STORM_TEMPEST, 30.0f))
+    if (pPlayer->GetQuestStatus(QUEST_MASTER_THE_STORM) == QUEST_STATUS_INCOMPLETE && !pPlayer->IsInCombat() && !GetClosestCreatureWithEntry(pPlayer, NPC_STORM_TEMPEST, 30.0f))
         pClickedCreature->SummonCreature(NPC_STORM_TEMPEST, 3403.64f, 4133.09f, 18.04f, 5.65f, TEMPSPAWN_TIMED_OOC_OR_DEAD_DESPAWN, 10000);
 
     return true;
@@ -1377,7 +1377,7 @@ struct npc_proudhoofAI : public npc_escortAI
             GetCreatureListWithEntryInGrid(lGuardsList, m_creature, NPC_CARAVAN_GUARD, 20.0f);
             for (CreatureList::const_iterator itr = lGuardsList.begin(); itr != lGuardsList.end(); ++itr)
             {
-                if (!(*itr)->isAlive())
+                if (!(*itr)->IsAlive())
                     continue;
 
                 (*itr)->SetFactionTemporary(FACTION_ESCORT_H_NEUTRAL_ACTIVE, TEMPFACTION_RESTORE_RESPAWN);
@@ -1445,12 +1445,12 @@ struct npc_proudhoofAI : public npc_escortAI
 
     void UpdateEscortAI(const uint32 uiDiff) override
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_uiCleaveTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_FORCEFUL_CLEAVE) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_FORCEFUL_CLEAVE) == CAST_OK)
                 m_uiCleaveTimer = urand(4000, 8000);
         }
         else

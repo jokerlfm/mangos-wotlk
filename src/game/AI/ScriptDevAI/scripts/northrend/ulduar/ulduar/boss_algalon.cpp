@@ -328,7 +328,7 @@ struct boss_algalonAI : public ScriptedAI, private DialogueHelper
             // move Brann to the center of the platform (and override pathfinding because of missing GO support)
             case NPC_BRANN_ALGALON:
                 pSummoned->SetWalk(false);
-                pSummoned->GetMotionMaster()->MovePoint(0, 1631.986f, -297.7831f, 417.321f, false);
+                pSummoned->GetMotionMaster()->MovePoint(0, 1631.986f, -297.7831f, 417.321f, FORCED_MOVEMENT_NONE, false);
                 break;
             case NPC_AZEROTH:
                 pSummoned->ForcedDespawn(30000);
@@ -498,7 +498,7 @@ struct boss_algalonAI : public ScriptedAI, private DialogueHelper
     {
         DialogueUpdate(uiDiff);
 
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_uiBerserkTimer)
@@ -518,7 +518,7 @@ struct boss_algalonAI : public ScriptedAI, private DialogueHelper
 
         if (m_uiQuantumStrikeTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), m_bIsRegularMode ? SPELL_QUANTUM_STRIKE : SPELL_QUANTUM_STRIKE_H) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), m_bIsRegularMode ? SPELL_QUANTUM_STRIKE : SPELL_QUANTUM_STRIKE_H) == CAST_OK)
                 m_uiQuantumStrikeTimer = 4000;
         }
         else
@@ -545,7 +545,7 @@ struct boss_algalonAI : public ScriptedAI, private DialogueHelper
 
         if (m_uiPhasePunchTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_PHASE_PUNCH) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_PHASE_PUNCH) == CAST_OK)
                 m_uiPhasePunchTimer = 15000;
         }
         else

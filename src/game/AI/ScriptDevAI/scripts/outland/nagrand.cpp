@@ -30,6 +30,8 @@ EndContentData */
 
 #include "AI/ScriptDevAI/include/sc_common.h"
 #include "AI/ScriptDevAI/base/escort_ai.h"
+#include "AI/ScriptDevAI/scripts/outland/world_outland.h"
+#include "Spells/Scripts/SpellScript.h"
 
 /*######
 ## mob_lump
@@ -67,7 +69,7 @@ struct mob_lumpAI : public ScriptedAI
 
     void AttackedBy(Unit* pAttacker) override
     {
-        if (m_creature->getVictim())
+        if (m_creature->GetVictim())
             return;
 
         if (!m_creature->CanAttackNow(pAttacker))
@@ -76,7 +78,7 @@ struct mob_lumpAI : public ScriptedAI
         AttackStart(pAttacker);
     }
 
-    void DamageTaken(Unit* /*pDealer*/, uint32& damage, DamageEffectType /*damagetype*/, SpellEntry const* /*spellInfo*/) override
+    void DamageTaken(Unit* /*dealer*/, uint32& damage, DamageEffectType /*damagetype*/, SpellEntry const* /*spellInfo*/) override
     {
         if (m_creature->GetHealth() < damage || (m_creature->GetHealth() - damage) * 100 / m_creature->GetMaxHealth() < 30)
         {
@@ -121,13 +123,13 @@ struct mob_lumpAI : public ScriptedAI
         }
 
         // Return since we have no target
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         // SpearThrow Timer
         if (m_uiSpearThrowTimer < uiDiff)
         {
-            DoCastSpellIfCan(m_creature->getVictim(), SPELL_SPEAR_THROW);
+            DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SPEAR_THROW);
             m_uiSpearThrowTimer = 20000;
         }
         else
@@ -246,16 +248,16 @@ struct npc_nagrand_captiveAI : public npc_escortAI
         {
             switch (uiPointId)
             {
-                case 4:
+                case 5:
                     DoScriptText(SAY_MAG_MORE, m_creature);
                     break;
-                case 5:
+                case 6:
                     if (Creature *summoned = m_creature->SummonCreature(NPC_MURK_BRUTE, -1496.662f, 8508.388f, 1.015174f, 2.56f, TEMPSPAWN_TIMED_OOC_OR_DEAD_DESPAWN, 10000))
                         DoScriptText(SAY_MURK_BRUTE_WHERE, summoned);
                     m_creature->SummonCreature(NPC_MURK_PUTRIFIER, -1494.623f, 8505.492f, 1.173438f, 2.63f, TEMPSPAWN_TIMED_OOC_OR_DEAD_DESPAWN, 10000);
                     m_creature->SummonCreature(NPC_MURK_SCAVENGER, -1497.349f, 8505.020f, 1.107700f, 2.56f, TEMPSPAWN_TIMED_OOC_OR_DEAD_DESPAWN, 10000);
                     break;
-                case 10:
+                case 11:
                     DoScriptText(SAY_MAG_COMPLETE, m_creature);
 
                     if (Player* pPlayer = GetPlayerForEscort())
@@ -269,23 +271,23 @@ struct npc_nagrand_captiveAI : public npc_escortAI
         {
             switch (uiPointId)
             {
-                case 1:
+                case 2:
                     DoScriptText(SAY_KUR_START, m_creature);
                     break;
-                case 7:
+                case 8:
                     DoScriptText(SAY_KUR_AMBUSH_2, m_creature);
                     break;
-                case 8:
+                case 9:
                     if (Creature *summoned = m_creature->SummonCreature(NPC_MURK_BRUTE, -1417.57f, 8516.55f, 8.593721f, 3.76f, TEMPSPAWN_TIMED_OOC_OR_DEAD_DESPAWN, 10000))
                         DoScriptText(SAY_MURK_BRUTE_WHERE, summoned);
                     m_creature->SummonCreature(NPC_MURK_PUTRIFIER, -1411.089f, 8507.651f, 8.976571f, 3.21f, TEMPSPAWN_TIMED_OOC_OR_DEAD_DESPAWN, 10000);
                     m_creature->SummonCreature(NPC_MURK_SCAVENGER, -1440.539f, 8490.212f, 6.207497f, 1.03f, TEMPSPAWN_TIMED_OOC_OR_DEAD_DESPAWN, 10000);
                     break;
-                case 9:
+                case 10:
                     m_creature->SetFacingTo(0.61f);
                     DoScriptText(SAY_KUR_UP_AHEAD, m_creature);					
                     break;
-                case 12:
+                case 13:
                     DoScriptText(SAY_KUR_COMPLETE, m_creature);
 
                     if (Player* pPlayer = GetPlayerForEscort())
@@ -335,12 +337,12 @@ struct npc_nagrand_captiveAI : public npc_escortAI
 
     void UpdateEscortAI(const uint32 uiDiff) override
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_uiChainLightningTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_CHAIN_LIGHTNING) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_CHAIN_LIGHTNING) == CAST_OK)
                 m_uiChainLightningTimer = urand(7000, 14000);
         }
         else
@@ -369,7 +371,7 @@ struct npc_nagrand_captiveAI : public npc_escortAI
 
         if (m_uiFrostShockTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_FROST_SHOCK) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_FROST_SHOCK) == CAST_OK)
                 m_uiFrostShockTimer = urand(7500, 15000);
         }
         else
@@ -473,7 +475,11 @@ enum
 
 struct npc_rethhedronAI : public ScriptedAI
 {
-    npc_rethhedronAI(Creature* pCreature) : ScriptedAI(pCreature) { JustRespawned(); Reset(); }
+    npc_rethhedronAI(Creature* pCreature) : ScriptedAI(pCreature)
+    {
+        m_creature->GetCombatManager().SetLeashingDisable(true);
+        Reset();
+    }
 
     uint32 m_uiCrippleTimer;
     uint32 m_uiShadowBoltTimer;
@@ -493,7 +499,7 @@ struct npc_rethhedronAI : public ScriptedAI
 
         m_bLowHpYell        = false;
 
-        m_attackDistance = 30.0f;
+        m_attackDistance = 60.0f;
     }
 
     void JustRespawned() override
@@ -506,7 +512,7 @@ struct npc_rethhedronAI : public ScriptedAI
         ScriptedAI::JustRespawned();
     }
 
-    void DamageTaken(Unit* /*pDealer*/, uint32& damage, DamageEffectType /*damagetype*/, SpellEntry const* /*spellInfo*/) override
+    void DamageTaken(Unit* /*dealer*/, uint32& damage, DamageEffectType /*damagetype*/, SpellEntry const* /*spellInfo*/) override
     {
         damage = std::min(m_creature->GetHealth() - 1, damage);
 
@@ -517,7 +523,7 @@ struct npc_rethhedronAI : public ScriptedAI
             SetCombatMovement(false);
             SetCombatScriptStatus(true);
             m_meleeEnabled = false;
-            m_creature->MeleeAttackStop(m_creature->getVictim());
+            m_creature->MeleeAttackStop(m_creature->GetVictim());
             m_creature->SetTarget(nullptr);
             m_creature->InterruptNonMeleeSpells(false);
             m_creature->GetMotionMaster()->Clear(false, true);
@@ -546,7 +552,7 @@ struct npc_rethhedronAI : public ScriptedAI
 
     void UpdateAI(const uint32 uiDiff) override
     {
-        if (!m_creature->SelectHostileTarget() || !m_creature->getVictim())
+        if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
 
         if (m_bEventFinished)
@@ -554,7 +560,7 @@ struct npc_rethhedronAI : public ScriptedAI
 
         if (m_uiCrippleTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_CRIPPLE) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_CRIPPLE) == CAST_OK)
                 m_uiCrippleTimer = urand(20000, 30000);
         }
         else
@@ -562,7 +568,7 @@ struct npc_rethhedronAI : public ScriptedAI
 
         if (m_uiShadowBoltTimer < uiDiff)
         {
-            if (DoCastSpellIfCan(m_creature->getVictim(), SPELL_SHADOW_BOLT) == CAST_OK)
+            if (DoCastSpellIfCan(m_creature->GetVictim(), SPELL_SHADOW_BOLT) == CAST_OK)
                 m_uiShadowBoltTimer = urand(3000, 5000);
         }
         else
@@ -570,7 +576,7 @@ struct npc_rethhedronAI : public ScriptedAI
 
         if (m_uiAbyssalTossTimer < uiDiff)
         {
-            if (Unit* victim = m_creature->getVictim())
+            if (Unit* victim = m_creature->GetVictim())
             {
                 if (!m_creature->CanReachWithMeleeAttack(victim))
                 {
@@ -596,10 +602,58 @@ struct npc_rethhedronAI : public ScriptedAI
     }
 };
 
-UnitAI* GetAI_npc_rethhedron(Creature* pCreature)
+enum
 {
-    return new npc_rethhedronAI(pCreature);
+    GOSSIP_IN_BATTLE = 7700,
+
+    QUEST_RING_OF_BLOOD_FINAL_CHALLENGE = 9977,
+};
+
+bool QuestAccept_npc_gurthock(Player* /*player*/, Creature* creature, const Quest* quest)
+{
+    if (quest->GetQuestId() == QUEST_RING_OF_BLOOD_FINAL_CHALLENGE)
+    {
+        if (InstanceData* data = creature->GetInstanceData())
+            data->SetData(TYPE_MOGOR, 1);
+    }
+    else
+        creature->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER);
+    return true;
 }
+
+bool GossipHello_npc_gurthock(Player* player, Creature* creature)
+{
+    if (creature->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER))
+        return false;
+    player->PrepareGossipMenu(creature, GOSSIP_IN_BATTLE);
+    player->SendPreparedGossip(creature);
+    return true;
+}
+
+enum
+{
+    NPC_WILD_SPARROWHAWK = 22979,
+
+    SPELL_CAPTURED_SPARROWHAWK = 39812,
+};
+
+struct SparrowhawkNet : public SpellScript
+{
+    SpellCastResult OnCheckCast(Spell* spell, bool /*strict*/) const override
+    {
+        if (spell->m_targets.getUnitTargetGuid().GetEntry() != NPC_WILD_SPARROWHAWK)
+            return SPELL_FAILED_BAD_TARGETS;
+        return SPELL_CAST_OK;
+    }
+
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_1 || !spell->GetUnitTarget())
+            return;
+
+        spell->GetUnitTarget()->CastSpell(spell->GetCaster(), SPELL_CAPTURED_SPARROWHAWK, TRIGGERED_OLD_TRIGGERED);
+    }
+};
 
 void AddSC_nagrand()
 {
@@ -621,6 +675,14 @@ void AddSC_nagrand()
 
     pNewScript = new Script;
     pNewScript->Name = "npc_rethhedron";
-    pNewScript->GetAI = &GetAI_npc_rethhedron;
+    pNewScript->GetAI = &GetNewAIInstance<npc_rethhedronAI>;
     pNewScript->RegisterSelf();
+
+    pNewScript = new Script;
+    pNewScript->Name = "npc_gurthock";
+    pNewScript->pQuestAcceptNPC = &QuestAccept_npc_gurthock;
+    pNewScript->pGossipHello = &GossipHello_npc_gurthock;
+    pNewScript->RegisterSelf();
+
+    RegisterSpellScript<SparrowhawkNet>("spell_sparrowhawk_net");
 }

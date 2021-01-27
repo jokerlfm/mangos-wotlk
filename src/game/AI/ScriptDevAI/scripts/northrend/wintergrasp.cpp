@@ -25,10 +25,12 @@ EndScriptData */
 npc_spirit_guide_wintergrasp
 go_vehicle_teleporter
 event_go_tower_destroy
+spell_teleport_lake_wintergrasp
 EndContentData */
 
 #include "AI/ScriptDevAI/include/sc_common.h"
 #include "Battlefield/BattlefieldWG.h"
+#include "Spells/Scripts/SpellScript.h"
 
 enum
 {
@@ -210,23 +212,71 @@ bool ProcessEventId_event_go_tower_destroy(uint32 uiEventId, Object* pSource, Ob
         GetCreatureListWithEntryInGrid(lCannonsInRange, tower, NPC_WINTERGRASP_TOWER_CANNON, 50.0f);
         for (auto cannon : lCannonsInRange)
             cannon->ForcedDespawn();
-
-        GameObjectList lAllianceBanners;
-        GetGameObjectListWithEntryInGrid(lAllianceBanners, tower, GO_WINTERGRASP_ALLIANCE_BANNER, 50.0f);
-        for (auto banner : lAllianceBanners)
-            banner->SetLootState(GO_JUST_DEACTIVATED);
-
-        GameObjectList lHordeBanners;
-        GetGameObjectListWithEntryInGrid(lHordeBanners, tower, GO_WINTERGRASP_HORDE_BANNER, 50.0f);
-        for (auto banner : lHordeBanners)
-            banner->SetLootState(GO_JUST_DEACTIVATED);
-
     }
 
     // always return false to allow battlefield script to process
     return false;
 }
 
+/*######
+## spell_teleport_lake_wintergrasp - 58622
+######*/
+
+struct spell_teleport_lake_wintergrasp : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* target = spell->GetUnitTarget();
+        if (!target || !target->IsPlayer())
+            return;
+
+        OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(ZONE_ID_WINTERGRASP);
+        if (outdoorPvP && outdoorPvP->IsBattlefield())
+        {
+            Player* player = static_cast<Player*>(target);
+            Battlefield* battlefield = static_cast<Battlefield*>(outdoorPvP);
+
+            if (!player || !battlefield)
+                return;
+
+            // teleport to Wintergrasp, depending on location and battlefield status
+            if (battlefield->GetBattlefieldStatus() == BF_STATUS_IN_PROGRESS || battlefield->GetTimer() < battlefield->GetStartInviteDelay())
+                player->CastSpell(player, player->GetTeam() == battlefield->GetDefender() ? 60035 : 59096, TRIGGERED_OLD_TRIGGERED);
+            if (battlefield->GetBattlefieldStatus() == BF_STATUS_COOLDOWN)
+            {
+                if (player->GetTeam() == battlefield->GetDefender())
+                    player->CastSpell(player, 58681, TRIGGERED_OLD_TRIGGERED);
+                else
+                    player->CastSpell(player, player->GetTeam() == ALLIANCE ? 58633 : 58632, TRIGGERED_OLD_TRIGGERED);
+            }
+        }
+    }
+};
+
+/*######
+## spell_build_wintergrasp_vehicle - 56659, 56662, 56664, 56666, 56668, 56670, 61409
+######*/
+
+struct spell_build_wintergrasp_vehicle : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* target = spell->GetUnitTarget();
+        if (!target || !target->IsPlayer())
+            return;
+
+        // calculate and cast proper spell to summon vehicle
+        uint32 spellId = spell->m_spellInfo->CalculateSimpleValue(effIdx);
+
+        target->CastSpell(target, spellId, TRIGGERED_NONE);
+    }
+};
 
 void AddSC_wintergrasp()
 {
@@ -244,4 +294,7 @@ void AddSC_wintergrasp()
     pNewScript->Name = "event_go_tower_destroy";
     pNewScript->pProcessEventId = &ProcessEventId_event_go_tower_destroy;
     pNewScript->RegisterSelf();
+
+    RegisterSpellScript<spell_teleport_lake_wintergrasp>("spell_teleport_lake_wintergrasp");
+    RegisterSpellScript<spell_build_wintergrasp_vehicle>("spell_build_wintergrasp_vehicle");
 }
