@@ -137,7 +137,7 @@ bool CreatureCreatePos::Relocate(Creature* cr) const
 }
 
 Creature::Creature(CreatureSubtype subtype) : Unit(),
-    m_lootMoney(0), m_lootGroupRecipientId(0),
+    m_gossipMenuId(0), m_lootMoney(0), m_lootGroupRecipientId(0),
     m_lootStatus(CREATURE_LOOT_STATUS_NONE),
     m_corpseAccelerationDecayDelay(MINIMUM_LOOTING_TIME),
     m_respawnTime(0), m_respawnDelay(25), m_respawnOverriden(false), m_respawnOverrideOnce(false), m_corpseDelay(60), m_canAggro(false),
@@ -148,7 +148,7 @@ Creature::Creature(CreatureSubtype subtype) : Unit(),
     m_originalEntry(0), m_dbGuid(0), m_ai(nullptr),
     m_isInvisible(false), m_ignoreMMAP(false), m_forceAttackingCapability(false), m_countSpawns(false),
     m_creatureInfo(nullptr),
-    m_noXP(false), m_noLoot(false), m_noReputation(false), m_ignoringFeignDeath(false),
+    m_noXP(false), m_noLoot(false), m_noReputation(false), m_ignoringFeignDeath(false), m_noWeaponSkillGain(false),
     m_immunitySet(UINT32_MAX),
     m_creatureGroup(nullptr)
 {
@@ -345,6 +345,8 @@ bool Creature::InitEntry(uint32 Entry, CreatureData const* data /*=nullptr*/, Ga
 
     SetObjectScale(cinfo->Scale);
 
+    SetFloatValue(UNIT_FIELD_HOVERHEIGHT, 1.f); // TODO: Add setting in DB
+
     // equal to player Race field, but creature does not have race
     SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_RACE, 0);
 
@@ -456,6 +458,7 @@ bool Creature::InitEntry(uint32 Entry, CreatureData const* data /*=nullptr*/, Ga
     SetNoLoot(false);
     SetNoReputation(false);
     SetIgnoreFeignDeath((cinfo->ExtraFlags & CREATURE_EXTRA_FLAG_IGNORE_FEIGN_DEATH) != 0);
+    SetNoWeaponSkillGain((cinfo->ExtraFlags & CREATURE_EXTRA_FLAG_NO_SKILL_GAINS) != 0);
 
     SetDetectionRange(cinfo->Detection);
 
@@ -534,6 +537,7 @@ bool Creature::UpdateEntry(uint32 Entry, const CreatureData* data /*=nullptr*/, 
         faction = data->spawnTemplate->faction;
     setFaction(faction);
 
+    SetDefaultGossipMenuId(GetCreatureInfo()->GossipMenuId);
     SetUInt32Value(UNIT_NPC_FLAGS, GetCreatureInfo()->NpcFlags);
 
     uint32 attackTimer = GetCreatureInfo()->MeleeBaseAttackTime;
@@ -555,6 +559,7 @@ bool Creature::UpdateEntry(uint32 Entry, const CreatureData* data /*=nullptr*/, 
         unitFlags |= UNIT_FLAG_SWIMMING;
 
     SetUInt32Value(UNIT_FIELD_FLAGS, unitFlags);
+    SetUInt32Value(UNIT_FIELD_FLAGS_2, GetCreatureInfo()->UnitFlags2);
 
     // preserve all current dynamic flags if exist
     uint32 dynFlags = GetUInt32Value(UNIT_DYNAMIC_FLAGS);
@@ -572,6 +577,9 @@ bool Creature::UpdateEntry(uint32 Entry, const CreatureData* data /*=nullptr*/, 
     m_countSpawns = (GetCreatureInfo()->ExtraFlags & CREATURE_EXTRA_FLAG_COUNT_SPAWNS) != 0;
     if (IsWorldBoss())
         ApplySpellImmune(nullptr, IMMUNITY_STATE, SPELL_AURA_MOD_TOTAL_STAT_PERCENTAGE, true);
+
+    if (GetCreatureInfo()->RegenerateStats & (REGEN_FLAG_POWER_IN_COMBAT | REGEN_FLAG_POWER) == (REGEN_FLAG_POWER_IN_COMBAT | REGEN_FLAG_POWER))
+        SetFlag(UNIT_FIELD_FLAGS_2, UNIT_FLAG2_REGENERATE_POWER);
 
     SetCanModifyStats(true);
     UpdateAllStats();
@@ -1434,7 +1442,7 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
             case POWER_MANA:        maxValue = mana; break;
             case POWER_RAGE:        maxValue = 0; break;
             case POWER_FOCUS:       maxValue = POWER_FOCUS_DEFAULT; break;
-            case POWER_ENERGY:      maxValue = POWER_ENERGY_DEFAULT * cinfo->PowerMultiplier; break;
+            case POWER_ENERGY:      maxValue = 0; break;
             case POWER_HAPPINESS:   maxValue = POWER_HAPPINESS_DEFAULT; break;
             case POWER_RUNE:        maxValue = 0; break;
             case POWER_RUNIC_POWER: maxValue = 0; break;
@@ -1567,6 +1575,19 @@ void Creature::ClearCreatureGroup()
         m_creatureGroup->RemoveObject(this);
     }
     m_creatureGroup = nullptr;
+}
+
+bool Creature::IsOnlyVisibleTo(ObjectGuid guid) const
+{
+    if (m_onlyVisibleTo.IsEmpty())
+        return true;
+
+    return guid == m_onlyVisibleTo;
+}
+
+void Creature::SetOnlyVisibleTo(ObjectGuid guid)
+{
+    m_onlyVisibleTo = guid;
 }
 
 bool Creature::CreateFromProto(uint32 guidlow, CreatureInfo const* cinfo, const CreatureData* data /*=nullptr*/, GameEventCreatureData const* eventData /*=nullptr*/)
@@ -1811,7 +1832,7 @@ void Creature::DeleteFromDB(uint32 lowguid, CreatureData const* data)
     WorldDatabase.BeginTransaction();
     WorldDatabase.PExecuteLog("DELETE FROM creature WHERE guid=%u", lowguid);
     WorldDatabase.PExecuteLog("DELETE FROM creature_addon WHERE guid=%u", lowguid);
-    WorldDatabase.PExecuteLog("DELETE FROM creature_movement WHERE id=%u", lowguid);
+    WorldDatabase.PExecuteLog("DELETE FROM creature_movement WHERE Id=%u", lowguid);
     WorldDatabase.PExecuteLog("DELETE FROM game_event_creature WHERE guid=%u", lowguid);
     WorldDatabase.PExecuteLog("DELETE FROM game_event_creature_data WHERE guid=%u", lowguid);
     WorldDatabase.PExecuteLog("DELETE FROM creature_battleground WHERE guid=%u", lowguid);
@@ -1866,6 +1887,8 @@ void Creature::SetDeathState(DeathState s)
 
         SetWalk(true, true);
         ResetEntry(true);
+
+        m_killer = ObjectGuid();
 
         ResetSpellHitCounter();
 
@@ -2100,6 +2123,8 @@ void Creature::CallAssistance()
     // FIXME: should player pets call for assistance?
     if (!m_AlreadyCallAssistance && GetVictim() && !HasCharmer())
     {
+        MANGOS_ASSERT(AI());
+
         SetNoCallAssistance(true);
 
         if (!CanCallForAssistance())
@@ -2291,6 +2316,12 @@ void Creature::SetInCombatWithZone(bool checkAttackability)
         return;
     }
 
+    if (!AI())
+    {
+        sLog.outError("Creature entry %u call SetInCombatWithZone but creature does not have AI. Possible call during create.", GetEntry());
+        return;
+    }
+
     Map* pMap = GetMap();
 
     if (!pMap->IsDungeon())
@@ -2341,7 +2372,12 @@ void Creature::UpdateSpell(int32 index, int32 newSpellId)
 {
     auto itr = m_spellList.Spells.find(index);
     if (itr != m_spellList.Spells.end())
-        (*itr).second.SpellId = newSpellId;
+    {
+        if (newSpellId == 0)
+            m_spellList.Spells.erase(itr);
+        else
+            (*itr).second.SpellId = newSpellId;
+    }
 }
 
 void Creature::SetSpellList(uint32 spellSet)

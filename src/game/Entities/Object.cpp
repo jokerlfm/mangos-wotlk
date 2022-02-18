@@ -2217,8 +2217,15 @@ Creature* WorldObject::SummonCreature(TempSpawnSettings settings, Map* map, uint
     if (settings.spellId)
         creature->SetUInt32Value(UNIT_CREATED_BY_SPELL, settings.spellId);
 
+    if (settings.level)
+        creature->SelectLevel(settings.level);
+
     if (settings.ownerGuid)
         creature->SetOwnerGuid(settings.ownerGuid);
+
+    // intended only for visual way point debug feature
+    if (settings.waypointId)
+        creature->SetLevel(settings.waypointId);
 
     creature->Summon(settings.spawnType, settings.despawnTime);                  // Also initializes the AI and MMGen
 

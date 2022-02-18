@@ -18,6 +18,7 @@
 
 #include "Spells/Scripts/SpellScript.h"
 #include "Spells/SpellAuras.h"
+#include "Spells/SpellMgr.h"
 
 struct SpiritOfRedemptionHeal : public SpellScript
 {
@@ -168,15 +169,163 @@ struct CircleOfHealing : public SpellScript
     }
 };
 
+struct PowerWordShield : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        if (data.caster && data.caster->IsPlayer())
+        {
+            if (Aura* borrowedTime = static_cast<Player*>(data.caster)->GetKnownTalentRankAuraById(1202, EFFECT_INDEX_1))
+                value += (borrowedTime->GetAmount() * data.caster->SpellBaseDamageBonusDone(GetSpellSchoolMask(data.spellProto)) / 100);
+        }
+        return value;
+    }
+};
+
+enum LightwellData
+{
+    NPC_PRIEST_LIGHTWELL_1 = 31897,
+    NPC_PRIEST_LIGHTWELL_2 = 31896,
+    NPC_PRIEST_LIGHTWELL_3 = 31895,
+    NPC_PRIEST_LIGHTWELL_4 = 31894,
+    NPC_PRIEST_LIGHTWELL_5 = 31893,
+    NPC_PRIEST_LIGHTWELL_6 = 31883,
+
+    SPELL_PRIEST_LIGHTWELL_RENEW_R1 = 7001,
+    SPELL_PRIEST_LIGHTWELL_RENEW_R2 = 27873,
+    SPELL_PRIEST_LIGHTWELL_RENEW_R3 = 27874,
+    SPELL_PRIEST_LIGHTWELL_RENEW_R4 = 28276,
+    SPELL_PRIEST_LIGHTWELL_RENEW_R5 = 48084,
+    SPELL_PRIEST_LIGHTWELL_RENEW_R6 = 48085,
+
+    SPELL_PRIEST_LIGHTWELL_CHARGES = 59907,
+};
+
+struct LightwellRenew : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (apply)
+            aura->SetScriptValue(aura->GetTarget()->GetMaxHealth() * 30 / 100); // set at 30% hp of target
+    }
+
+    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
+    {
+        // proc until 30% of hp as damage
+        uint64 remainingDamage = aura->GetScriptValue();
+        if (remainingDamage > procData.damage)
+            remainingDamage -= procData.damage;
+        else
+            remainingDamage = 0;
+        aura->SetScriptValue(remainingDamage);
+        return remainingDamage ? SPELL_AURA_PROC_FAILED : SPELL_AURA_PROC_OK;
+    }
+};
+
+struct LightwellRelay : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex /*effIdx*/) const override
+    {
+        Creature* caster = dynamic_cast<Creature*>(spell->GetCaster());
+        if (!caster || !caster->IsTemporarySummon())
+            return;
+
+        uint32 lightwellRenew = 0;
+        switch (caster->GetEntry())
+        {
+            case NPC_PRIEST_LIGHTWELL_1:
+                lightwellRenew = SPELL_PRIEST_LIGHTWELL_RENEW_R1;
+                break;
+            case NPC_PRIEST_LIGHTWELL_2:
+                lightwellRenew = SPELL_PRIEST_LIGHTWELL_RENEW_R2;
+                break;
+            case NPC_PRIEST_LIGHTWELL_3:
+                lightwellRenew = SPELL_PRIEST_LIGHTWELL_RENEW_R3;
+                break;
+            case NPC_PRIEST_LIGHTWELL_4:
+                lightwellRenew = SPELL_PRIEST_LIGHTWELL_RENEW_R4;
+                break;
+            case NPC_PRIEST_LIGHTWELL_5:
+                lightwellRenew = SPELL_PRIEST_LIGHTWELL_RENEW_R5;
+                break;
+            case NPC_PRIEST_LIGHTWELL_6:
+                lightwellRenew = SPELL_PRIEST_LIGHTWELL_RENEW_R6;
+                break;
+            default:
+                return;
+        }
+
+        // proc a spellcast
+        if (SpellAuraHolder* chargesHolder = caster->GetSpellAuraHolder(SPELL_PRIEST_LIGHTWELL_CHARGES))
+        {
+            caster->CastSpell(spell->GetUnitTarget(), lightwellRenew, TRIGGERED_NONE, nullptr, nullptr, caster->GetSpawnerGuid());
+            if (chargesHolder->DropAuraCharge())
+                caster->ForcedDespawn();
+        }
+    }
+};
+
+struct GlyphOfLightwell : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_HEALING_DONE, apply);
+    }
+
+    void OnDamageCalculate(Aura* aura, Unit* /*victim*/, int32& advertisedBenefit, float& totalMod) const override
+    {
+        advertisedBenefit += aura->GetModifier()->m_amount / 3; // ticks 3 times
+    }
+};
+
+struct GlyphOfShadowWordDeath : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (aura->GetEffIndex() == EFFECT_INDEX_0)
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_DAMAGE_DONE, apply);
+    }
+
+    void OnDamageCalculate(Aura* aura, Unit* victim, int32& advertisedBenefit, float& totalMod) const override
+    {
+        if (victim->GetHealthPercent() <= 35.f)
+            totalMod *= (float(100 + aura->GetModifier()->m_amount) / 100);
+    }
+};
+
+struct ShadowAffinityDots : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (!apply && aura->GetRemoveMode() == AURA_REMOVE_BY_DISPEL)
+        {
+            if (Player* caster = dynamic_cast<Player*>(aura->GetCaster()))
+            {
+                if (Aura* aura = caster->GetKnownTalentRankAuraById(466, EFFECT_INDEX_1))
+                {
+                    int32 basepoints0 = aura->GetModifier()->m_amount * caster->GetCreateMana() / 100;
+                    caster->CastCustomSpell(nullptr, 64103, &basepoints0, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
+                }
+            }
+        }
+    }
+};
+
 void LoadPriestScripts()
 {
     RegisterSpellScript<PowerInfusion>("spell_power_infusion");
     RegisterSpellScript<ShadowWordDeath>("spell_shadow_word_death");
     RegisterSpellScript<SpiritOfRedemptionHeal>("spell_spirit_of_redemption_heal");
     RegisterSpellScript<PrayerOfMending>("spell_prayer_of_mending");
-    RegisterAuraScript<PainSuppression>("spell_pain_suppression");
+    RegisterSpellScript<PainSuppression>("spell_pain_suppression");
     RegisterSpellScript<Shadowfiend>("spell_shadowfiend");
     RegisterSpellScript<DivineHymn>("spell_divine_hymn");
     RegisterSpellScript<HymnOfHope>("spell_hymn_of_hope");
     RegisterSpellScript<CircleOfHealing>("spell_circle_of_healing");
+    RegisterSpellScript<PowerWordShield>("spell_power_word_shield");
+    RegisterSpellScript<LightwellRenew>("spell_lightwell_renew");
+    RegisterSpellScript<LightwellRelay>("spell_lightwell_relay");
+    RegisterSpellScript<GlyphOfLightwell>("spell_glyph_of_lightwell");
+    RegisterSpellScript<GlyphOfShadowWordDeath>("spell_glyph_of_shadow_word_death");
+    RegisterSpellScript<ShadowAffinityDots>("spell_shadow_affinity_dots");
 }

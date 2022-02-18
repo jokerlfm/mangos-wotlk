@@ -132,7 +132,7 @@ struct IncreasedHolyLightHealing : public AuraScript
         aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_HEALING_DONE, apply);
     }
 
-    void OnDamageCalculate(Aura* aura, int32& advertisedBenefit, float& /*totalMod*/) const override
+    void OnDamageCalculate(Aura* aura, Unit* /*victim*/, int32& advertisedBenefit, float& /*totalMod*/) const override
     {
         advertisedBenefit += aura->GetModifier()->m_amount;
     }
@@ -181,11 +181,88 @@ struct RighteousDefense : public SpellScript
     }
 };
 
+struct DivineStorm : public SpellScript
+{
+    void OnInit(Spell* spell) const override
+    {
+        spell->SetMaxAffectedTargets(4);
+    }
+
+    void OnAfterHit(Spell* spell) const override
+    {
+        spell->SetScriptValue(spell->GetScriptValue() + spell->GetTotalTargetDamage());
+    }
+
+    void OnSuccessfulFinish(Spell* spell) const override
+    {
+        int32 totalDamage = int32(spell->GetScriptValue() * spell->CalculateSpellEffectValue(EFFECT_INDEX_1, nullptr) / 100);
+        spell->GetCaster()->CastCustomSpell(nullptr, 54171, &totalDamage, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+struct DivineStormHeal : public SpellScript
+{
+    void OnInit(Spell* spell) const override
+    {
+        spell->SetMaxAffectedTargets(3);
+    }
+
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        Unit* target = spell->GetUnitTarget();
+        int32 damage = spell->GetDamage() / spell->GetTargetList().size();
+        spell->GetCaster()->CastCustomSpell(target, 54172, &damage, nullptr, nullptr, TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_CURRENT_CASTED_SPELL | TRIGGERED_HIDE_CAST_IN_COMBAT_LOG);
+    }
+};
+
+struct DivineStormCooldown : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex /*effIdx*/) const override
+    {
+        Unit* caster = spell->GetCaster();
+        caster->RemoveSpellCooldown(53385, true);
+    }
+};
+
+struct JudgementsOfTheWise : public AuraScript
+{
+    bool OnCheckProc(Aura* /*aura*/, ProcExecutionData& data) const override
+    {
+        if (data.damage == 0)
+            return false;
+        return true;
+    }
+
+    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
+    {
+        Unit* caster = aura->GetTarget();
+        procData.triggeredSpellId = 31930; // Judgements of the Wise
+        procData.triggerTarget = nullptr;
+
+        // Replenishment
+        caster->CastSpell(nullptr, 57669, TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_CURRENT_CASTED_SPELL | TRIGGERED_HIDE_CAST_IN_COMBAT_LOG);
+        return SPELL_AURA_PROC_OK;
+    }
+};
+
+struct JudgementsOfTheWiseEnergize : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex /*effIdx*/) const override
+    {
+        spell->SetDamage(spell->GetDamage() * spell->GetCaster()->GetCreateMana() / 100);
+    }
+};
+
 void LoadPaladinScripts()
 {
-    RegisterAuraScript<IncreasedHolyLightHealing>("spell_increased_holy_light_healing");
+    RegisterSpellScript<IncreasedHolyLightHealing>("spell_increased_holy_light_healing");
     RegisterSpellScript<spell_judgement>("spell_judgement");
     RegisterSpellScript<RighteousDefense>("spell_righteous_defense");
-    RegisterAuraScript<SealOfTheCrusader>("spell_seal_of_the_crusader");
-    RegisterAuraScript<spell_paladin_tier_6_trinket>("spell_paladin_tier_6_trinket");
+    RegisterSpellScript<SealOfTheCrusader>("spell_seal_of_the_crusader");
+    RegisterSpellScript<spell_paladin_tier_6_trinket>("spell_paladin_tier_6_trinket");
+    RegisterSpellScript<DivineStorm>("spell_divine_storm");
+    RegisterSpellScript<DivineStormHeal>("spell_divine_storm_heal");
+    RegisterSpellScript<DivineStormCooldown>("spell_divine_storm_cooldown");
+    RegisterSpellScript<JudgementsOfTheWise>("spell_judgements_of_the_wise");
+    RegisterSpellScript<JudgementsOfTheWiseEnergize>("spell_judgements_of_the_wise_energize");
 }

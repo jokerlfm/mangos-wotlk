@@ -31,12 +31,18 @@ struct HunterPetScaling1 : public AuraScript
 {
     int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
     {
+        Unit* target = data.target;
         switch (data.effIdx)
         {
             case EFFECT_INDEX_0: // stamina
                 if (Unit* owner = data.caster->GetOwner())
                 {
-                    value = float(owner->GetStat(STAT_STAMINA)) * 0.3f;
+                    float coeff = 1.f;
+                    if (target->HasSpell(62762))
+                        coeff = 1.4f;
+                    else if (target->HasSpell(62758))
+                        coeff = 1.2f;
+                    value = float(owner->GetStat(STAT_STAMINA)) * 0.3f * coeff;
                     if (owner->HasAura(SPELL_INCREASED_ATTACK_POWER))
                         value += 52;
                 }
@@ -44,14 +50,26 @@ struct HunterPetScaling1 : public AuraScript
             case EFFECT_INDEX_1: // attack power
                 if (Unit* owner = data.caster->GetOwner())
                 {
-                    value = owner->GetTotalAttackPowerValue(RANGED_ATTACK) * 0.25f;
+                    float coeff = 1.f;
+                    if (target->HasSpell(62762))
+                        coeff = 1.3f;
+                    else if (target->HasSpell(62758))
+                        coeff = 1.15f;
+                    value = owner->GetTotalAttackPowerValue(RANGED_ATTACK) * 0.25f * coeff;
                     if (owner->HasAura(SPELL_INCREASED_ATTACK_POWER))
                         value += 70;
                 }
                 break;
             case EFFECT_INDEX_2: // spell power
                 if (Unit* owner = data.caster->GetOwner())
-                    value = owner->GetTotalAttackPowerValue(RANGED_ATTACK) * 0.125f;
+                {
+                    float coeff = 1.f;
+                    if (target->HasSpell(62762))
+                        coeff = 1.3f;
+                    else if (target->HasSpell(62758))
+                        coeff = 1.15f;
+                    value = owner->GetTotalAttackPowerValue(RANGED_ATTACK) * 0.125f * coeff;
+                }
                 break;
         }
         return value;
@@ -102,6 +120,40 @@ struct HunterPetScaling3 : public AuraScript
                     if (owner->HasAura(SPELL_INCREASED_ATTACK_POWER))
                         value += 490;
                 }
+                break;
+        }
+        return value;
+    }
+};
+
+struct HunterPetScaling4 : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        switch (data.effIdx)
+        {
+            case EFFECT_INDEX_0: // hit chance
+                break;
+            case EFFECT_INDEX_1: // spell hit chance
+                break;
+            case EFFECT_INDEX_2: // expertise
+                break;
+        }
+        return value;
+    }
+};
+
+struct HunterSnakeTrapScaling1 : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        switch (data.effIdx)
+        {
+            case EFFECT_INDEX_0: // unk
+                break;
+            case EFFECT_INDEX_1: // unk
+                break;
+            case EFFECT_INDEX_2: // unk
                 break;
         }
         return value;
@@ -233,6 +285,23 @@ struct WarlockPetScaling4 : public AuraScript
                         value = static_cast<Player*>(owner)->GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER) * 0.5f * 5.f;
                 break;
             default: break;
+        }
+        return value;
+    }
+};
+
+struct WarlockPetScaling5 : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        switch (data.effIdx)
+        {
+            case EFFECT_INDEX_0: // hit chance
+                break;
+            case EFFECT_INDEX_1: // spell hit chance
+                break;
+            case EFFECT_INDEX_2: // expertise
+                break;
         }
         return value;
     }
@@ -371,6 +440,8 @@ struct PriestPetScaling2 : public AuraScript
             case EFFECT_INDEX_1: // armor
                 break;
             case EFFECT_INDEX_2: // resistance
+                if (Unit* owner = data.caster->GetOwner())
+                    value = (owner->GetResistance(SPELL_SCHOOL_FIRE) * 0.4f);
                 break;
         }
         return value;
@@ -384,10 +455,16 @@ struct PriestPetScaling3 : public AuraScript
         switch (data.effIdx)
         {
             case EFFECT_INDEX_0: // resistance
+                if (Unit* owner = data.caster->GetOwner())
+                    value = (owner->GetResistance(SPELL_SCHOOL_FROST) * 0.4f);
                 break;
             case EFFECT_INDEX_1: // resistance
+                if (Unit* owner = data.caster->GetOwner())
+                    value = (owner->GetResistance(SPELL_SCHOOL_ARCANE) * 0.4f);
                 break;
             case EFFECT_INDEX_2: // resistance
+                if (Unit* owner = data.caster->GetOwner())
+                    value = (owner->GetResistance(SPELL_SCHOOL_NATURE) * 0.4f);
                 break;
         }
         return value;
@@ -401,6 +478,8 @@ struct PriestPetScaling4 : public AuraScript
         switch (data.effIdx)
         {
             case EFFECT_INDEX_0: // resistance
+                if (Unit* owner = data.caster->GetOwner())
+                    value = (owner->GetResistance(SPELL_SCHOOL_SHADOW) * 0.4f);
                 break;
             default: break;
         }
@@ -554,7 +633,7 @@ struct DruidPetScaling4 : public AuraScript
     }
 };
 
-struct EnhancementPetScaling1 : public AuraScript
+struct FeralSpiritPetScaling1 : public AuraScript
 {
     int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
     {
@@ -573,7 +652,7 @@ struct EnhancementPetScaling1 : public AuraScript
     }
 };
 
-struct EnhancementPetScaling2 : public AuraScript
+struct FeralSpiritPetScaling2 : public AuraScript
 {
     int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
     {
@@ -590,7 +669,7 @@ struct EnhancementPetScaling2 : public AuraScript
     }
 };
 
-struct EnhancementPetScaling3 : public AuraScript
+struct FeralSpiritPetScaling3 : public AuraScript
 {
     int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
     {
@@ -601,6 +680,92 @@ struct EnhancementPetScaling3 : public AuraScript
             case EFFECT_INDEX_1: // resistance
                 break;
             case EFFECT_INDEX_2: // armor
+                break;
+        }
+        return value;
+    }
+};
+
+struct FeralSpiritPetScaling4 : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        switch (data.effIdx)
+        {
+            case EFFECT_INDEX_0: // hit chance
+                break;
+            case EFFECT_INDEX_1: // spell hit chance
+                break;
+            case EFFECT_INDEX_2: // damage percent done
+                break;
+        }
+        return value;
+    }
+};
+
+// when tweaking these also need to adjust serverside aura types
+struct EarthElementalPetScaling1 : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        switch (data.effIdx)
+        {
+            case EFFECT_INDEX_0: // unk
+                break;
+            case EFFECT_INDEX_1: // unk
+                break;
+            case EFFECT_INDEX_2: // unk
+                break;
+        }
+        return value;
+    }
+};
+
+struct EarthElementalPetScaling2 : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        switch (data.effIdx)
+        {
+            case EFFECT_INDEX_0: // unk
+                break;
+            case EFFECT_INDEX_1: // unk
+                break;
+            case EFFECT_INDEX_2: // unk
+                break;
+        }
+        return value;
+    }
+};
+
+struct EarthElementalPetScaling3 : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        switch (data.effIdx)
+        {
+            case EFFECT_INDEX_0: // unk
+                break;
+            case EFFECT_INDEX_1: // unk
+                break;
+            case EFFECT_INDEX_2: // unk
+                break;
+        }
+        return value;
+    }
+};
+
+struct EarthElementalPetScaling4 : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        switch (data.effIdx)
+        {
+            case EFFECT_INDEX_0: // unk
+                break;
+            case EFFECT_INDEX_1: // unk
+                break;
+            case EFFECT_INDEX_2: // unk
                 break;
         }
         return value;
@@ -678,43 +843,257 @@ struct InfernalPetScaling4 : public AuraScript
     }
 };
 
+struct DeathKnightPetScaling1 : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        switch (data.effIdx)
+        {
+            case EFFECT_INDEX_0: // stamina
+            {
+                float coeff = 0.3f;
+                if (Unit* owner = data.caster->GetOwner())
+                {
+                    for (uint32 auraId : {49572, 49571, 48965})
+                    {
+                        if (Aura* aura = owner->GetAura(auraId, EFFECT_INDEX_0))
+                        {
+                            coeff = coeff * (100 + aura->GetSpellProto()->CalculateSimpleValue(EFFECT_INDEX_1)) / 100;
+                            break;
+                        }
+                    }
+                    if (Aura* aura = owner->GetAura(58686, EFFECT_INDEX_0)) // Glyph of the Ghoul
+                        coeff += float(aura->GetAmount()) / 100;
+                    value = float(owner->GetStat(STAT_STAMINA)) * coeff;
+                }
+                break;
+            }
+            case EFFECT_INDEX_1: // strength
+            {
+                float coeff = 0.7f;
+                if (Unit* owner = data.caster->GetOwner())
+                {
+                    for (uint32 auraId : {49572, 49571, 48965})
+                    {
+                        if (Aura* aura = owner->GetAura(auraId, EFFECT_INDEX_0))
+                        {
+                            coeff = coeff * (100 + aura->GetSpellProto()->CalculateSimpleValue(EFFECT_INDEX_1)) / 100;
+                            break;
+                        }
+                    }
+                    if (Aura* aura = owner->GetAura(58686, EFFECT_INDEX_0)) // Glyph of the Ghoul
+                        coeff += float(aura->GetAmount()) / 100;
+                    value = float(owner->GetStat(STAT_STRENGTH)) * coeff;
+                }
+                break;
+            }
+            case EFFECT_INDEX_2: // spell damage
+                if (Unit* owner = data.caster->GetOwner())
+                    value = owner->GetTotalAttackPowerValue(BASE_ATTACK) * 0.125f;
+                break;
+        }
+        return value;
+    }
+};
+
+struct DeathKnightPetScaling2 : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        switch (data.effIdx)
+        {
+            case EFFECT_INDEX_0: // damage percent done
+                break;
+            case EFFECT_INDEX_1: // melee slow
+                if (Unit* owner = data.caster->GetOwner())
+                {
+                    // For others recalculate it from:
+                    float hasteMelee = 0.0f;
+                    // Increase hit from SPELL_AURA_MOD_HIT_CHANCE
+                    hasteMelee += (1 - owner->m_modAttackSpeedPct[BASE_ATTACK]) * 100;
+                    value += int32(hasteMelee);
+                }
+                break;
+            case EFFECT_INDEX_2: // mechanic immunity
+                break;
+        }
+        return value;
+    }
+};
+
+struct DeathKnightPetScaling3 : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        switch (data.effIdx)
+        {
+            case EFFECT_INDEX_0: // hit chance
+                if (Player* owner = dynamic_cast<Player*>(data.caster->GetOwner()))
+                {
+                    // For others recalculate it from:
+                    float hitMelee = 0.0f;
+                    // Increase hit from SPELL_AURA_MOD_HIT_CHANCE
+                    hitMelee += owner->GetTotalAuraModifier(SPELL_AURA_MOD_HIT_CHANCE);
+                    // Increase hit melee from meele hit ratings
+                    hitMelee += owner->GetRatingBonusValue(CR_HIT_MELEE);
+                    value += int32(hitMelee);
+                }
+                break;
+            case EFFECT_INDEX_1: // spell hit chance
+                if (Player* owner = dynamic_cast<Player*>(data.caster->GetOwner()))
+                {
+                    // For others recalculate it from:
+                    float hitSpell = 0.0f;
+                    // Increase hit from SPELL_AURA_MOD_SPELL_HIT_CHANCE
+                    hitSpell += owner->GetTotalAuraModifier(SPELL_AURA_MOD_SPELL_HIT_CHANCE);
+                    // Increase hit spell from spell hit ratings
+                    hitSpell += owner->GetRatingBonusValue(CR_HIT_SPELL);
+
+                    value += int32(hitSpell);
+                }
+                break;
+            case EFFECT_INDEX_2: // mechanic immunity
+                break;
+        }
+        return value;
+    }
+};
+
+// when tweaking these also need to adjust serverside aura types
+struct DeathKnightRuneWeaponScaling1 : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        switch (data.effIdx)
+        {
+            case EFFECT_INDEX_0: // unk
+                break;
+            case EFFECT_INDEX_1: // unk
+                break;
+            case EFFECT_INDEX_2: // unk
+                break;
+        }
+        return value;
+    }
+};
+
+struct DeathKnightRuneWeaponScaling2 : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        switch (data.effIdx)
+        {
+            case EFFECT_INDEX_0: // damage done
+                break;
+            case EFFECT_INDEX_1: // melee slow
+                if (Unit* owner = data.caster->GetOwner())
+                {
+                    // For others recalculate it from:
+                    float hasteMelee = 0.0f;
+                    // Increase hit from SPELL_AURA_MOD_HIT_CHANCE
+                    hasteMelee += (1 - owner->m_modAttackSpeedPct[BASE_ATTACK]) * 100;
+                    value += int32(hasteMelee);
+                }
+                break;
+            case EFFECT_INDEX_2: // damage percent done
+                break;
+        }
+        return value;
+    }
+};
+
+struct DeathKnightArmyOfTheDead1 : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        switch (data.effIdx)
+        {
+            case EFFECT_INDEX_0: // Unk
+                break;
+            case EFFECT_INDEX_1: // Unk
+                break;
+            case EFFECT_INDEX_2: // Unk
+                break;
+        }
+        return value;
+    }
+};
+
+struct DeathKnightBloodParasitePetScaling : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        switch (data.effIdx)
+        {
+            case EFFECT_INDEX_0: // Unk
+                break;
+            case EFFECT_INDEX_1: // Unk
+                break;
+            case EFFECT_INDEX_2: // Unk
+                break;
+        }
+        return value;
+    }
+};
+
 void LoadScalingScripts()
 {
-    RegisterAuraScript<HunterPetScaling1>("spell_hunter_pet_scaling_1");
-    RegisterAuraScript<HunterPetScaling2>("spell_hunter_pet_scaling_2");
-    RegisterAuraScript<HunterPetScaling3>("spell_hunter_pet_scaling_3");
+    RegisterSpellScript<HunterPetScaling1>("spell_hunter_pet_scaling_1");
+    RegisterSpellScript<HunterPetScaling2>("spell_hunter_pet_scaling_2");
+    RegisterSpellScript<HunterPetScaling3>("spell_hunter_pet_scaling_3");
+    RegisterSpellScript<HunterPetScaling4>("spell_hunter_pet_scaling_4");
 
-    RegisterAuraScript<WarlockPetScaling1>("spell_warlock_pet_scaling_1");
-    RegisterAuraScript<WarlockPetScaling2>("spell_warlock_pet_scaling_2");
-    RegisterAuraScript<WarlockPetScaling3>("spell_warlock_pet_scaling_3");
-    RegisterAuraScript<WarlockPetScaling4>("spell_warlock_pet_scaling_4");
+    RegisterSpellScript<HunterSnakeTrapScaling1>("spell_hunter_snake_trap_scaling_1");
 
-    RegisterAuraScript<MagePetScaling1>("spell_mage_pet_scaling_1");
-    RegisterAuraScript<MagePetScaling2>("spell_mage_pet_scaling_2");
-    RegisterAuraScript<MagePetScaling3>("spell_mage_pet_scaling_3");
-    RegisterAuraScript<MagePetScaling4>("spell_mage_pet_scaling_4");
+    RegisterSpellScript<WarlockPetScaling1>("spell_warlock_pet_scaling_1");
+    RegisterSpellScript<WarlockPetScaling2>("spell_warlock_pet_scaling_2");
+    RegisterSpellScript<WarlockPetScaling3>("spell_warlock_pet_scaling_3");
+    RegisterSpellScript<WarlockPetScaling4>("spell_warlock_pet_scaling_4");
+    RegisterSpellScript<WarlockPetScaling5>("spell_warlock_pet_scaling_5");
 
-    RegisterAuraScript<PriestPetScaling1>("spell_priest_pet_scaling_1");
-    RegisterAuraScript<PriestPetScaling2>("spell_priest_pet_scaling_2");
-    RegisterAuraScript<PriestPetScaling3>("spell_priest_pet_scaling_3");
-    RegisterAuraScript<PriestPetScaling4>("spell_priest_pet_scaling_4");
+    RegisterSpellScript<MagePetScaling1>("spell_mage_pet_scaling_1");
+    RegisterSpellScript<MagePetScaling2>("spell_mage_pet_scaling_2");
+    RegisterSpellScript<MagePetScaling3>("spell_mage_pet_scaling_3");
+    RegisterSpellScript<MagePetScaling4>("spell_mage_pet_scaling_4");
 
-    RegisterAuraScript<ElementalPetScaling1>("spell_elemental_pet_scaling_1");
-    RegisterAuraScript<ElementalPetScaling2>("spell_elemental_pet_scaling_2");
-    RegisterAuraScript<ElementalPetScaling3>("spell_elemental_pet_scaling_3");
-    RegisterAuraScript<ElementalPetScaling4>("spell_elemental_pet_scaling_4");
+    RegisterSpellScript<PriestPetScaling1>("spell_priest_pet_scaling_1");
+    RegisterSpellScript<PriestPetScaling2>("spell_priest_pet_scaling_2");
+    RegisterSpellScript<PriestPetScaling3>("spell_priest_pet_scaling_3");
+    RegisterSpellScript<PriestPetScaling4>("spell_priest_pet_scaling_4");
 
-    RegisterAuraScript<DruidPetScaling1>("spell_druid_pet_scaling_1");
-    RegisterAuraScript<DruidPetScaling2>("spell_druid_pet_scaling_2");
-    RegisterAuraScript<DruidPetScaling3>("spell_druid_pet_scaling_3");
-    RegisterAuraScript<DruidPetScaling4>("spell_druid_pet_scaling_4");
+    RegisterSpellScript<ElementalPetScaling1>("spell_elemental_pet_scaling_1");
+    RegisterSpellScript<ElementalPetScaling2>("spell_elemental_pet_scaling_2");
+    RegisterSpellScript<ElementalPetScaling3>("spell_elemental_pet_scaling_3");
+    RegisterSpellScript<ElementalPetScaling4>("spell_elemental_pet_scaling_4");
 
-    RegisterAuraScript<EnhancementPetScaling1>("spell_enhancement_pet_scaling_1");
-    RegisterAuraScript<EnhancementPetScaling2>("spell_enhancement_pet_scaling_2");
-    RegisterAuraScript<EnhancementPetScaling3>("spell_enhancement_pet_scaling_3");
+    RegisterSpellScript<DruidPetScaling1>("spell_druid_pet_scaling_1");
+    RegisterSpellScript<DruidPetScaling2>("spell_druid_pet_scaling_2");
+    RegisterSpellScript<DruidPetScaling3>("spell_druid_pet_scaling_3");
+    RegisterSpellScript<DruidPetScaling4>("spell_druid_pet_scaling_4");
 
-    RegisterAuraScript<InfernalPetScaling1>("spell_infernal_pet_scaling_1");
-    RegisterAuraScript<InfernalPetScaling2>("spell_infernal_pet_scaling_2");
-    RegisterAuraScript<InfernalPetScaling3>("spell_infernal_pet_scaling_3");
-    RegisterAuraScript<InfernalPetScaling4>("spell_infernal_pet_scaling_4");
+    RegisterSpellScript<FeralSpiritPetScaling1>("spell_feral_spirit_pet_scaling_1");
+    RegisterSpellScript<FeralSpiritPetScaling2>("spell_feral_spirit_pet_scaling_2");
+    RegisterSpellScript<FeralSpiritPetScaling3>("spell_feral_spirit_pet_scaling_3");
+    RegisterSpellScript<FeralSpiritPetScaling4>("spell_feral_spirit_pet_scaling_4");
+
+    RegisterSpellScript<EarthElementalPetScaling1>("spell_earth_elemental_pet_scaling_1");
+    RegisterSpellScript<EarthElementalPetScaling2>("spell_earth_elemental_pet_scaling_2");
+    RegisterSpellScript<EarthElementalPetScaling3>("spell_earth_elemental_pet_scaling_3");
+    RegisterSpellScript<EarthElementalPetScaling4>("spell_earth_elemental_pet_scaling_4");
+
+    RegisterSpellScript<InfernalPetScaling1>("spell_infernal_pet_scaling_1");
+    RegisterSpellScript<InfernalPetScaling2>("spell_infernal_pet_scaling_2");
+    RegisterSpellScript<InfernalPetScaling3>("spell_infernal_pet_scaling_3");
+    RegisterSpellScript<InfernalPetScaling4>("spell_infernal_pet_scaling_4");
+
+    RegisterSpellScript<DeathKnightPetScaling1>("spell_death_knight_pet_scaling_1");
+    RegisterSpellScript<DeathKnightPetScaling2>("spell_death_knight_pet_scaling_2");
+    RegisterSpellScript<DeathKnightPetScaling3>("spell_death_knight_pet_scaling_3");
+
+    RegisterSpellScript<DeathKnightRuneWeaponScaling1>("spell_death_knight_rune_weapon_scaling_1");
+    RegisterSpellScript<DeathKnightRuneWeaponScaling2>("spell_death_knight_rune_weapon_scaling_2");
+
+    RegisterSpellScript<DeathKnightArmyOfTheDead1>("spell_death_knight_army_of_the_dead_1");
+
+    RegisterSpellScript<DeathKnightBloodParasitePetScaling>("spell_death_knight_blood_parasite_pet_scaling");
 }

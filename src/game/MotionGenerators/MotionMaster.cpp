@@ -378,7 +378,7 @@ void MotionMaster::MoveInFormation(FormationSlotDataSPtr& sData, bool asMain /*=
         return;
 
     DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s is in formation with %s", m_owner->GetGuidStr().c_str(), master->GetGuidStr().c_str());
-    sLog.outString("%s is in formation with %s", m_owner->GetGuidStr().c_str(), master->GetGuidStr().c_str());
+    //sLog.outString("%s is in formation with %s", m_owner->GetGuidStr().c_str(), master->GetGuidStr().c_str());
 
     Mutate(new FormationMovementGenerator(sData, asMain));
 }
@@ -610,13 +610,17 @@ void MotionMaster::MoveJump(float x, float y, float z, float horizontalSpeed, fl
     Mutate(new EffectMovementGenerator(init, id));
 }
 
-void MotionMaster::MoveJumpFacing(float x, float y, float z, float o, float horizontalSpeed, float max_height, uint32 id/*= EVENT_JUMP*/)
+void MotionMaster::MoveJumpFacing(Position pos, float horizontalSpeed, float verticalSpeed, uint32 id/*= EVENT_JUMP*/)
 {
+    float moveTimeHalf = verticalSpeed / Movement::gravity;
+    float max_height = -Movement::computeFallElevation(moveTimeHalf, false, -verticalSpeed);
+
     Movement::MoveSplineInit init(*m_owner);
-    init.MoveTo(x, y, z);
+    init.MoveTo(pos.x, pos.y, pos.z);
     init.SetParabolic(max_height, 0);
     init.SetVelocity(horizontalSpeed);
-    init.SetFacing(o);
+    if (pos.o != 100.f)
+        init.SetFacing(pos.o);
     Mutate(new EffectMovementGenerator(init, id));
 }
 

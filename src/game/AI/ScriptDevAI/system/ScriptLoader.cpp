@@ -22,10 +22,12 @@ extern void AddSC_generic_creature();
 extern void AddSC_go_scripts();
 extern void AddSC_guards();
 extern void AddSC_item_scripts();
+extern void AddSC_item_scripts_wotlk();
 extern void AddSC_npc_professions();
 extern void AddSC_npcs_special();
 extern void AddSC_quests_scripts();
 extern void AddSC_spell_scripts();
+extern void AddSC_spell_scripts_wotlk();
 extern void AddSC_world_map_scripts();
 extern void AddSC_boss_highlord_kruul();
 extern void AddSC_war_effort();
@@ -140,9 +142,7 @@ extern void AddSC_zulaman();
 extern void AddSC_boss_zuljin();
 extern void AddSC_boss_arlokk();                            // zulgurub
 extern void AddSC_boss_hakkar();
-extern void AddSC_boss_hazzarah();
 extern void AddSC_boss_jeklik();
-extern void AddSC_boss_jindo();
 extern void AddSC_boss_mandokir();
 extern void AddSC_boss_marli();
 extern void AddSC_boss_ouro();
@@ -521,10 +521,12 @@ void AddScripts()
     AddSC_go_scripts();
     AddSC_guards();
     AddSC_item_scripts();
+    AddSC_item_scripts_wotlk();
     AddSC_npc_professions();
     AddSC_npcs_special();
     AddSC_quests_scripts();
     AddSC_spell_scripts();
+    AddSC_spell_scripts_wotlk();
     AddSC_world_map_scripts();
     AddSC_boss_highlord_kruul();
     AddSC_war_effort();
@@ -639,9 +641,7 @@ void AddScripts()
     AddSC_boss_zuljin();
     AddSC_boss_arlokk();                                    // zulgurub
     AddSC_boss_hakkar();
-    AddSC_boss_hazzarah();
     AddSC_boss_jeklik();
-    AddSC_boss_jindo();
     AddSC_boss_mandokir();
     AddSC_boss_marli();
     AddSC_boss_ouro();

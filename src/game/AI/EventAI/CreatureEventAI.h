@@ -83,7 +83,7 @@ enum EventAI_Type
 enum EventAI_ActionType
 {
     ACTION_T_NONE                       = 0,                // No action
-    ACTION_T_TEXT                       = 1,                // TextId1, optionally -TextId2, optionally -TextId3(if -TextId2 exist). If more than just -TextId1 is defined, randomize. Negative values.
+    ACTION_T_TEXT                       = 1,                // TextId1, optionally TextId2, optionally TextId3(if TextId2 exist). If more than just TextId1 is defined, randomize. Values are broadcast_text Ids.
     ACTION_T_SET_FACTION                = 2,                // FactionId (or 0 for default)
     ACTION_T_MORPH_TO_ENTRY_OR_MODEL    = 3,                // Creature_template entry(param1) OR ModelId (param2) (or 0 for both to demorph)
     ACTION_T_SOUND                      = 4,                // SoundId
@@ -126,7 +126,7 @@ enum EventAI_ActionType
     ACTION_T_FORCE_DESPAWN              = 41,               // Delay (0-instant despawn)
     ACTION_T_SET_DEATH_PREVENTION       = 42,               // 0-off/1-on
     ACTION_T_MOUNT_TO_ENTRY_OR_MODEL    = 43,               // Creature_template entry(param1) OR ModelId (param2) (or 0 for both to unmount)
-    ACTION_T_CHANCED_TEXT               = 44,               // Chance to display the text, TextId1, optionally TextId2. If more than just -TextId1 is defined, randomize. Negative values.
+    ACTION_T_CHANCED_TEXT               = 44,               // Chance to display the text, TextId1, optionally TextId2. If more than just TextId1 is defined, randomize. Values are broadcast_text Ids.
     ACTION_T_THROW_AI_EVENT             = 45,               // EventType, Radius, Target
     ACTION_T_SET_THROW_MASK             = 46,               // EventTypeMask, unused, unused
     ACTION_T_SET_STAND_STATE            = 47,               // StandState, unused, unused
@@ -146,6 +146,7 @@ enum EventAI_ActionType
     ACTION_T_SET_IMMOBILIZED_STATE      = 61,               // state (true - rooted), combatonly (true - autoremoved on combat stop)
     ACTION_T_SET_DESPAWN_AGGREGATION    = 62,               // mask, entry, entry2
     ACTION_T_SET_IMMUNITY_SET           = 63,               // SetId - creature_immunities
+    ACTION_T_SET_FOLLOW_MOVEMENT        = 64,               // state - 0 off, 1 on
 
     ACTION_T_END,
 };
@@ -577,6 +578,11 @@ struct CreatureEventAI_Action
         {
             uint32 setId;
         } immunitySet;
+        // ACTION_T_SET_FOLLOW_MOVEMENT
+        struct
+        {
+            uint32 state;
+        } followMovement;
         // RAW
         struct
         {
@@ -882,8 +888,6 @@ class CreatureEventAI : public CreatureAI
         inline Unit* GetTargetByType(uint32 target, Unit* actionInvoker, Unit* AIEventSender, Unit* eventTarget, bool& isError, uint32 forSpellId = 0, uint32 selectFlags = 0) const;
 
         bool SpawnedEventConditionsCheck(CreatureEventAI_Event const& event) const;
-
-        void DoFindFriendlyMissingBuff(CreatureList& list, float range, uint32 spellId, bool inCombat) const;
 
         MovementGeneratorType GetDefaultMovement() { return m_defaultMovement; }
     protected:

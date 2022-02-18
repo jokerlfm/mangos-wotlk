@@ -1259,25 +1259,6 @@ struct spell_eject_all_passengers : public SpellScript
     }
 };
 
-struct Replenishment : public SpellScript
-{
-    void OnInit(Spell* spell) const override
-    {
-        spell->SetMaxAffectedTargets(10);
-        spell->SetFilteringScheme(EFFECT_INDEX_0, false, SCHEME_PRIORITIZE_MANA);
-    }
-
-    bool OnCheckTarget(const Spell* spell, Unit* target, SpellEffectIndex /*eff*/) const override
-    {
-        Unit* caster = spell->GetCaster();
-        if (caster->GetMap()->IsBattleArena()) // in arenas only hits caster
-            if (target != caster)
-                return false;
-
-        return true;
-    }
-};
-
 enum SpellVisualKitFoodOrDrink
 {
     SPELL_VISUAL_KIT_FOOD = 406,
@@ -1368,7 +1349,7 @@ struct IncreasedHealingDoneDummy : public AuraScript
         aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_HEALING_DONE, apply);
     }
 
-    void OnDamageCalculate(Aura* aura, int32& advertisedBenefit, float& /*totalMod*/) const override
+    void OnDamageCalculate(Aura* aura, Unit* /*victim*/, int32& advertisedBenefit, float& /*totalMod*/) const override
     {
         advertisedBenefit += aura->GetModifier()->m_amount;
     }
@@ -1385,6 +1366,115 @@ struct spell_scourge_strike : public SpellScript
     }
 };
 
+enum
+{
+    SPELL_THISTLEFUR_DEATH = 8603,
+    SPELL_RIVERPAW_DEATH   = 8655,
+    SPELL_STROMGARDE_DEATH = 8894,
+    SPELL_CRUSHRIDGE_DEATH = 9144,
+
+    SAY_RAGE_FALLEN        = 1151,
+};
+
+struct TribalDeath : public SpellScript
+{
+    bool OnCheckTarget(const Spell* spell, Unit* target, SpellEffectIndex /*eff*/) const override
+    {
+        uint32 entry = 0;
+        switch (spell->m_spellInfo->Id)
+        {
+            case SPELL_THISTLEFUR_DEATH: entry = 3925; break; // Thistlefur Avenger
+            case SPELL_RIVERPAW_DEATH: entry = 0; break; // Unk
+            case SPELL_STROMGARDE_DEATH: entry = 2585; break; // Stromgarde Vindicator
+            case SPELL_CRUSHRIDGE_DEATH: entry = 2287; break; // Crushridge Warmonger
+        }
+        if (target->GetEntry() != entry)
+            return false;
+        return true;
+    }
+
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        uint32 spellId = 0;
+        switch (spell->m_spellInfo->Id)
+        {
+            case SPELL_THISTLEFUR_DEATH: spellId = 8602; break;
+            case SPELL_RIVERPAW_DEATH: spellId = 0; break; // Unk
+            case SPELL_STROMGARDE_DEATH: spellId = 8602; break;
+            case SPELL_CRUSHRIDGE_DEATH: spellId = 8269; break;
+        }
+        Unit* target = spell->GetUnitTarget();
+        Unit* caster = spell->GetCaster();
+        target->CastSpell(nullptr, spellId, TRIGGERED_OLD_TRIGGERED);
+        if (!target->IsInCombat())
+            if (Unit* killer = target->GetMap()->GetUnit(static_cast<Creature*>(target)->GetKillerGuid()))
+                target->AI()->AttackStart(killer);
+
+        if (spell->m_spellInfo->Id == SPELL_CRUSHRIDGE_DEATH)
+            DoBroadcastText(SAY_RAGE_FALLEN, target, caster);
+    }
+};
+
+struct RetaliationCreature : public SpellScript
+{
+    SpellCastResult OnCheckCast(Spell* spell, bool /*strict*/) const override
+    {
+        if (!spell->m_targets.getUnitTarget() || !spell->GetCaster()->HasInArc(spell->m_targets.getUnitTarget()))
+            return SPELL_FAILED_CASTER_AURASTATE;
+
+        return SPELL_CAST_OK;
+    }
+};
+
+struct PreventSpellIfSameAuraOnCaster : public SpellScript
+{
+    SpellCastResult OnCheckCast(Spell* spell, bool /*strict*/) const override
+    {
+        if (spell->GetCaster()->HasAura(spell->m_spellInfo->Id))
+            return SPELL_FAILED_CASTER_AURASTATE;
+
+        return SPELL_CAST_OK;
+    }
+};
+
+struct Stoned : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        Unit* target = aura->GetTarget();
+        if (apply)
+        {
+            if (target->GetTypeId() != TYPEID_UNIT)
+                return;
+
+            if (target->GetEntry() == 25507)
+                return;
+
+            target->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_IMMUNE_TO_NPC | UNIT_FLAG_NOT_SELECTABLE);
+            target->addUnitState(UNIT_STAT_ROOT);
+        }
+        else
+        {
+            if (target->GetTypeId() != TYPEID_UNIT)
+                return;
+
+            if (target->GetEntry() == 25507)
+                return;
+
+            // see dummy effect of spell 10254 for removal of flags etc
+            target->CastSpell(nullptr, 10254, TRIGGERED_OLD_TRIGGERED);
+        }
+    }
+};
+
+struct BirthNoVisualInstantSpawn : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex /*effIdx*/) const override
+    {
+        spell->GetCaster()->SetFlag(UNIT_FIELD_FLAGS_2, UNIT_FLAG2_DO_NOT_FADE_IN);
+    }
+};
+
 void AddSC_spell_scripts()
 {
     Script* pNewScript = new Script;
@@ -1398,30 +1488,32 @@ void AddSC_spell_scripts()
     pNewScript->pEffectAuraDummy = &EffectAuraDummy_spell_aura_dummy_npc;
     pNewScript->RegisterSelf();
 
-    RegisterAuraScript<GreaterInvisibilityMob>("spell_greater_invisibility_mob");
-    RegisterAuraScript<InebriateRemoval>("spell_inebriate_removal");
+    RegisterSpellScript<GreaterInvisibilityMob>("spell_greater_invisibility_mob");
+    RegisterSpellScript<InebriateRemoval>("spell_inebriate_removal");
     RegisterSpellScript<AstralBite>("spell_astral_bite");
     RegisterSpellScript<FelInfusion>("spell_fel_infusion");
-    RegisterAuraScript<AuchenaiPossess>("spell_auchenai_possess");
-    RegisterAuraScript<GettingSleepyAura>("spell_getting_sleepy_aura");
-    RegisterAuraScript<AllergiesAura>("spell_allergies");
+    RegisterSpellScript<AuchenaiPossess>("spell_auchenai_possess");
+    RegisterSpellScript<GettingSleepyAura>("spell_getting_sleepy_aura");
+    RegisterSpellScript<AllergiesAura>("spell_allergies");
     RegisterSpellScript<UseCorpse>("spell_use_corpse");
     RegisterSpellScript<RaiseDead>("spell_raise_dead");
     RegisterSpellScript<SplitDamage>("spell_split_damage");
     RegisterSpellScript<TKDive>("spell_tk_dive");
-    RegisterAuraScript<CurseOfPain>("spell_curse_of_pain");
-    RegisterAuraScript<spell_seed_of_corruption_npc>("spell_seed_of_corruption_npc");
+    RegisterSpellScript<CurseOfPain>("spell_curse_of_pain");
+    RegisterSpellScript<spell_seed_of_corruption_npc>("spell_seed_of_corruption_npc");
     RegisterSpellScript<deflection>("spell_deflection");
     RegisterSpellScript<spell_eject_all_passengers>("spell_eject_all_passengers");
     RegisterSpellScript<WondervoltTrap>("spell_wondervolt_trap");
-    RegisterAuraScript<FoodAnimation>("spell_food_animation");
-    RegisterAuraScript<DrinkAnimation>("spell_drink_animation");
-    RegisterAuraScript<Drink>("spell_drink");
+    RegisterSpellScript<FoodAnimation>("spell_food_animation");
+    RegisterSpellScript<DrinkAnimation>("spell_drink_animation");
+    RegisterSpellScript<Drink>("spell_drink");
     RegisterSpellScript<spell_effect_summon_no_follow_movement>("spell_effect_summon_no_follow_movement");
-    RegisterAuraScript<SpellHasteHealerTrinket>("spell_spell_haste_healer_trinket");
-    RegisterAuraScript<IncreasedHealingDoneDummy>("spell_increased_healing_done_dummy");
+    RegisterSpellScript<SpellHasteHealerTrinket>("spell_spell_haste_healer_trinket");
+    RegisterSpellScript<IncreasedHealingDoneDummy>("spell_increased_healing_done_dummy");
     RegisterSpellScript<spell_scourge_strike>("spell_scourge_strike");
-
-    // wotlk section
-    RegisterSpellScript<Replenishment>("spell_replenishment");
+    RegisterSpellScript<TribalDeath>("spell_tribal_death");
+    RegisterSpellScript<PreventSpellIfSameAuraOnCaster>("spell_prevent_spell_if_same_aura_on_caster");
+    RegisterSpellScript<RetaliationCreature>("spell_retaliation_creature");
+    RegisterSpellScript<Stoned>("spell_stoned");
+    RegisterSpellScript<BirthNoVisualInstantSpawn>("spell_birth_no_visual_instant_spawn");
 }

@@ -17,6 +17,18 @@
 */
 
 #include "Spells/Scripts/SpellScript.h"
+#include "Spells/SpellAuras.h"
+#include "Spells/SpellMgr.h"
+
+struct Entrapment : public AuraScript
+{
+    SpellAuraProcResult OnProc(Aura* /*aura*/, ProcExecutionData& procData) const override
+    {
+        if (procData.spell)
+            procData.triggerOriginalCaster = procData.spell->GetTrueCaster()->GetObjectGuid();
+        return SPELL_AURA_PROC_OK;
+    }
+};
 
 struct KillCommand : public SpellScript
 {
@@ -67,10 +79,119 @@ struct Disengage : public SpellScript
     }
 };
 
+struct RoarOfSacrifice : public AuraScript
+{
+    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
+    {
+        Unit* pet = aura->GetCaster();
+        Unit* target = aura->GetTarget();
+        if (!pet)
+            return SPELL_AURA_PROC_OK;
+
+        int32 damage = procData.damage;
+        target->CastCustomSpell(pet, 67481, &damage, nullptr, nullptr, TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_CURRENT_CASTED_SPELL | TRIGGERED_HIDE_CAST_IN_COMBAT_LOG);
+        return SPELL_AURA_PROC_OK;
+    }
+};
+
+struct RapidRecuperationPeriodic : public AuraScript
+{
+    void OnPeriodicTrigger(Aura* aura, PeriodicTriggerData& data) const override
+    {
+        Unit* target = aura->GetTarget();
+        data.basePoints[0] = target->GetPower(POWER_MANA) * aura->GetAmount() / 100;
+    }
+};
+
+struct RapidKilling : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (!apply)
+            return;
+
+        Unit* target = aura->GetTarget();
+        if (Player* player = dynamic_cast<Player*>(target))
+        {
+            if (Aura* aura = player->GetKnownTalentRankAuraById(2131, EFFECT_INDEX_1)) // Rapid Recuperation talent
+            {
+                uint32 spellId = 0;
+                switch (aura->GetId())
+                {
+                    case 53228: spellId = 56654; break; // Rank 1
+                    case 53232: spellId = 58882; break; // Rank 2
+                }
+                target->CastSpell(nullptr, spellId, TRIGGERED_OLD_TRIGGERED);
+            }
+        }
+    }
+};
+
+struct ExplosiveShot : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        if (data.caster)
+            value += int32(data.caster->GetTotalAttackPowerValue(RANGED_ATTACK) * 14 / 100);
+        return value;
+    }
+
+    void OnPeriodicDummy(Aura* aura) const override
+    {
+        if (Unit* caster = aura->GetCaster())
+        {
+            int32 amount = aura->GetAmount();
+            caster->CastCustomSpell(aura->GetTarget(), 53352, &amount, nullptr, nullptr, TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_CURRENT_CASTED_SPELL | TRIGGERED_HIDE_CAST_IN_COMBAT_LOG, nullptr, aura);
+        }
+    }
+};
+
+struct LockAndLoad : public AuraScript
+{
+    bool OnCheckProc(Aura* aura, ProcExecutionData& /*data*/) const override
+    {
+        if (aura->GetTarget()->HasAura(67544)) // Lock and Load Marker
+            return false;
+        return true;
+    }
+
+    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
+    {
+        if (!procData.spellInfo || aura->GetEffIndex() != EFFECT_INDEX_0)
+            return SPELL_AURA_PROC_OK;
+
+        if (procData.spellInfo->IsFitToFamilyMask(0x00000018) && (procData.procFlags & PROC_FLAG_ON_TRAP_ACTIVATION) != 0)
+            if (!roll_chance_i(aura->GetAmount())) // eff 0 chance
+                return SPELL_AURA_PROC_FAILED;
+
+        if (procData.spellInfo->IsFitToFamilyMask(0x0800000000000000, 0x00024000) && (procData.procFlags & PROC_FLAG_DEAL_HARMFUL_PERIODIC) != 0)
+            if (Aura* secondEffectAura = aura->GetHolder()->m_auras[EFFECT_INDEX_1]) // should never fail
+                if (!roll_chance_i(secondEffectAura->GetAmount())) // eff 0 chance
+                    return SPELL_AURA_PROC_FAILED;
+
+        return SPELL_AURA_PROC_OK;
+    }
+};
+
+struct LockAndLoadTrigger : public SpellScript
+{
+    void OnCast(Spell* spell) const override
+    {
+        spell->AddPrecastSpell(67544);
+    }
+};
+
 void LoadHunterScripts()
 {
+    RegisterSpellScript<Entrapment>("spell_entrapment");
     RegisterSpellScript<KillCommand>("spell_kill_command");
     RegisterSpellScript<Misdirection>("spell_misdirection");
-    RegisterAuraScript<ExposeWeakness>("spell_expose_weakness");
+    RegisterSpellScript<ExposeWeakness>("spell_expose_weakness");
     RegisterSpellScript<Disengage>("spell_disengage");
+    RegisterSpellScript<RoarOfSacrifice>("spell_roar_of_sacrifice");
+    RegisterSpellScript<RapidRecuperationPeriodic>("spell_rapid_recuperation_periodic");
+    RegisterSpellScript<RapidKilling>("spell_rapid_killing");
+    RegisterSpellScript<ExplosiveShot>("spell_explosive_shot");
+    RegisterSpellScript<LockAndLoad>("spell_lock_and_load");
+    RegisterSpellScript<LockAndLoadTrigger>("spell_lock_and_load_trigger");
 }

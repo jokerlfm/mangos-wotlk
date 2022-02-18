@@ -372,6 +372,13 @@ void LoadDBCStores(const std::string& dataPath)
 
     uint32 build = ReadDBCBuild(dbcPath);
 
+    if (!MaNGOS::Filesystem::exists(dbcPath))
+    {
+        sLog.outError("DBC directory does not exist: %s", dataPath.c_str());
+        Log::WaitBeforeContinueIfNeed();
+        exit(1);
+    }
+
     // Check the expected DBC version
     if (!IsAcceptableClientBuild(build))
     {

@@ -147,7 +147,7 @@ class Pet : public Creature
 
         PetType getPetType() const { return m_petType; }
         void setPetType(PetType type) { m_petType = type; }
-        bool isControlled() const { return getPetType() == SUMMON_PET || getPetType() == HUNTER_PET; }
+        bool isControlled() const { return getPetType() == SUMMON_PET || getPetType() == HUNTER_PET || IsControllableGuardian(); }
         bool isTemporarySummoned() const { return m_duration > 0; }
         bool IsGuardian() const { return getPetType() == GUARDIAN_PET; }
 
@@ -155,7 +155,7 @@ class Pet : public Creature
         bool CreateBaseAtCreature(Creature* creature);
         bool LoadPetFromDB(Player* owner, Position const& spawnPos, uint32 petentry = 0, uint32 petnumber = 0, bool current = false, uint32 healthPercentage = 0, bool permanentOnly = false, bool forced = false);
         void SavePetToDB(PetSaveMode mode, Player* owner);
-        Position GetPetSpawnPosition(Player* owner);
+        static Position GetPetSpawnPosition(Unit* owner);
         bool isLoading() const { return m_loading; }
         void SetLoading(bool state) { m_loading = state; }
         void Unsummon(PetSaveMode mode, Unit* owner = nullptr);
@@ -229,8 +229,9 @@ class Pet : public Creature
         void _SaveSpellCooldowns();
         void _LoadAuras(uint32 timediff);
         void _SaveAuras();
-        void _LoadSpells();
+        bool _LoadSpells();
         void _SaveSpells();
+        bool _LoadGuardianPetNumber();
 
         bool addSpell(uint32 spell_id, ActiveStates active = ACT_DECIDE, PetSpellState state = PETSPELL_NEW, PetSpellType type = PETSPELL_NORMAL);
         bool learnSpell(uint32 spell_id);
@@ -283,6 +284,21 @@ class Pet : public Creature
         void ResetCorpseRespawn();
 
         void ForcedDespawn(uint32 timeMSToDespawn = 0, bool onlyAlive = false) override;
+
+        void SetDismissDisabled() { m_dismissDisabled = true; }
+        bool IsDismissDisabled() { return m_dismissDisabled; }
+
+        void SetControllableGuardian() { m_controllableGuardian = true; }
+        bool IsControllableGuardian() const { return m_controllableGuardian; }
+
+        void SetNoMountedFollow() { m_doNotFollowMounted = true; }
+        bool IsNoMountedFollow() const override { return m_doNotFollowMounted; }
+        
+        void SetSaveAutoCast() { m_saveAutocast = true; }
+        bool IsSaveAutoCast() const { return m_saveAutocast; }
+        void InitializeSpellsForControllableGuardian(bool load);
+
+        void StartCooldown(Unit* owner);
     protected:
         uint32  m_happinessTimer;
         PetType m_petType;
@@ -295,6 +311,11 @@ class Pet : public Creature
         PetModeFlags m_petModeFlags;
         CharmInfo*   m_originalCharminfo;
         bool m_inStatsUpdate;
+        bool m_dismissDisabled;
+        bool m_controllableGuardian;
+        bool m_doNotFollowMounted;
+        bool m_saveAutocast;
+        bool m_imposedCooldown;
 
         void SaveToDB(uint32, uint8, uint32) override       // overwrite of Creature::SaveToDB     - don't must be called
         {

@@ -536,11 +536,11 @@ enum UnitFlags
 enum UnitFlags2
 {
     UNIT_FLAG2_FEIGN_DEATH          = 0x00000001,
-    UNIT_FLAG2_UNK1                 = 0x00000002,           // Hides body and body armor. Weapons and shoulder and head armor still visible
+    UNIT_FLAG2_HIDE_BODY            = 0x00000002,           // Hides body and body armor. Weapons and shoulder and head armor still visible
     UNIT_FLAG2_IGNORE_REPUTATION    = 0x00000004,
     UNIT_FLAG2_COMPREHEND_LANG      = 0x00000008,
     UNIT_FLAG2_CLONED               = 0x00000010,           // Used in SPELL_AURA_MIRROR_IMAGE
-    UNIT_FLAG2_UNK5                 = 0x00000020,
+    UNIT_FLAG2_DO_NOT_FADE_IN       = 0x00000020,
     UNIT_FLAG2_FORCE_MOVE           = 0x00000040,
     UNIT_FLAG2_DISARM_OFFHAND       = 0x00000080,           // also shield case
     UNIT_FLAG2_UNK8                 = 0x00000100,
@@ -718,7 +718,7 @@ struct CalcDamageInfo
     SubDamageInfo subDamage[MAX_ITEM_PROTO_DAMAGES];
     uint32 blocked_amount;
     uint32 HitInfo;
-    uint32 TargetState;
+    uint8  TargetState;
     // Helper
     WeaponAttackType attackType; //
     uint32 procAttacker;
@@ -847,6 +847,7 @@ struct ProcExecutionData
     std::array<int32, MAX_EFFECT_INDEX> basepoints = { 0, 0, 0 };
     bool procOnce;
     Unit* triggerTarget;
+    ObjectGuid triggerOriginalCaster; // not filled by default
 
     ProcExecutionData(ProcSystemArguments& data, bool isVictim);
 };
@@ -1135,6 +1136,8 @@ struct SelectAttackingTargetParams
 };
 
 struct SpellProcEventEntry;                                 // used only privately
+
+extern float baseMoveSpeed[MAX_MOVE_TYPE];
 
 class Unit : public WorldObject
 {
@@ -1864,7 +1867,7 @@ class Unit : public WorldObject
         Unit* GetCharmer(WorldObject const* pov = nullptr) const;
         Unit* GetCreator(WorldObject const* pov = nullptr) const;
         Unit* GetTarget(WorldObject const* pov = nullptr) const;
-        Unit* GetChannelObject(WorldObject const* pov = nullptr) const;
+        WorldObject* GetChannelObject(WorldObject const* pov = nullptr) const;
 
         void SetCharm(Unit* charmed) { SetCharmGuid(charmed ? charmed->GetObjectGuid() : ObjectGuid()); }
         void SetCharmer(Unit* charmer) { SetCharmerGuid(charmer ? charmer->GetObjectGuid() : ObjectGuid()); }
@@ -2200,7 +2203,7 @@ class Unit : public WorldObject
         void UpdateModelData();
         void SendCollisionHeightUpdate(float height);
 
-        DynamicObject* GetDynObject(uint32 spellId, SpellEffectIndex effIndex);
+        DynamicObject* GetDynObject(uint32 spellId, SpellEffectIndex effIndex, Unit* target = nullptr);
         DynamicObject* GetDynObject(uint32 spellId);
         void AddDynObject(DynamicObject* dynObj);
         void RemoveDynObject(uint32 spellid);
@@ -2236,8 +2239,8 @@ class Unit : public WorldObject
 
         bool IsTriggeredAtSpellProcEvent(ProcExecutionData& data, SpellAuraHolder* holder, SpellProcEventEntry const*& spellProcEvent);
         // only to be used in proc handlers - basepoints is expected to be a MAX_EFFECT_INDEX sized array
-        SpellAuraProcResult TriggerProccedSpell(Unit* target, std::array<int32, MAX_EFFECT_INDEX>& basepoints, uint32 triggeredSpellId, Item* castItem, Aura* triggeredByAura, uint32 cooldown);
-        SpellAuraProcResult TriggerProccedSpell(Unit* target, std::array<int32, MAX_EFFECT_INDEX>& basepoints, SpellEntry const* spellInfo, Item* castItem, Aura* triggeredByAura, uint32 cooldown);
+        SpellAuraProcResult TriggerProccedSpell(Unit* target, std::array<int32, MAX_EFFECT_INDEX>& basepoints, uint32 triggeredSpellId, Item* castItem, Aura* triggeredByAura, uint32 cooldown, ObjectGuid originalCaster);
+        SpellAuraProcResult TriggerProccedSpell(Unit* target, std::array<int32, MAX_EFFECT_INDEX>& basepoints, SpellEntry const* spellInfo, Item* castItem, Aura* triggeredByAura, uint32 cooldown, ObjectGuid originalCaster);
         // Aura proc handlers
         SpellAuraProcResult HandleDummyAuraProc(ProcExecutionData& data);
         SpellAuraProcResult HandleHasteAuraProc(ProcExecutionData& data);
@@ -2520,6 +2523,13 @@ class Unit : public WorldObject
         void AddSummonForOnDeathDespawn(ObjectGuid guid);
         void DespawnSummonsOnDeath();
 
+        // false if only visible to set and not equal
+        virtual bool IsOnlyVisibleTo(ObjectGuid guid) const { return true; }
+
+        virtual bool IsNoMountedFollow() const { return false; }
+
+        virtual bool IsNoWeaponSkillGain() const { return false; }
+
     protected:
         bool MeetsSelectAttackingRequirement(Unit* target, SpellEntry const* spellInfo, uint32 selectFlags, SelectAttackingTargetParams params) const;
 
@@ -2686,6 +2696,7 @@ class Unit : public WorldObject
         // Need to safeguard aura proccing in Unit::ProcDamageAndSpell
         bool m_spellProcsHappening;
         std::vector<SpellAuraHolder*> m_delayedSpellAuraHolders;
+        uint32 m_hasHeartbeatProcCounter;
 
         bool m_alwaysHit;
         bool m_noThreat;

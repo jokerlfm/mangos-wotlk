@@ -32,7 +32,8 @@ Pet::Pet(PetType type) :
     m_resetTalentsCost(0), m_resetTalentsTime(0), m_usedTalentCount(0),
     m_removed(false), m_happinessTimer(7500), m_petType(type), m_duration(0),
     m_loading(false),
-    m_declinedname(nullptr), m_petModeFlags(PET_MODE_DEFAULT), m_originalCharminfo(nullptr), m_inStatsUpdate(false)
+    m_declinedname(nullptr), m_petModeFlags(PET_MODE_DEFAULT), m_originalCharminfo(nullptr), m_inStatsUpdate(false), m_dismissDisabled(false),
+    m_controllableGuardian(false), m_doNotFollowMounted(false), m_imposedCooldown(false)
 {
     m_name = "Pet";
     m_regenTimer = 4000;
@@ -54,6 +55,11 @@ void Pet::AddToWorld()
         GetMap()->GetObjectsStore().insert<Pet>(GetObjectGuid(), (Pet*)this);
 
     Unit::AddToWorld();
+
+    if (isControlled())
+		if (Unit* owner = GetOwner())
+			if (owner->IsPlayer())
+				static_cast<Player*>(owner)->AddControllable(this);
 }
 
 void Pet::RemoveFromWorld()
@@ -239,6 +245,15 @@ bool Pet::LoadPetFromDB(Player* owner, Position const& spawnPos, uint32 petentry
         return false;
     }
 
+    // DK Permanent ghoul spell
+    if (summon_spell_id == 52150 && current && !forced) // must cast through spell in order to trigger correct ghoul CD
+    {
+        Position pos = Pet::GetPetSpawnPosition(owner);
+        owner->CastSpell(pos.x, pos.y, pos.z, summon_spell_id, TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_COOLDOWNS);
+        delete result;
+        return false;
+    }
+
     setPetType(pet_type);
     setFaction(owner->GetFaction());
     SetUInt32Value(UNIT_CREATED_BY_SPELL, summon_spell_id);
@@ -392,14 +407,6 @@ bool Pet::LoadPetFromDB(Player* owner, Position const& spawnPos, uint32 petentry
 
     SavePetToDB(PET_SAVE_AS_CURRENT, owner);
 
-    if (owner)
-    {
-        SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(GetUInt32Value(UNIT_CREATED_BY_SPELL));
-        // Add infinity cooldown on db load
-        if (spellInfo && spellInfo->HasAttribute(SPELL_ATTR_DISABLED_WHILE_ACTIVE))
-            owner->AddCooldown(*spellInfo, nullptr, true);
-    }
-
     if (GenericTransport* transport = owner->GetTransport())
         transport->AddPetToTransport(owner, this);
     return true;
@@ -414,8 +421,7 @@ void Pet::SavePetToDB(PetSaveMode mode, Player* owner)
     if (!isControlled())
         return;
 
-    // dont save shadowfiend
-    if (owner->getClass() == CLASS_PRIEST)
+    if (getPetType() == GUARDIAN_PET && !IsSaveAutoCast())
         return;
 
     // current/stable/not_in_slot
@@ -527,7 +533,7 @@ void Pet::SavePetToDB(PetSaveMode mode, Player* owner)
     }
 }
 
-Position Pet::GetPetSpawnPosition(Player* owner)
+Position Pet::GetPetSpawnPosition(Unit* owner)
 {
     Position pos;
     owner->GetFirstCollisionPosition(pos, 2.f, owner->GetOrientation() + M_PI_F / 2);
@@ -583,6 +589,9 @@ void Pet::SetOwnerGuid(ObjectGuid owner)
 {
     switch (uint32(m_petType))
     {
+        case GUARDIAN_PET:
+            if (!m_controllableGuardian)
+                break;
         case SUMMON_PET:
         case HUNTER_PET:
             SetSummonerGuid(owner);
@@ -617,6 +626,13 @@ void Pet::SetDeathState(DeathState s)                       // overwrite virtual
         }
 
         SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_STUNNED);
+
+        if (Unit* owner = GetOwner())
+        {
+            StartCooldown(owner);
+            if (getPetType() == GUARDIAN_PET)
+                owner->RemoveGuardian(this);
+        }
     }
     else if (GetDeathState() == ALIVE)
     {
@@ -657,7 +673,7 @@ void Pet::Update(const uint32 diff)
 
             if (isControlled())
             {
-                if (owner->GetPetGuid() != GetObjectGuid())
+                if (owner->GetPetGuid() != GetObjectGuid() && !IsControllableGuardian())
                 {
                     Unsummon(getPetType() == HUNTER_PET ? PET_SAVE_AS_DELETED : PET_SAVE_NOT_IN_SLOT, owner);
                     return;
@@ -670,7 +686,7 @@ void Pet::Update(const uint32 diff)
                     m_duration -= (int32)diff;
                 else
                 {
-                    Unsummon(getPetType() != SUMMON_PET ? PET_SAVE_AS_DELETED : PET_SAVE_NOT_IN_SLOT, owner);
+                    Unsummon(getPetType() != SUMMON_PET && !IsSaveAutoCast() ? PET_SAVE_AS_DELETED : PET_SAVE_NOT_IN_SLOT, owner);
                     return;
                 }
             }
@@ -777,6 +793,8 @@ void Pet::Unsummon(PetSaveMode mode, Unit* owner /*= nullptr*/)
     if (IsInCombat())
         CombatStop(true);
 
+    AI()->OnUnsummon();
+
     if (owner)
     {
         Player* p_owner = nullptr;
@@ -834,12 +852,7 @@ void Pet::Unsummon(PetSaveMode mode, Unit* owner /*= nullptr*/)
         }
 
         if (p_owner)
-        {
-            SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(GetUInt32Value(UNIT_CREATED_BY_SPELL));
-            // Remove infinity cooldown
-            if (spellInfo && spellInfo->HasAttribute(SPELL_ATTR_DISABLED_WHILE_ACTIVE))
-                p_owner->AddCooldown(*spellInfo);
-        }
+            StartCooldown(p_owner);
 
         // only if current pet in slot
         switch (getPetType())
@@ -851,6 +864,13 @@ void Pet::Unsummon(PetSaveMode mode, Unit* owner /*= nullptr*/)
             case PROTECTOR_PET:
             case GUARDIAN_PET:
                 owner->RemoveGuardian(this);
+                if (m_controllableGuardian)
+                {
+                    if (owner->GetPetGuid() == GetObjectGuid())
+                        owner->SetPet(nullptr);
+                    else
+                        m_saveAutocast = false; // only save the main one
+                }
                 break;
             default:
                 if (owner->GetPetGuid() == GetObjectGuid())
@@ -1187,66 +1207,53 @@ void Pet::InitStatsForLevel(uint32 petlevel)
 
 void Pet::InitPetScalingAuras()
 {
-    if (getPetType() == HUNTER_PET)
+    if (m_scalingAuras.size() > 0) // levelup rebuild case
     {
-        CastSpell(nullptr, 34902, TRIGGERED_NONE);
-        CastSpell(nullptr, 34903, TRIGGERED_NONE);
-        CastSpell(nullptr, 34904, TRIGGERED_NONE);
+        UpdateScalingAuras();
         return;
     }
 
-    switch (GetUInt32Value(UNIT_CREATED_BY_SPELL))
+    std::vector<uint32> scalingAuras;
+    if (getPetType() == HUNTER_PET)
+        scalingAuras.insert(scalingAuras.end(), { 34902, 34903, 34904 });
+    else
     {
-        case 688: // Imp - Warlock
-        case 691: // Felhunter
-        case 697: // Voidwalker
-        case 712: // Succubus
-        case 30146: // Felguard
-            CastSpell(nullptr, 34947, TRIGGERED_NONE);
-            CastSpell(nullptr, 34956, TRIGGERED_NONE);
-            CastSpell(nullptr, 34957, TRIGGERED_NONE);
-            CastSpell(nullptr, 34958, TRIGGERED_NONE);
-            break;
-        case 12740: // Infernal - Warlock - unique - isnt updated on stat changes
-        case 18541: // Doomguard - Ritual of Doom
-        case 18662: // Doomguard - Curse of Doom
-            CastSpell(nullptr, 36186, TRIGGERED_NONE);
-            CastSpell(nullptr, 36188, TRIGGERED_NONE);
-            CastSpell(nullptr, 36189, TRIGGERED_NONE);
-            CastSpell(nullptr, 36190, TRIGGERED_NONE);
-            break;
-        case 31687: // Water Elemental - Mage
-            CastSpell(nullptr, 35657, TRIGGERED_NONE);
-            CastSpell(nullptr, 35658, TRIGGERED_NONE);
-            CastSpell(nullptr, 35659, TRIGGERED_NONE);
-            CastSpell(nullptr, 35660, TRIGGERED_NONE);
-            break;
-        case 32982: // Fire Elemental - Shaman
-            CastSpell(nullptr, 35665, TRIGGERED_NONE);
-            CastSpell(nullptr, 35666, TRIGGERED_NONE);
-            CastSpell(nullptr, 35667, TRIGGERED_NONE);
-            CastSpell(nullptr, 35668, TRIGGERED_NONE);
-            break;
-        case 33663: // Earth Elemental - Shaman
-            CastSpell(nullptr, 35674, TRIGGERED_NONE);
-            CastSpell(nullptr, 35675, TRIGGERED_NONE);
-            CastSpell(nullptr, 35676, TRIGGERED_NONE);
-            break;
-        case 33831: // Force Of Nature - Treants - Druid
-            CastSpell(nullptr, 35669, TRIGGERED_NONE);
-            CastSpell(nullptr, 35670, TRIGGERED_NONE);
-            CastSpell(nullptr, 35671, TRIGGERED_NONE);
-            CastSpell(nullptr, 35672, TRIGGERED_NONE);
-            break;
-        case 34433: // Shadowfiend - Priest
-            CastSpell(nullptr, 35661, TRIGGERED_NONE);
-            CastSpell(nullptr, 35662, TRIGGERED_NONE);
-            CastSpell(nullptr, 35663, TRIGGERED_NONE);
-            CastSpell(nullptr, 35664, TRIGGERED_NONE);
-            break;
-        default:
-            break;
+        switch (GetUInt32Value(UNIT_CREATED_BY_SPELL))
+        {
+            case 688: // Imp - Warlock
+            case 691: // Felhunter
+            case 697: // Voidwalker
+            case 712: // Succubus
+            case 30146: // Felguard
+                scalingAuras.insert(scalingAuras.end(), { 34947, 34956, 34957, 34958 });
+                break;
+            case 12740: // Infernal - Warlock - unique - isnt updated on stat changes
+            case 18541: // Doomguard - Ritual of Doom
+            case 18662: // Doomguard - Curse of Doom
+                scalingAuras.insert(scalingAuras.end(), { 36186, 36188, 36189, 36190 });
+                break;
+            case 31687: // Water Elemental - Mage
+                scalingAuras.insert(scalingAuras.end(), { 35657, 35658, 35659, 35660 });
+                break;
+            case 32982: // Fire Elemental - Shaman
+                scalingAuras.insert(scalingAuras.end(), { 35665, 35666, 35667, 35668 });
+                break;
+            case 33663: // Earth Elemental - Shaman
+                scalingAuras.insert(scalingAuras.end(), { 35674, 35675, 35676 });
+                break;
+            case 33831: // Force Of Nature - Treants - Druid
+                scalingAuras.insert(scalingAuras.end(), { 35669, 35670, 35671, 35672 });
+                break;
+            case 34433: // Shadowfiend - Priest
+                scalingAuras.insert(scalingAuras.end(), { 35661, 35662, 35663, 35664 });
+                break;
+            default:
+                break;
+        }
     }
+
+    for (uint32 spellId : scalingAuras)
+        CastSpell(nullptr, spellId, TRIGGERED_NONE);
 }
 
 void Pet::PlayDismissSound()
@@ -1369,6 +1376,10 @@ void Pet::_LoadSpellCooldowns()
 
 void Pet::_SaveSpellCooldowns()
 {
+    // controllable guardians only save spells and main entry
+    if (m_controllableGuardian)
+        return;
+
     static SqlStatementID delSpellCD ;
     static SqlStatementID insSpellCD ;
 
@@ -1392,9 +1403,9 @@ void Pet::_SaveSpellCooldowns()
     }
 }
 
-void Pet::_LoadSpells()
+bool Pet::_LoadSpells()
 {
-    QueryResult* result = CharacterDatabase.PQuery("SELECT spell,active FROM pet_spell WHERE guid = '%u'", m_charmInfo->GetPetNumber());
+    std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery("SELECT spell,active FROM pet_spell WHERE guid = '%u'", m_charmInfo->GetPetNumber()));
 
     if (result)
     {
@@ -1406,8 +1417,10 @@ void Pet::_LoadSpells()
         }
         while (result->NextRow());
 
-        delete result;
+        return true;
     }
+
+    return false;
 }
 
 void Pet::_SaveSpells()
@@ -1455,10 +1468,23 @@ void Pet::_SaveSpells()
     }
 }
 
+bool Pet::_LoadGuardianPetNumber()
+{
+    std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery("SELECT id FROM character_pet WHERE entry='%u' AND owner = '%u'", GetEntry(), GetOwnerGuid().GetCounter()));
+
+    if (result)
+    {
+        Field* fields = result->Fetch();
+		m_charmInfo->SetPetNumber(fields[0].GetUInt32(), false);
+
+        return true;
+    }
+
+    return false;
+}
+
 void Pet::_LoadAuras(uint32 timediff)
 {
-    RemoveAllAuras();
-
     QueryResult* result = CharacterDatabase.PQuery("SELECT caster_guid,item_guid,spell,stackcount,remaincharges,basepoints0,basepoints1,basepoints2,periodictime0,periodictime1,periodictime2,maxduration,remaintime,effIndexMask FROM pet_aura WHERE guid = '%u'", m_charmInfo->GetPetNumber());
 
     if (result)
@@ -1556,6 +1582,10 @@ void Pet::_LoadAuras(uint32 timediff)
 
 void Pet::_SaveAuras()
 {
+    // controllable guardians only save spells and main entry
+    if (m_controllableGuardian)
+        return;
+
     static SqlStatementID delAuras ;
     static SqlStatementID insAuras ;
 
@@ -2208,6 +2238,7 @@ bool Pet::Create(uint32 guidlow, CreatureCreatePos& cPos, CreatureInfo const* ci
     if (!cPos.Relocate(this))
         return false;
 
+    SetFlag(UNIT_FIELD_FLAGS_2, UNIT_FLAG2_REGENERATE_POWER);
     SetSheath(SHEATH_STATE_MELEE);
 
     if (getPetType() == MINI_PET)                           // always non-attackable
@@ -2221,6 +2252,9 @@ bool Pet::Create(uint32 guidlow, CreatureCreatePos& cPos, CreatureInfo const* ci
 
 bool Pet::HasSpell(uint32 spell) const
 {
+    if (m_controllableGuardian)
+        return Creature::HasSpell(spell);
+
     PetSpellMap::const_iterator itr = m_spells.find(spell);
     return (itr != m_spells.end() && itr->second.state != PETSPELL_REMOVED);
 }
@@ -2428,4 +2462,36 @@ void Pet::ForcedDespawn(uint32 timeMSToDespawn, bool onlyAlive)
     RemoveCorpse(true);                                     // force corpse removal in the same grid
 
     Unsummon(PET_SAVE_NOT_IN_SLOT);
+}
+
+void Pet::InitializeSpellsForControllableGuardian(bool load)
+{
+    m_charmInfo->InitPetActionBar();
+
+    CreatureSpellList const& spellList = GetSpellList();
+
+    for (auto& spellData : spellList.Spells)
+        addSpell(spellData.second.SpellId, ACT_DECIDE, PETSPELL_NEW);
+
+    if (load && _LoadGuardianPetNumber() && _LoadSpells())
+    {
+        // update autocast in bar
+        for (uint32 i = ACTION_BAR_INDEX_PET_SPELL_START; i < ACTION_BAR_INDEX_PET_SPELL_END; ++i)
+        {
+            UnitActionBarEntry const* bar = m_charmInfo->GetActionBarEntry(i);
+            m_charmInfo->SetActionBar(i, bar->GetAction(), (ActiveStates)m_spells[bar->GetAction()].active);
+        }
+    }
+}
+
+void Pet::StartCooldown(Unit* owner)
+{
+    if (!m_imposedCooldown)
+    {
+        m_imposedCooldown = true;
+        SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(GetUInt32Value(UNIT_CREATED_BY_SPELL));
+        // Remove infinity cooldown
+        if (spellInfo && spellInfo->HasAttribute(SPELL_ATTR_DISABLED_WHILE_ACTIVE))
+            owner->AddCooldown(*spellInfo);
+    }
 }

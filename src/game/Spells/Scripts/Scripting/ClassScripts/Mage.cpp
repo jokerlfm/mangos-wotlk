@@ -46,7 +46,86 @@ struct ArcaneConcentration : public AuraScript
     }
 };
 
+struct MageIgnite : public AuraScript
+{
+    // implemented this way because we do not support proccing in spellscript on empty aura slot
+    void OnPeriodicTickEnd(Aura* aura) const override
+    {
+        Unit* caster = aura->GetCaster();
+        if (!caster)
+            return;
+
+        SpellAuraHolder* holder = caster->GetSpellAuraHolder(31658);
+        if (!holder)
+            holder = caster->GetSpellAuraHolder(31657);
+        if (!holder)
+            holder = caster->GetSpellAuraHolder(31656);
+        if (!holder)
+            return;
+
+        uint32 chance = holder->GetSpellProto()->procChance;
+        if (roll_chance_f(chance))
+        {
+            uint32 baseMana = caster->GetCreateMana();
+            int32 gainedMana = baseMana * 2 / 100;
+            caster->CastCustomSpell(nullptr, 67545, &gainedMana, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
+        }
+    }
+};
+
+struct FingersOfFrostProc : public AuraScript
+{
+    bool OnCheckProc(Aura* aura, ProcExecutionData& /*data*/) const override
+    {
+        return roll_chance_i(aura->GetAmount());
+    }
+};
+
+struct FingersOfFrostIgnore : public SpellScript
+{
+    void OnCast(Spell* spell) const override
+    {
+        spell->AddPrecastSpell(74396);
+    }
+};
+
+struct FingersOfFrostDummy : public AuraScript
+{
+    void OnHolderInit(SpellAuraHolder* holder, WorldObject* /*caster*/) const override
+    {
+        holder->PresetAuraStacks(holder->GetSpellProto()->StackAmount);
+    }
+
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (!apply && aura->GetRemoveMode() != AURA_REMOVE_BY_GAINED_STACK)
+            aura->GetTarget()->RemoveAurasDueToSpell(44544);
+    }
+
+    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& /*procData*/) const override
+    {
+        aura->GetTarget()->RemoveAuraStack(aura->GetId());
+        return SPELL_AURA_PROC_OK;
+    }
+};
+
+struct DeepFreezeImmunityState : public AuraScript
+{
+    bool OnCheckProc(Aura* /*aura*/, ProcExecutionData& data) const override
+    {
+        if (data.victim->IsCreature())
+            if (static_cast<Creature*>(data.victim)->GetCreatureInfo()->MechanicImmuneMask & (1 << (MECHANIC_STUN - 1)))
+                return true;
+        return false;
+    }
+};
+
 void LoadMageScripts()
 {
-    RegisterAuraScript<ArcaneConcentration>("spell_arcane_concentration");
+    RegisterSpellScript<ArcaneConcentration>("spell_arcane_concentration");
+    RegisterSpellScript<MageIgnite>("spell_mage_ignite");
+    RegisterSpellScript<FingersOfFrostProc>("spell_fingers_of_frost_proc");
+    RegisterSpellScript<FingersOfFrostIgnore>("spell_fingers_of_frost_ignore");
+    RegisterSpellScript<FingersOfFrostDummy>("spell_fingers_of_frost_dummy");
+    RegisterSpellScript<DeepFreezeImmunityState>("spell_deep_freeze_immunity_state");
 }

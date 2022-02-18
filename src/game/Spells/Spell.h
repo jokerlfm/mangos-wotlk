@@ -530,23 +530,23 @@ class Spell
         {
             CreaturePosition() :
                 x(0.0f), y(0.0f), z(0.0f),
-                creature(nullptr)
+                creature(nullptr), processed(false)
             {}
 
             float x, y, z;
             Creature* creature;
+            bool processed;
         };
         typedef std::vector<CreaturePosition> CreatureSummonPositions;
 
-        // return true IFF further processing required
-        bool DoSummonPet(SpellEffectIndex eff_idx);
+        bool DoCreateItem(SpellEffectIndex eff_idx, uint32 itemtype, bool reportError = true);
+        bool DoSummonPet(CreatureSummonPositions& list, SummonPropertiesEntry const* prop, SpellEffectIndex effIdx);
         bool DoSummonTotem(CreatureSummonPositions& list, SpellEffectIndex eff_idx, uint8 slot_dbc = 0);
         bool DoSummonWild(CreatureSummonPositions& list, SummonPropertiesEntry const* prop, SpellEffectIndex effIdx, uint32 level);
         bool DoSummonCritter(CreatureSummonPositions& list, SummonPropertiesEntry const* prop, SpellEffectIndex effIdx, uint32 level);
         bool DoSummonGuardian(CreatureSummonPositions& list, SummonPropertiesEntry const* prop, SpellEffectIndex effIdx, uint32 level);
         bool DoSummonPossessed(CreatureSummonPositions& list, SummonPropertiesEntry const* prop, SpellEffectIndex effIdx, uint32 level);
         bool DoSummonVehicle(CreatureSummonPositions& list, SummonPropertiesEntry const* prop, SpellEffectIndex effIdx, uint32 level);
-        bool DoCreateItem(SpellEffectIndex eff_idx, uint32 itemtype, bool reportError = true);
 
         void ProcessDispelList(std::list <std::pair<SpellAuraHolder*, uint32> >& dispelList, std::list<std::pair<SpellAuraHolder*, uint32> >& successList, std::list <uint32>& failList);
         void EvaluateResultLists(std::list<std::pair<SpellAuraHolder*, uint32> >& successList, std::list <uint32>& failList);
@@ -684,8 +684,6 @@ class Spell
 
         bool CanBeInterrupted() const { return m_spellState <= SPELL_STATE_DELAYED || m_spellState == SPELL_STATE_CHANNELING; }
 
-        uint64 GetScriptValue() const { return m_scriptValue; }
-        void SetScriptValue(uint64 value) { m_scriptValue = value; }
         void RegisterAuraProc(Aura* aura);
         bool IsAuraProcced(Aura* aura);
         // setting 0 disables the trigger
@@ -743,8 +741,8 @@ class Spell
         {
             uint32 effectMask;
             uint64 timeDelay;
-            bool processed;
-            DestTargetInfo() : effectMask(0), timeDelay(0), processed(false) {}
+            uint32 effectMaskProcessed;
+            DestTargetInfo() : effectMask(0), timeDelay(0), effectMaskProcessed(0) {}
         };
 
         typedef std::list<TargetInfo>     TargetList;
@@ -770,6 +768,9 @@ class Spell
 
         // Scripting system
         SpellScript* GetSpellScript() const { return m_spellScript; }
+        // Variable storage
+        uint64 GetScriptValue() const { return m_scriptValue; }
+        void SetScriptValue(uint64 value) { m_scriptValue = value; }
         // hooks
         void OnInit();
         void OnSuccessfulStart();
@@ -785,6 +786,7 @@ class Spell
         void OnAfterHit();
         void OnSummon(GameObject* summon);
         void OnSummon(Creature* summon);
+        uint32 GetPhaseMaskOverride(); // SUMMON_PROP_FLAG_IGNORE_SUMMONERS_PHASE - propid 1881
         // effect execution info access - only to be used in OnEffectExecute OnHit and OnAfterHit
         Unit* GetUnitTarget() { return unitTarget; }
         Item* GetItemTarget() { return itemTarget; }
@@ -794,8 +796,10 @@ class Spell
         SpellSchoolMask GetSchoolMask() { return m_spellSchoolMask; }
         // OnHit use only
         uint32 GetTotalTargetDamage() { return m_damage; }
+        void SetTotalTargetValueModifier(float modifier);
         // script initialization hook only setters - use only if dynamic - else use appropriate helper
         void SetMaxAffectedTargets(uint32 newValue) { m_affectedTargetCount = newValue; }
+        void SetChainTargetsCount(SpellEffectIndex effIdx, uint32 newValue) { m_chainTargetCount[effIdx] = newValue; }
         void SetJumpRadius(float newValue) { m_jumpRadius = newValue; }
         // warning - always set scheme for first unique target in a row
         void SetFilteringScheme(SpellEffectIndex effIdx, bool targetB, SpellTargetFilterScheme scheme) { m_filteringScheme[effIdx][uint32(targetB)] = scheme; }
@@ -806,6 +810,9 @@ class Spell
         TargetList& GetTargetList() { return m_UniqueTargetInfo; }
         // enables customizing auras after creation - use only in OnEffectExecute and with aura effects
         SpellAuraHolder* GetSpellAuraHolder() { return m_spellAuraHolder; }
+        // enables fetching which runes were taken
+        uint8 GetOldRuneState() const { return m_runesState; }
+        uint8 GetNewRuneState() const { return m_runesStateAfterCast; }
 
         // Vehicle casting subsection
         static SpellCastResult CheckVehicle(Unit const* caster, SpellEntry const& spellInfo);
@@ -847,6 +854,7 @@ class Spell
         bool m_autoRepeat;
         float m_maxRange;                                   // For channeled spell check
         uint8 m_runesState;
+        uint8 m_runesStateAfterCast;
 
         uint8 m_delayAtDamageCount;
         bool isDelayableNoMore()
@@ -883,6 +891,7 @@ class Spell
 
         // Damage and healing in effects need just calculate
         int32 m_damage;                                     // Damage in effects count here
+        int32 damagePerEffect[MAX_EFFECT_INDEX];            // Workaround for multiple weapon damage effects
         int32 m_damagePerEffect[MAX_EFFECT_INDEX];
         int32 m_healing;                                    // Healing in effects count here
         int32 m_healingPerEffect[MAX_EFFECT_INDEX];
@@ -975,6 +984,7 @@ class Spell
         float m_castOrientation;
 
         uint32 m_affectedTargetCount;
+        uint32 m_chainTargetCount[MAX_EFFECT_INDEX];
         float m_jumpRadius;
         SpellTargetFilterScheme m_filteringScheme[MAX_EFFECT_INDEX][2];
 

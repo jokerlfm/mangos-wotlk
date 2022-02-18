@@ -1978,6 +1978,8 @@ enum
     SPELL_MIND_NUMBING_POISON   = 25810,
     SPELL_CRIPPLING_POISON      = 25809,
 
+    SPELL_HUNTER_SNAKE_TRAP_SCALING_01 = 62915,
+
     // SPELL_RANDOM_AGGRO = 34701 // unk purpose
 };
 
@@ -1993,6 +1995,7 @@ struct npc_snakesAI : public ScriptedAI
         m_creature->GetMotionMaster()->Clear();
         m_creature->GetMotionMaster()->MoveRandomAroundPoint(m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), 5.f);
         DoCastSpellIfCan(nullptr, SPELL_DEADLY_POISON_PASSIVE, CAST_AURA_NOT_PRESENT | CAST_TRIGGERED);
+        DoCastSpellIfCan(nullptr, SPELL_HUNTER_SNAKE_TRAP_SCALING_01, CAST_AURA_NOT_PRESENT | CAST_TRIGGERED);
     }
 
     void UpdateAI(const uint32 diff) override
@@ -2101,6 +2104,8 @@ enum
 {
     SPELL_MAGE_CLONE_ME                 = 45204,
     SPELL_MAGE_MASTERS_THREAT_LIST      = 58838,
+    SPELL_COPY_WEAPON                   = 41055,
+    SPELL_COPY_OFFHAND_WEAPON           = 45206,
 
     SPELL_MAGE_FROST_BOLT               = 59638,
     SPELL_MAGE_FIRE_BLAST               = 59637,
@@ -2113,6 +2118,8 @@ struct npc_mage_mirror_imageAI : public ScriptedAI
         if (Player* pOwner = m_creature->GetMap()->GetPlayer(m_creature->GetSpawnerGuid()))
         {
             pOwner->CastSpell(m_creature, SPELL_MAGE_CLONE_ME, TRIGGERED_OLD_TRIGGERED);
+            m_creature->CastSpell(pOwner, SPELL_COPY_WEAPON, TRIGGERED_OLD_TRIGGERED);
+            m_creature->CastSpell(pOwner, SPELL_COPY_OFFHAND_WEAPON, TRIGGERED_OLD_TRIGGERED);
             m_creature->GetMotionMaster()->MoveFollow(pOwner, PET_FOLLOW_DIST, pOwner->GetAngle(m_creature) + M_PI_F/2);
             SetMoveChaseParams(3 * ATTACK_DISTANCE, 0.0f, false);
             SetReactState(REACT_DEFENSIVE);
@@ -2130,21 +2137,23 @@ struct npc_mage_mirror_imageAI : public ScriptedAI
 
     void UpdateAI(const uint32 uiDiff) override
     {
-        // update threat and owner on 1 sec timer
-        if (m_uiThreatUpdateTimer < uiDiff)
+        if (m_uiThreatUpdateTimer) // snapshot threat at start and attack else
         {
-            Player* pOwner = m_creature->GetMap()->GetPlayer(m_creature->GetSpawnerGuid());
-            if (!pOwner || !pOwner->IsAlive())
+            if (m_uiThreatUpdateTimer <= uiDiff)
             {
-                m_creature->ForcedDespawn();
-                return;
-            }
+                Player* pOwner = m_creature->GetMap()->GetPlayer(m_creature->GetSpawnerGuid());
+                if (!pOwner || !pOwner->IsAlive())
+                {
+                    m_creature->ForcedDespawn();
+                    return;
+                }
 
-            if (DoCastSpellIfCan(m_creature, SPELL_MAGE_MASTERS_THREAT_LIST) == CAST_OK)
-                m_uiThreatUpdateTimer = 1000;
+                if (DoCastSpellIfCan(m_creature, SPELL_MAGE_MASTERS_THREAT_LIST) == CAST_OK)
+                    m_uiThreatUpdateTimer = 0;
+            }
+            else
+                m_uiThreatUpdateTimer -= uiDiff;
         }
-        else
-            m_uiThreatUpdateTimer -= uiDiff;
 
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
             return;
@@ -2164,10 +2173,36 @@ struct npc_mage_mirror_imageAI : public ScriptedAI
     }
 };
 
-UnitAI* GetAI_npc_mage_mirror_image(Creature* pCreature)
+struct InheritMastersThreatList : public SpellScript
 {
-    return new npc_mage_mirror_imageAI(pCreature);
-}
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        Unit* caster = spell->GetCaster();
+        Unit* spawner = caster->GetSpawner();
+        auto& attackers = spawner->getAttackers();
+        Unit* target = spell->GetUnitTarget();
+
+        if (!caster->CanAttack(target) || target->IsCrowdControlled())
+            return;
+
+        if (spawner->GetVictim() == target || attackers.find(target) != attackers.end() || target->getThreatManager().HasThreat(spawner))
+        {
+            caster->AddThreat(target);
+            return;
+        }
+    }
+};
+
+struct MirrorImageFrostbolt : public SpellScript
+{
+    SpellCastResult OnCheckCast(Spell* spell, bool /*strict*/) const override
+    {
+        if (Unit* target = spell->m_targets.getUnitTarget())
+            if (target->IsPolymorphed())
+                return SPELL_FAILED_BAD_TARGETS;
+        return SPELL_CAST_OK;
+    }
+};
 
 /*########
 # npc_mojo
@@ -3145,7 +3180,7 @@ void AddSC_npcs_special()
 
     pNewScript = new Script;
     pNewScript->Name = "npc_mage_mirror_image";
-    pNewScript->GetAI = &GetAI_npc_mage_mirror_image;
+    pNewScript->GetAI = &GetNewAIInstance<npc_mage_mirror_imageAI>;
     pNewScript->RegisterSelf();
     
     pNewScript = new Script;
@@ -3167,7 +3202,8 @@ void AddSC_npcs_special()
     pNewScript->Name = "npc_advanced_target_dummy";
     pNewScript->GetAI = &GetNewAIInstance<npc_advanced_target_dummyAI>;
     pNewScript->RegisterSelf();
-    
+
+    pNewScript = new Script;
     pNewScript->Name = "go_imp_in_a_ball";
     pNewScript->GetGameObjectAI = &GetNewAIInstance<go_imp_in_a_ball>;
     pNewScript->RegisterSelf();
@@ -3185,9 +3221,12 @@ void AddSC_npcs_special()
 
     RegisterSpellScript<ImpInABottleSay>("spell_imp_in_a_bottle_say");
     RegisterSpellScript<GossipNPCPeriodicTriggerFidget>("spell_gossip_npc_periodic_trigger_fidget");
-    RegisterAuraScript<GossipNPCPeriodicTalk>("spell_gossip_npc_periodic_talk");
+    RegisterSpellScript<GossipNPCPeriodicTalk>("spell_gossip_npc_periodic_talk");
     RegisterSpellScript<GossipNPCPeriodicTriggerTalk>("spell_gossip_npc_periodic_trigger_talk");
-    RegisterAuraScript<GossipNPCAppearanceAllBrewfest>("spell_gossip_npc_appearance_all_brewfest");
-    RegisterAuraScript<GossipNPCAppearanceAllSpiritOfCompetition>("spell_gossip_npc_appearance_all_spirit_of_competition");
-    RegisterAuraScript<GossipNPCAppearanceAllPirateDay>("spell_gossip_npc_appearance_all_pirate_day");
+    RegisterSpellScript<GossipNPCAppearanceAllBrewfest>("spell_gossip_npc_appearance_all_brewfest");
+    RegisterSpellScript<GossipNPCAppearanceAllSpiritOfCompetition>("spell_gossip_npc_appearance_all_spirit_of_competition");
+    RegisterSpellScript<GossipNPCAppearanceAllPirateDay>("spell_gossip_npc_appearance_all_pirate_day");
+
+    RegisterSpellScript<MirrorImageFrostbolt>("spell_mirror_image_frostbolt");
+    RegisterSpellScript<InheritMastersThreatList>("spell_inherit_masters_threat_list");
 }

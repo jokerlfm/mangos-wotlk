@@ -199,6 +199,8 @@ inline bool IsEffectHandledImmediatelySpellLaunch(SpellEntry const* spellInfo, S
         case SPELL_EFFECT_HEAL_PCT:
         case SPELL_EFFECT_CHARGE:
         case SPELL_EFFECT_CHARGE_DEST:
+        case SPELL_EFFECT_JUMP:
+        case SPELL_EFFECT_JUMP_DEST:
             return true;
         default:
             return false;
@@ -1074,7 +1076,7 @@ inline bool IsPointEffectTarget(SpellTarget target)
         case TARGET_LOCATION_SCRIPT_NEAR_CASTER:
         case TARGET_LOCATION_CASTER_TARGET_POSITION:
         case TARGET_LOCATION_UNIT_POSITION:
-        case TARGET_LOCATION_DYNOBJ_POSITION:
+        case TARGET_LOCATION_CHANNEL_TARGET_DEST:
         case TARGET_LOCATION_NORTH:
         case TARGET_LOCATION_SOUTH:
         case TARGET_LOCATION_EAST:

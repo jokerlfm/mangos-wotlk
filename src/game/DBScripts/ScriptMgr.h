@@ -35,7 +35,7 @@ struct SpellEntry;
 enum ScriptCommand                                          // resSource, resTarget are the resulting Source/ Target after buddy search is done
 {
     SCRIPT_COMMAND_TALK                     = 0,            // resSource = WorldObject, resTarget = Unit/none
-    // dataint = text entry from dbscript_string -table. dataint2-4 optional for random selected texts.
+    // dataint = text id from broadcast_text table. dataint2-4 optional for random selected texts.
     SCRIPT_COMMAND_EMOTE                    = 1,            // resSource = Unit, resTarget = Unit/none
     // datalong1 = emote_id, dataint1-4 optional for random selected emotes
     SCRIPT_COMMAND_FIELD_SET                = 2,            // source = any, datalong = field_id, datalong2 = value
@@ -133,6 +133,7 @@ enum ScriptCommand                                          // resSource, resTar
     SCRIPT_COMMAND_SET_DATA_64              = 49,           // datalong = set data param 1, datalong2 = set data param 2
     SCRIPT_COMMAND_ZONE_PULSE               = 50,           //
     SCRIPT_COMMAND_SPAWN_GROUP              = 51,           // dalalong = command
+    SCRIPT_COMMAND_SET_GOSSIP_MENU          = 52,           // datalong = gossip_menu_id
 };
 
 #define MAX_TEXT_ID 4                                       // used for SCRIPT_COMMAND_TALK, SCRIPT_COMMAND_EMOTE, SCRIPT_COMMAND_CAST_SPELL, SCRIPT_COMMAND_TERMINATE_SCRIPT
@@ -346,7 +347,7 @@ struct ScriptInfo
 
         struct                                              // SCRIPT_COMMAND_TERMINATE_SCRIPT (31)
         {
-            uint32 npcEntry;                                // datalong
+            uint32 npcOrGOEntry;                                // datalong
             uint32 searchDist;                              // datalong2
             uint32 poolId;                                  // datalong3
             // changeWaypointWaitTime                       // dataint
@@ -453,6 +454,11 @@ struct ScriptInfo
             uint32 data1;                                   // datalong2
             uint32 data2;                                   // datalong3
         } formationData;
+
+        struct                                              // SCRIPT_COMMAND_SET_GOSSIP_MENU (52)
+        {
+            uint32 gossipMenuId;                            // datalong
+        } setGossipMenu;
 
         struct                                              // SCRIPT_COMMAND_LOG_KILL (99)
         {

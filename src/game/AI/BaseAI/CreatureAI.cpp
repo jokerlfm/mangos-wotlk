@@ -52,7 +52,8 @@ void CreatureAI::Reset()
 void CreatureAI::EnterCombat(Unit* enemy)
 {
     UnitAI::EnterCombat(enemy);
-    if (m_creature->IsCritter())
+    // TODO: Monitor this condition to see if it conflicts with any pets
+    if (m_creature->IsCritter() && !m_creature->IsPet())
         m_creature->SetInPanic(30000);
     if (enemy && (m_creature->IsGuard() || m_creature->IsCivilian()))
     {
@@ -213,7 +214,8 @@ void CreatureAI::OnCallForHelp(Unit* caller, Unit* enemy)
     {
         if (factionTemplate->factionFlags & FACTION_TEMPLATE_FLEE_FROM_CALL_FOR_HELP)
         {
-            m_creature->SetInPanic(10000);
+            if (m_creature->SetInPanic(10000))
+                SetAIOrder(ORDER_FLEE_FROM_CALL_FOR_HELP);
             return;
         }
     }
@@ -244,7 +246,10 @@ CreatureSpellList const& CreatureAI::GetSpellList() const
 void CreatureAI::TimedFleeingEnded()
 {
     UnitAI::TimedFleeingEnded();
-    if (FactionTemplateEntry const* factionTemplate = m_creature->GetFactionTemplateEntry())
-        if (factionTemplate->factionFlags & FACTION_TEMPLATE_FLEE_FROM_CALL_FOR_HELP)
-            EnterEvadeMode();
+    if (GetAIOrder() == ORDER_FLEE_FROM_CALL_FOR_HELP && m_creature->IsAlive())
+    {
+        if (FactionTemplateEntry const* factionTemplate = m_creature->GetFactionTemplateEntry())
+            if (factionTemplate->factionFlags & FACTION_TEMPLATE_FLEE_FROM_CALL_FOR_HELP)
+                EnterEvadeMode();
+    }
 }

@@ -153,9 +153,14 @@ class CooldownData
         }
 
         // wotlk+ feature
-        void SpellCDExpireTime(TimePoint expireTime)
+        void SetSpellCDExpireTime(TimePoint expireTime)
         {
             m_expireTime = expireTime;
+        }
+
+        void SetCatCDExpireTime(TimePoint expireTime)
+        {
+            m_catExpireTime = expireTime;
         }
 
         // return false if permanent
@@ -240,10 +245,24 @@ class CooldownContainer
         {
             RemoveBySpellId(spellId);
             auto resultItr = m_spellIdMap.emplace(spellId, std::move(std::unique_ptr<CooldownData>(new CooldownData(clockNow, spellId, duration, spellCategory, categoryDuration, itemId, onHold))));
+            // do not overwrite one permanent category cooldown with another permanent category cooldown
             if (resultItr.second && spellCategory && categoryDuration)
             {
-                RemoveByCategory(spellCategory);
-                m_categoryMap.emplace(spellCategory, resultItr.first);
+                auto catItr = FindByCategory(spellCategory);
+                if (!onHold || catItr == m_spellIdMap.end() || !catItr->second->IsPermanent())
+                {
+                    // we must keep original category cd owner for sake of client sync
+                    if (catItr != m_spellIdMap.end())
+                    {
+                        catItr->second->SetCatCDExpireTime(std::chrono::milliseconds(categoryDuration) + clockNow);
+                        catItr->second->m_typePermanent = false;
+                        resultItr.first->second->m_category = 0;
+                    }
+                    else
+                        m_categoryMap.emplace(spellCategory, resultItr.first);
+                }
+                else
+                    resultItr.first->second->m_category = 0;
             }
 
             return resultItr.second;
@@ -685,6 +704,7 @@ struct TempSpawnSettings
     uint32 spawnDataEntry = 0;
     int32 movegen = -1;
     WorldObject* dbscriptTarget = nullptr;
+    uint32 level = 0;
 
     // TemporarySpawnWaypoint subsystem
     bool tempSpawnMovegen = false;
@@ -694,9 +714,9 @@ struct TempSpawnSettings
 
     TempSpawnSettings() {}
     TempSpawnSettings(WorldObject* spawner, uint32 entry, float x, float y, float z, float ori, TempSpawnType spawnType, uint32 despawnTime, bool activeObject = false, bool setRun = false, uint32 pathId = 0, uint32 faction = 0,
-        uint32 modelId = 0, bool spawnCounting = false, bool forcedOnTop = false, uint32 spellId = 0, int32 movegen = -1) :
+        uint32 modelId = 0, bool spawnCounting = false, bool forcedOnTop = false, uint32 spellId = 0, int32 movegen = -1, uint32 level = 0) :
         spawner(spawner), entry(entry), x(x), y(y), z(z), ori(ori), spawnType(spawnType), despawnTime(despawnTime), activeObject(activeObject), setRun(setRun), pathId(pathId), faction(faction), modelId(modelId), spawnCounting(spawnCounting),
-        forcedOnTop(forcedOnTop), spellId(spellId), movegen(movegen)
+        forcedOnTop(forcedOnTop), spellId(spellId), movegen(movegen), level(level)
     {}
 };
 

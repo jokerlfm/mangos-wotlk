@@ -1366,6 +1366,7 @@ void WorldState::SetScourgeInvasionState(SIState state)
         StartScourgeInvasion();
     else if (state == STATE_0_DISABLED)
         StopScourgeInvasion();
+    Save(SAVE_ID_SCOURGE_INVASION);
 }
 
 void WorldState::StartScourgeInvasion()
@@ -1548,6 +1549,7 @@ void WorldState::SetSIRemaining(SIRemaining remaining, uint32 value)
 {
     std::lock_guard<std::mutex> guard(m_siData.m_siMutex);
     m_siData.m_remaining[remaining] = value;
+    Save(SAVE_ID_SCOURGE_INVASION);
 }
 
 TimePoint WorldState::GetSITimer(SITimers timer)
@@ -1571,6 +1573,7 @@ void WorldState::AddBattlesWon(int32 count)
     std::lock_guard<std::mutex> guard(m_siData.m_siMutex);
     m_siData.m_battlesWon += count;
     HandleDefendedZones();
+    Save(SAVE_ID_SCOURGE_INVASION);
 }
 
 uint32 WorldState::GetLastAttackZone()
@@ -1679,6 +1682,9 @@ void WorldState::StartNewCityAttackIfTime(uint32 attackTimeVar, uint32 zoneId)
         return;
 
     StartNewCityAttack(zoneId);
+    uint32 cityAttackTimer = urand(CITY_ATTACK_TIMER_MIN, CITY_ATTACK_TIMER_MAX);
+    TimePoint next_attack = now + std::chrono::seconds(cityAttackTimer);
+    sWorldState.SetSITimer(SITimers(attackTimeVar), next_attack);
 }
 
 void WorldState::StartNewInvasion(uint32 zoneId)
@@ -1717,7 +1723,7 @@ void WorldState::StartNewInvasion(uint32 zoneId)
     }
 
     if (mapPtr)
-        SummonMouth(mapPtr, zone, zone.mouth[0]);
+        SummonMouth(mapPtr, zone, zone.mouth[0], true);
 }
 
 void WorldState::StartNewCityAttack(uint32 zoneId)
@@ -1741,8 +1747,8 @@ void WorldState::StartNewCityAttack(uint32 zoneId)
     if (m_siData.m_pendingPallids.find(zoneId) != m_siData.m_pendingPallids.end())
         return;
 
-    if (!m_siData.m_attackPoints[zoneId].pallidGuid.IsEmpty())
-        return;
+    /*if (!m_siData.m_attackPoints[zoneId].pallidGuid.IsEmpty())
+        return;*/
 
     if (mapPtr && SummonPallid(mapPtr, zone, zone.pallid[SpawnLocationID], SpawnLocationID))
         sLog.outBasic("[Scourge Invasion Event] Pallid Horror summoned in zone %d.", zoneId);
@@ -1775,12 +1781,12 @@ bool WorldState::ResumeInvasion(ScourgeInvasionData::InvasionZone& zone)
         return false;
     }
 
-    SummonMouth(mapPtr, zone, zone.mouth[0]);
+    SummonMouth(mapPtr, zone, zone.mouth[0], false);
 
     return true;
 }
 
-bool WorldState::SummonMouth(Map* map, ScourgeInvasionData::InvasionZone& zone, Position position)
+bool WorldState::SummonMouth(Map* map, ScourgeInvasionData::InvasionZone& zone, Position position, bool newInvasion)
 {
     AddPendingInvasion(zone.zoneId);
     map->GetMessager().AddMessage([=](Map* map)
@@ -1795,7 +1801,8 @@ bool WorldState::SummonMouth(Map* map, ScourgeInvasionData::InvasionZone& zone, 
         {
             mouth->AI()->SendAIEvent(AI_EVENT_CUSTOM_A, mouth, mouth, EVENT_MOUTH_OF_KELTHUZAD_ZONE_START);
             sWorldState.SetMouthGuid(zone.zoneId, mouth->GetObjectGuid());
-            sWorldState.SetSIRemaining(SIRemaining(zone.remainingVar), zone.necroAmount);
+            if (newInvasion)
+                sWorldState.SetSIRemaining(SIRemaining(zone.remainingVar), zone.necroAmount);
         }
         sWorldState.RemovePendingInvasion(zone.zoneId);
     });
@@ -1848,8 +1855,8 @@ void WorldState::HandleActiveZone(uint32 attackTimeVar, uint32 zoneId, uint32 re
 
     // Calculate the next possible attack between ZONE_ATTACK_TIMER_MIN and ZONE_ATTACK_TIMER_MAX.
     uint32 zoneAttackTimer = urand(ZONE_ATTACK_TIMER_MIN, ZONE_ATTACK_TIMER_MAX);
-    TimePoint next_attack = now + std::chrono::milliseconds(zoneAttackTimer);
-    uint64 timeToNextAttack = (next_attack - now).count();
+    TimePoint next_attack = now + std::chrono::seconds(zoneAttackTimer);
+    uint64 timeToNextAttack = std::chrono::duration_cast<std::chrono::minutes>(next_attack-now).count();
 
     if (zone.mouthGuid)
     {
@@ -1866,7 +1873,7 @@ void WorldState::HandleActiveZone(uint32 attackTimeVar, uint32 zoneId, uint32 re
                 sWorldState.AddBattlesWon(1);
                 sWorldState.SetLastAttackZone(zoneId);
 
-                sLog.outBasic("[Scourge Invasion Event] The Scourge has been defeated in %d, next attack starting in %d minutes.", zoneId, uint32(timeToNextAttack / 60));
+                sLog.outBasic("[Scourge Invasion Event] The Scourge has been defeated in %d, next attack starting in %ld minutes.", zoneId, timeToNextAttack);
                 sLog.outBasic("[Scourge Invasion Event] %d victories", sWorldState.GetBattlesWon());
 
                 if (mouth)

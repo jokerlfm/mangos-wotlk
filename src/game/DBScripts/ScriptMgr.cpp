@@ -186,7 +186,7 @@ void ScriptMgr::LoadScripts(ScriptMapMapName& scripts, const char* tablename)
                 sLog.outErrorDb("Table `%s` has invalid data_flags %u in command %u for script id %u, skipping.", tablename, tmp.data_flags, tmp.command, tmp.id);
                 continue;
             }
-            if ((tmp.data_flags & SCRIPT_FLAG_BUDDY_AS_TARGET) != 0 && (tmp.data_flags & SCRIPT_FLAG_BUDDY_BY_POOL) == 0 && (tmp.data_flags & SCRIPT_FLAG_BUDDY_BY_GUID) == 0 && !tmp.buddyEntry)
+            if ((tmp.data_flags & SCRIPT_FLAG_BUDDY_AS_TARGET) != 0 && (tmp.data_flags & SCRIPT_FLAG_BUDDY_BY_POOL) == 0 && (tmp.data_flags & SCRIPT_FLAG_BUDDY_BY_GUID) == 0 && (tmp.data_flags & SCRIPT_FLAG_BUDDY_BY_GO) == 0 && !tmp.buddyEntry)
             {
                 sLog.outErrorDb("Table `%s` has buddy required in data_flags %u in command %u for script id %u, but no buddy defined, skipping.", tablename, tmp.data_flags, tmp.command, tmp.id);
                 continue;
@@ -256,8 +256,6 @@ void ScriptMgr::LoadScripts(ScriptMapMapName& scripts, const char* tablename)
                         continue;
                     }
                 }
-
-                // if (!GetMangosStringLocale(tmp.dataint)) will be checked after dbscript_string loading
                 break;
             }
             case SCRIPT_COMMAND_EMOTE:                      // 1
@@ -653,10 +651,21 @@ void ScriptMgr::LoadScripts(ScriptMapMapName& scripts, const char* tablename)
             }
             case SCRIPT_COMMAND_TERMINATE_SCRIPT:           // 31
             {
-                if (tmp.terminateScript.npcEntry && !ObjectMgr::GetCreatureTemplate(tmp.terminateScript.npcEntry))
+                if (tmp.IsCreatureBuddy())
                 {
-                    sLog.outErrorDb("Table `%s` has npc entry = '%u' in SCRIPT_COMMAND_TERMINATE_SCRIPT for script id %u, but this npc entry does not exist.", tablename, tmp.terminateScript.npcEntry, tmp.id);
-                    continue;
+                    if (tmp.terminateScript.npcOrGOEntry && !ObjectMgr::GetCreatureTemplate(tmp.terminateScript.npcOrGOEntry))
+                    {
+                        sLog.outErrorDb("Table `%s` has npc entry = '%u' in SCRIPT_COMMAND_TERMINATE_SCRIPT for script id %u, but this npc entry does not exist.", tablename, tmp.terminateScript.npcOrGOEntry, tmp.id);
+                        continue;
+                    }
+                }
+                else
+                {
+                    if (tmp.terminateScript.npcOrGOEntry && !ObjectMgr::GetGameObjectInfo(tmp.terminateScript.npcOrGOEntry))
+                    {
+                        sLog.outErrorDb("Table `%s` has GO entry = '%u' in SCRIPT_COMMAND_TERMINATE_SCRIPT for script id %u, but this GO entry does not exist.", tablename, tmp.terminateScript.npcOrGOEntry, tmp.id);
+                        continue;
+                    }
                 }
                 if (tmp.terminateScript.poolId && tmp.terminateScript.poolId > sPoolMgr.GetMaxPoolId())
                 {
@@ -850,6 +859,17 @@ void ScriptMgr::LoadScripts(ScriptMapMapName& scripts, const char* tablename)
 
                 break;
             }
+            case SCRIPT_COMMAND_SET_GOSSIP_MENU:            // 52
+            {
+                // sScriptMgr.LoadGossipScripts() must be called first in order for this to work
+                //if (!sObjectMgr.IsExistingGossipMenuId(tmp.setGossipMenu.gossipMenuId))
+                //{
+                //    sLog.outErrorDb("Table `%s` using nonexistent gossip menu (id: %u) in SCRIPT_COMMAND_SET_GOSSIP_MENU for script id %u",
+                //        tablename, tmp.setGossipMenu.gossipMenuId, tmp.id);
+                //    continue;
+                //}
+                break;
+            }
             default:
             {
                 sLog.outErrorDb("Table `%s` unknown command %u, skipping.", tablename, tmp.command);
@@ -1028,10 +1048,6 @@ void ScriptMgr::LoadRelayScripts()
 
 void ScriptMgr::LoadDbScriptStrings()
 {
-    // load both dbscript_strings and creature_ai_texts here because either may be referenced by dbscript_random_templates
-    sObjectMgr.LoadMangosStrings(WorldDatabase, "dbscript_string", MIN_DB_SCRIPT_STRING_ID, MAX_DB_SCRIPT_STRING_ID, true);
-    sObjectMgr.LoadMangosStrings(WorldDatabase, "creature_ai_texts", MIN_CREATURE_AI_TEXT_STRING_ID, MAX_CREATURE_AI_TEXT_STRING_ID, true);
-
     CheckScriptTexts(sQuestEndScripts);
     CheckScriptTexts(sQuestStartScripts);
     CheckScriptTexts(sSpellScripts);
@@ -1101,7 +1117,7 @@ void ScriptMgr::CheckScriptTexts(ScriptMapMapName const& scripts)
             {
                 for (int i : itrM->second.textId)
                 {
-                    if (i && !sObjectMgr.GetBroadcastText(i) && !sObjectMgr.GetMangosString(i, -1))
+                    if (i && !sObjectMgr.GetBroadcastText(i))
                         sLog.outErrorDb("Table `broadcast_text` is missing string id %u, used in database script table %s id %u.", i, scripts.first, itrMM->first);
                 }
 
@@ -1110,7 +1126,7 @@ void ScriptMgr::CheckScriptTexts(ScriptMapMapName const& scripts)
                     auto& vector = m_scriptTemplates[STRING_TEMPLATE][itrM->second.talk.stringTemplateId];
                     for (auto& data : vector)
                     {
-                        if (!sObjectMgr.GetBroadcastText(data.first) && !sObjectMgr.GetMangosString(data.first, -1))
+                        if (!sObjectMgr.GetBroadcastText(data.first))
                             sLog.outErrorDb("Table `broadcast_text` is missing string id %d, used in database script template table dbscript_random_templates id %u.", data.first, itrM->second.talk.stringTemplateId);
                     }
                 }
@@ -2279,7 +2295,7 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
             }
 
             bool result = false;
-            if (m_script->terminateScript.npcEntry || m_script->terminateScript.poolId || (m_script->data_flags & (SCRIPT_FLAG_BUDDY_BY_GUID)))
+            if (m_script->terminateScript.npcOrGOEntry || m_script->terminateScript.poolId || (m_script->data_flags & (SCRIPT_FLAG_BUDDY_BY_GUID)))
             {
                 WorldObject* terminationBuddy = nullptr;
                 WorldObject* pSearcher = pSource ? pSource : pTarget;
@@ -2305,13 +2321,13 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
                             terminationBuddy = pTarget;
                     }
                 }
-                else if (m_script->terminateScript.npcEntry)
+                else if (m_script->terminateScript.npcOrGOEntry)
                 {
                     if (m_script->IsCreatureBuddy())
                     {
                         // npc entry is provided
                         Creature* creatureBuddy = nullptr;
-                        MaNGOS::NearestCreatureEntryWithLiveStateInObjectRangeCheck u_check(*pSearcher, m_script->terminateScript.npcEntry, true, false, m_script->terminateScript.searchDist, true);
+                        MaNGOS::NearestCreatureEntryWithLiveStateInObjectRangeCheck u_check(*pSearcher, m_script->terminateScript.npcOrGOEntry, true, false, m_script->terminateScript.searchDist, true);
                         MaNGOS::CreatureLastSearcher<MaNGOS::NearestCreatureEntryWithLiveStateInObjectRangeCheck> searcher(creatureBuddy, u_check);
                         Cell::VisitGridObjects(pSearcher, searcher, m_script->terminateScript.searchDist);
                         terminationBuddy = creatureBuddy;
@@ -2319,7 +2335,7 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
                     else
                     {
                         GameObject* goBuddy = nullptr;
-                        MaNGOS::NearestGameObjectEntryInObjectRangeCheck u_check(*pSearcher, m_script->terminateScript.npcEntry, m_script->terminateScript.searchDist);
+                        MaNGOS::NearestGameObjectEntryInObjectRangeCheck u_check(*pSearcher, m_script->terminateScript.npcOrGOEntry, m_script->terminateScript.searchDist);
                         MaNGOS::GameObjectLastSearcher<MaNGOS::NearestGameObjectEntryInObjectRangeCheck> searcher(goBuddy, u_check);
                         Cell::VisitGridObjects(pSearcher, searcher, m_script->terminateScript.searchDist);
                         terminationBuddy = goBuddy;
@@ -2371,16 +2387,16 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
 
                 if (!(m_script->data_flags & SCRIPT_FLAG_COMMAND_ADDITIONAL) && !terminationBuddy)
                 {
-                    if (m_script->terminateScript.npcEntry)
-                        DETAIL_FILTER_LOG(LOG_FILTER_DB_SCRIPT, "DB-SCRIPTS: Process table `%s` id %u, terminate further steps of this script! (as searched npc entry(%u) was not found alive)", m_table, m_script->id, m_script->terminateScript.npcEntry);
+                    if (m_script->terminateScript.npcOrGOEntry)
+                        DETAIL_FILTER_LOG(LOG_FILTER_DB_SCRIPT, "DB-SCRIPTS: Process table `%s` id %u, terminate further steps of this script! (as searched npc entry(%u) was not found alive)", m_table, m_script->id, m_script->terminateScript.npcOrGOEntry);
                     else
                         DETAIL_FILTER_LOG(LOG_FILTER_DB_SCRIPT, "DB-SCRIPTS: Process table `%s` id %u, terminate further steps of this script! (as no npc in pool id(%u) was found alive)", m_table, m_script->id, m_script->terminateScript.poolId);
                     result = true;
                 }
                 else if (m_script->data_flags & SCRIPT_FLAG_COMMAND_ADDITIONAL && terminationBuddy)
                 {
-                    if (m_script->terminateScript.npcEntry)
-                        DETAIL_FILTER_LOG(LOG_FILTER_DB_SCRIPT, "DB-SCRIPTS: Process table `%s` id %u, terminate further steps of this script! (as searched npc entry(%u) was found alive)", m_table, m_script->id, m_script->terminateScript.npcEntry);
+                    if (m_script->terminateScript.npcOrGOEntry)
+                        DETAIL_FILTER_LOG(LOG_FILTER_DB_SCRIPT, "DB-SCRIPTS: Process table `%s` id %u, terminate further steps of this script! (as searched npc entry(%u) was found alive)", m_table, m_script->id, m_script->terminateScript.npcOrGOEntry);
                     else
                         DETAIL_FILTER_LOG(LOG_FILTER_DB_SCRIPT, "DB-SCRIPTS: Process table `%s` id %u, terminate further steps of this script! (as searched npc in pool id(%u) was found alive)", m_table, m_script->id, m_script->terminateScript.poolId);
                     result = true;
@@ -2477,6 +2493,8 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
             // else if no radius and target is creature send AI event to target
             else if (pTarget->GetTypeId() == TYPEID_UNIT)
                 static_cast<Unit*>(pSource)->AI()->SendAIEvent(AIEventType(m_script->sendAIEvent.eventType), nullptr, (Unit*)pTarget, m_script->sendAIEvent.value);
+            else if (pSource->IsCreature() && pTarget->IsPlayer())
+                static_cast<Unit*>(pSource)->AI()->ReceiveAIEvent(AIEventType(m_script->sendAIEvent.eventType), (Unit*)pTarget, (Unit*)pTarget, m_script->sendAIEvent.value);
             else if (pSource->IsPlayer() && pTarget->IsCreature())
                 static_cast<Unit*>(pTarget)->AI()->ReceiveAIEvent(AIEventType(m_script->sendAIEvent.eventType), (Unit*)pSource, (Unit*)pSource, m_script->sendAIEvent.value);
             break;
@@ -2886,6 +2904,14 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
                     break;
             }
 
+            break;
+        }
+        case SCRIPT_COMMAND_SET_GOSSIP_MENU:                // 52
+        {
+            if (LogIfNotCreature(pTarget))
+                break;
+
+            static_cast<Creature*>(pTarget)->SetDefaultGossipMenuId(m_script->setGossipMenu.gossipMenuId);
             break;
         }
         default:

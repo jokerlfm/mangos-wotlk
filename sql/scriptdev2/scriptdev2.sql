@@ -255,6 +255,7 @@ INSERT INTO scripted_event_id VALUES
 /* War Effort*/
 UPDATE creature_template SET ScriptName='npc_war_effort' WHERE
 entry IN(15383,15431,15432,15434,15437,15445,15446,15448,15450,15451,15452,15453,15455,15456,15457,15459,15460,15469,15477,15508,15512,15515,15522,15525,15528,15529,15532,15533,15534,15535);
+UPDATE gameobject_template SET ScriptName='go_scarab_gong' WHERE entry=180717; -- The Scarab Gong
 
 /*Midsummer*/
 UPDATE gameobject_template SET ScriptName='go_midsummer_bonfire' WHERE entry IN(187946,187945,187944,187943,187942,187941,187940,187939,187938,187937,187936,187935,187934,187933,187932,187931,187930,187929,187928,187927,187926,187925,187924,187923,187922,187921,187920,187919,187917,187916,187914,187564,187971,187973,187952,187963,187950,187961,187959,187957,187968,187948,187953,187970,187966,187975,187969,187951,187956,187954,187947,187972,187964,187559,187965,187949,187955,187967,187958,187974,187960,187962,181332,181333,181334,181335,181336,181337,188128,188129);
@@ -304,6 +305,12 @@ UPDATE creature_template SET ScriptName='scourge_invasion_minion' WHERE entry IN
 UPDATE creature_template SET ScriptName='npc_pallid_horror' WHERE entry IN (16394,16382);
 UPDATE gameobject_template SET ScriptName='scourge_invasion_go_circle' WHERE entry=181136;
 UPDATE gameobject_template SET ScriptName='scourge_invasion_go_necropolis' WHERE entry IN (181154,181215,181223,181374,181373);
+
+/* Shaman */
+UPDATE creature_template SET ScriptName='npc_sentry_totem' WHERE entry=3968;
+
+/* Death Knight */
+UPDATE creature_template SET ScriptName='npc_gargoyle_dk' WHERE entry=27829;
 
 /*  */
 /* ZONE */
@@ -1325,6 +1332,10 @@ UPDATE creature_template SET ScriptName='npc_fire_cyclone' WHERE entry=30648;
 UPDATE instance_template SET ScriptName='instance_onyxias_lair' WHERE map=249;
 UPDATE creature_template SET ScriptName='boss_onyxia' WHERE entry=10184;
 
+/* ORGRIMMAR */
+UPDATE creature_template SET ScriptName='npc_overlord_runthalak' WHERE entry=14392;
+UPDATE creature_template SET ScriptName='npc_high_overlord_saurfang' WHERE entry=14720;
+
 /* RAGEFIRE CHASM */
 
 /* RAZORFEN DOWNS */
@@ -1475,6 +1486,8 @@ UPDATE creature_template SET ScriptName='npc_dashel_stonefist' WHERE entry=4961;
 UPDATE creature_template SET ScriptName='npc_lady_katrana_prestor' WHERE entry=1749;
 UPDATE creature_template SET ScriptName='npc_squire_rowe' WHERE entry=17804;
 UPDATE creature_template SET ScriptName='npc_reginald_windsor' WHERE entry =12580;
+UPDATE creature_template SET ScriptName='npc_major_mattingly' WHERE entry=14394;
+UPDATE creature_template SET ScriptName='npc_field_marshal_afrasiabi' WHERE entry=14721;
 
 /* STRANGLETHORN VALE */
 UPDATE creature_template SET ScriptName='mob_yenniku' WHERE entry=2530;
@@ -1934,16 +1947,13 @@ UPDATE creature_template SET ScriptName='boss_venoxis' WHERE entry=14507;
 UPDATE creature_template SET ScriptName='boss_marli' WHERE entry=14510;
 UPDATE creature_template SET ScriptName='boss_mandokir' WHERE entry=11382;
 UPDATE creature_template SET ScriptName='mob_ohgan' WHERE entry=14988;
-UPDATE creature_template SET ScriptName='boss_jindo' WHERE entry=11380;
 UPDATE creature_template SET ScriptName='boss_hakkar' WHERE entry=14834;
 UPDATE creature_template SET ScriptName='boss_thekal' WHERE entry=14509;
 UPDATE creature_template SET ScriptName='boss_arlokk' WHERE entry=14515;
 UPDATE gameobject_template SET ScriptName='go_gong_of_bethekk' WHERE entry=180526;
-UPDATE creature_template SET ScriptName='boss_hazzarah' WHERE entry=15083;
 UPDATE creature_template SET ScriptName='boss_renataki' WHERE entry=15084;
 UPDATE creature_template SET ScriptName='mob_zealot_lorkhan' WHERE entry=11347;
 UPDATE creature_template SET ScriptName='mob_zealot_zath' WHERE entry=11348;
-UPDATE creature_template SET ScriptName='mob_healing_ward' WHERE entry=14987;
 UPDATE creature_template SET ScriptName='npc_gurubashi_bat_rider' WHERE entry=14750;
 UPDATE creature_template SET ScriptName='npc_zulian_prowler' WHERE entry=15101;
 UPDATE creature_template SET ScriptName='npc_soulflayer' WHERE entry=11359;
@@ -2573,8 +2583,8 @@ INSERT INTO script_texts (entry,content_default,sound,type,language,emote,broadc
 
 ('-1000590','The feast of curruption is no more! Magtheridon has fallen to the battle prowess of $N and $Ghis:her; allies! Witness the might of the Alliance! A pit lord commander is destroyed!','0','6','0','15','0','Yell Magtheridon Death1 A'),
 ('-1000591','Hear me brothers and sisters-in-arms! The time of our enemies is at an end! We must strike at the fel orcs that remain! Exterminate them like the vermin that they are! Carry with you the favor of the Sons of Lothar!','0','6','0','22','0','Yell Magtheridon Death2 A'),
-('-1000592','For the first time - in as long as I can remember - there is silence.','0','6','0','15','0','Yell Magtheridon Death1 H'),
-('-1000593','This defeat is not only a blow to Illidan, $n. The Legion too reels... A pit lord commander has been defeated. The siege of Hellfire Citadel now holds no purpose for the Burning Legion. All of their efforts will undoubtedly be turned upon the Black Temple. Redemption comes for Illidan... and soon.','0','6','0','22','0','Yell Magtheridon Death2 H'),
+('-1000592','Hellfire Citadel is ours! The source of Illidan''s fel orc army is no more! Magtheridon has fallen to the might of $n and $g his:her; allies!','0','6','0','15','20765','Yell Magtheridon Death1 H'),
+('-1000593','The time for us to rise and strike at the fel orcs that remain is now! Do this for your Warchief! Do this for the Horde!','0','6','0','22','20766','Yell Magtheridon Death2 H'),
 
 ('-1000594','At last... now I can rest.','0','0','0','0','0','hero spirit SAY_BLESS_1'),
 ('-1000595','I''m so tired. Just let me rest for a moment.','0','0','0','0','0','hero spirit SAY_BLESS_2'),
@@ -4034,8 +4044,6 @@ INSERT INTO script_texts (entry,content_default,sound,type,language,emote,broadc
 ('-1309011','Bethekk, your priestess calls upon your might!','8416','1','0','0','0','arlokk SAY_AGGRO'),
 ('-1309012','Feast on $n, my pretties!','0','1','0','0','0','arlokk SAY_FEAST_PANTHER'),
 ('-1309013','At last, I am free of the Soulflayer!','8412','1','0','0','0','arlokk SAY_DEATH'),
-
-('-1309014','Welcome to da great show friends! Step right up to die!','8425','1','0','0','0','jindo SAY_AGGRO'),
 
 ('-1309015','I''ll feed your souls to Hakkar himself!','8413','1','0','0','0','mandokir SAY_AGGRO'),
 ('-1309016','DING!','0','1','0','0','0','mandokir SAY_DING_KILL'),
@@ -7892,7 +7900,7 @@ INSERT INTO gossip_texts (entry,content_default,comment) VALUES
 --
 
 TRUNCATE script_waypoint;
-INSERT INTO script_waypoint (entry, pathId, pointid, position_x, position_y, position_z, orientation, waittime, script_id, comment) VALUES
+INSERT INTO script_waypoint (Entry, PathId, Point, PositionX, PositionY, PositionZ, Orientation, WaitTime, ScriptId, Comment) VALUES
 (349,0,1,-8769.59,-2185.73,141.975,0,0,0,''),
 (349,0,2,-8776.54,-2193.78,140.96,0,0,0,''),
 (349,0,3,-8783.29,-2194.82,140.462,0,0,0,''),

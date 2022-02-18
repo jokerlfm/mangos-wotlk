@@ -106,7 +106,7 @@ SpellTargetInfo SpellTargetInfoTable[MAX_SPELL_TARGETS] =
     /*[73]*/    { "TARGET_LOCATION_CASTER_RANDOM_CIRCUMFERENCE",          TARGET_TYPE_LOCATION_DEST                                                 },
     /*[74]*/    { "TARGET_LOCATION_UNIT_RANDOM_SIDE",                     TARGET_TYPE_LOCATION_DEST                                                 },
     /*[75]*/    { "TARGET_LOCATION_UNIT_RANDOM_CIRCUMFERENCE",            TARGET_TYPE_LOCATION_DEST                                                 },
-    /*[76]*/    { "TARGET_LOCATION_DYNOBJ_POSITION",                      TARGET_TYPE_LOCATION_DEST                                                 },
+    /*[76]*/    { "TARGET_LOCATION_CHANNEL_TARGET_DEST",                  TARGET_TYPE_LOCATION_DEST                                                 },
     /*[77]*/    { "TARGET_UNIT_CHANNEL_TARGET",                           TARGET_TYPE_UNIT,             TARGET_HARMFUL,    TARGET_ENUMERATOR_SINGLE },
     /*[78]*/    { "TARGET_LOCATION_NORTH",                                TARGET_TYPE_LOCATION_DEST                                                 },
     /*[79]*/    { "TARGET_LOCATION_SOUTH",                                TARGET_TYPE_LOCATION_DEST                                                 },
@@ -238,7 +238,7 @@ SpellEffectInfo SpellEffectInfoTable[MAX_SPELL_EFFECTS] =
     /*[90]*/     { "SPELL_EFFECT_KILL_CREDIT_PERSONAL",         TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[91]*/     { "SPELL_EFFECT_THREAT_ALL",                   TARGET_TYPE_UNKNOWN,        TARGET_NONE },
     /*[92]*/     { "SPELL_EFFECT_ENCHANT_HELD_ITEM",            TARGET_TYPE_UNIT,           TARGET_NONE },
-    /*[93]*/     { "SPELL_EFFECT_BREAK_PLAYER_TARGETING",       TARGET_TYPE_UNIT,           TARGET_NONE },
+    /*[93]*/     { "SPELL_EFFECT_BREAK_PLAYER_TARGETING",       TARGET_TYPE_UNIT,           TARGET_UNIT_CASTER },
     /*[94]*/     { "SPELL_EFFECT_SELF_RESURRECT",               TARGET_TYPE_NONE,           TARGET_NONE }, // confirmed none
     /*[95]*/     { "SPELL_EFFECT_SKINNING",                     TARGET_TYPE_UNIT,           TARGET_NONE },
     /*[96]*/     { "SPELL_EFFECT_CHARGE",                       TARGET_TYPE_UNIT,           TARGET_NONE },

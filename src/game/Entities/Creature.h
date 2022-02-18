@@ -66,7 +66,7 @@ enum CreatureFlagsExtra
     CREATURE_EXTRA_FLAG_COUNT_SPAWNS           = 0x00200000,       // 2097152 count creature spawns in Map*
     CREATURE_EXTRA_FLAG_IGNORE_FEIGN_DEATH     = 0x00400000,       // 4194304 Ignores Feign Death
     CREATURE_EXTRA_FLAG_DUAL_WIELD_FORCED      = 0x00800000,       // 8388606 creature is alwyas dual wielding (even if unarmed)
-    // CREATURE_EXTRA_FLAG_REUSE               = 0x01000000,       // 16777216
+    CREATURE_EXTRA_FLAG_NO_SKILL_GAINS         = 0x01000000,       // 16777216 Does not give weapon skill gains to attacker
 };
 
 // GCC have alternative #pragma pack(N) syntax and old gcc version not support pack(push,N), also any gcc version not support it at some platform
@@ -101,6 +101,7 @@ struct CreatureInfo
     bool    RacialLeader;
     uint32  NpcFlags;
     uint32  UnitFlags;                                      // enum UnitFlags mask values
+    uint32  UnitFlags2;                                     // enum UnitFlags2
     uint32  DynamicFlags;
     uint32  ExtraFlags;
     uint32  CreatureTypeFlags;                              // enum CreatureTypeFlags mask values
@@ -771,6 +772,9 @@ class Creature : public Unit
         bool HasQuest(uint32 quest_id) const override;
         bool HasInvolvedQuest(uint32 quest_id)  const override;
 
+        void SetDefaultGossipMenuId(uint32 menuId) { m_gossipMenuId = menuId; }
+        uint32 GetDefaultGossipMenuId() const { return m_gossipMenuId; }
+
         GridReference<Creature>& GetGridRef() { return m_gridRef; }
         bool IsRegeneratingHealth() const { return (GetCreatureInfo()->RegenerateStats & REGEN_FLAG_HEALTH) != 0 && !(GetCreatureInfo()->CreatureTypeFlags & CREATURE_TYPEFLAGS_SIEGE_WEAPON); }
         bool IsRegeneratingPower() const;
@@ -863,6 +867,15 @@ class Creature : public Unit
         void ClearCreatureGroup();
         CreatureGroup* GetCreatureGroup() const { return m_creatureGroup; }
 
+        bool IsOnlyVisibleTo(ObjectGuid guid) const override;
+        void SetOnlyVisibleTo(ObjectGuid guid);
+
+        ObjectGuid GetKillerGuid() const { return m_killer; }
+        void SetKillerGuid(ObjectGuid guid) { m_killer = guid; }
+
+        void SetNoWeaponSkillGain(bool state) { m_noWeaponSkillGain = state; }
+        bool IsNoWeaponSkillGain() const override { return m_noWeaponSkillGain; }
+
     protected:
         bool CreateFromProto(uint32 guidlow, CreatureInfo const* cinfo, const CreatureData* data = nullptr, GameEventCreatureData const* eventData = nullptr);
         bool InitEntry(uint32 Entry, const CreatureData* data = nullptr, GameEventCreatureData const* eventData = nullptr);
@@ -876,6 +889,7 @@ class Creature : public Unit
         // vendor items
         VendorItemCounts m_vendorItemCounts;
 
+        uint32 m_gossipMenuId;
         uint32 m_lootMoney;
         ObjectGuid m_lootRecipientGuid;                     // player who will have rights for looting if m_lootGroupRecipient==0 or group disbanded
         uint32 m_lootGroupRecipientId;                      // group who will have rights for looting if set and exist
@@ -925,9 +939,11 @@ class Creature : public Unit
         bool m_noLoot;
         bool m_noReputation;
         bool m_ignoringFeignDeath;
+        bool m_noWeaponSkillGain;
 
         // Script logic
         bool m_countSpawns;
+        ObjectGuid m_onlyVisibleTo;
 
         // spell scripting persistency
         std::set<uint32> m_hitBySpells;
@@ -936,6 +952,8 @@ class Creature : public Unit
         CreatureSpellList m_spellList;
 
         CreatureGroup* m_creatureGroup;
+
+        ObjectGuid m_killer;
 
     private:
         GridReference<Creature> m_gridRef;

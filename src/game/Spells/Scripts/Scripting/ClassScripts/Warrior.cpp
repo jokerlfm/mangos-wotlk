@@ -85,7 +85,78 @@ struct SunderArmor : public SpellScript
     void OnInit(Spell* spell) const override
     {
         if (spell->GetCaster()->HasAura(58387)) // Glyph of Sunder Armor
-            spell->SetMaxAffectedTargets(2);
+        {
+            spell->SetChainTargetsCount(EFFECT_INDEX_0, 2);
+            spell->SetChainTargetsCount(EFFECT_INDEX_1, 2);
+        }
+    }
+};
+
+struct WarriorDevastate : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_1)
+            return;
+
+        Unit* target = spell->GetUnitTarget();
+        Unit* caster = spell->GetCaster();
+        uint32 sunders = 1;
+
+        // Sunder Armor
+        Aura* sunder = target->GetAura(SPELL_AURA_MOD_RESISTANCE_PCT, SPELLFAMILY_WARRIOR, uint64(0x0000000000004000), 0x00000000, caster->GetObjectGuid());
+
+        // Devastate bonus and sunder armor refresh
+        if (sunder)
+        {
+            sunder->GetHolder()->RefreshHolder();
+            spell->SetDamage(spell->GetDamage() + sunder->GetStackAmount() * spell->CalculateSpellEffectValue(EFFECT_INDEX_2, target));
+        }
+
+        if (Aura* glyphAura = caster->GetAura(63332, EFFECT_INDEX_0))
+            sunders = 2;
+
+        // Devastate causing Sunder Armor Effect
+        // and no need to cast over max stack amount
+        if (!sunder || sunder->GetStackAmount() < sunder->GetSpellProto()->StackAmount)
+        {
+            for (uint32 i = 0; i < sunders; ++i)
+                caster->CastSpell(target, 58567, TRIGGERED_IGNORE_HIT_CALCULATION | TRIGGERED_IGNORE_CURRENT_CASTED_SPELL | TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_COSTS);
+        }
+    }
+};
+
+struct RetaliationWarrior : public AuraScript
+{
+    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
+    {
+        // check attack comes not from behind
+        if (procData.victim->IsFacingTargetsBack(procData.attacker))
+            return SPELL_AURA_PROC_FAILED;
+
+        procData.victim->CastSpell(procData.attacker, 20240, TRIGGERED_IGNORE_HIT_CALCULATION | TRIGGERED_IGNORE_CURRENT_CASTED_SPELL | TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_COSTS);
+        return SPELL_AURA_PROC_OK;
+    }
+};
+
+struct HeroicStrike : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* target = spell->GetUnitTarget();
+        Unit::AuraList const& decSpeedList = target->GetAurasByType(SPELL_AURA_MOD_DECREASE_SPEED);
+        for (Unit::AuraList::const_iterator iter = decSpeedList.begin(); iter != decSpeedList.end(); ++iter)
+        {
+            if ((*iter)->GetSpellProto()->SpellIconID == 15 && (*iter)->GetSpellProto()->Dispel == 0)
+            {
+                // formula based on tooltip
+                spell->SetDamage(spell->GetDamage() + spell->m_spellInfo->EffectBasePoints[EFFECT_INDEX_0]);
+                break;
+            }
+        }
     }
 };
 
@@ -95,4 +166,7 @@ void LoadWarriorScripts()
     RegisterSpellScript<WarriorExecuteDamage>("spell_warrior_execute_damage");
     RegisterSpellScript<VictoryRush>("spell_warrior_victory_rush");
     RegisterSpellScript<SunderArmor>("spell_sunder_armor");
+    RegisterSpellScript<WarriorDevastate>("spell_warrior_devastate");
+    RegisterSpellScript<RetaliationWarrior>("spell_retaliation_warrior");
+    RegisterSpellScript<HeroicStrike>("spell_heroic_strike");
 }

@@ -837,7 +837,7 @@ struct world_map_outland : public ScriptedMap, public TimerManager
 
     void StartManaSlaveEvent()
     {
-        if (GameObject* go = GetSingleGameObjectFromStorage(GO_BASHIR_CRYSTALFORGE))
+        if (GameObject* go = GetSingleGameObjectFromStorage(GO_BASHIR_CRYSTALFORGE, true))
             if (Creature* controller = GetClosestCreatureWithEntry(go, CRYSTALFORGE_SLAVE_EVENT_CONTROLLER_ENTRY, 10.f))
                 instance->ScriptsStart(sRelayScripts, CRYSTALFORGE_SLAVE_EVENT_RELAY_ID, controller, controller);
     }
@@ -1568,6 +1568,7 @@ struct world_map_outland : public ScriptedMap, public TimerManager
             case NPC_DREADMAW:
             case NPC_LEGION_RING_SHIELD_ZAPPER_INVISMAN:
             case NPC_LEGION_RING_EVENT_INVISMAN_LG:
+            case NPC_YSIEL_WINDSINGER:
                 m_npcEntryGuidStore[creature->GetEntry()] = creature->GetObjectGuid();
                 break;
             case NPC_SKYGUARD_AETHER_TECH:
