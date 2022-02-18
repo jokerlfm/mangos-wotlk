@@ -7026,7 +7026,10 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
     // Subdamage count:
     uint32 lines = m_weaponDamageInfo.weapon[calcDamageInfo->attackType].lines;
 
-    WorldPacket data(SMSG_ATTACKERSTATEUPDATE, (4 + 8 + 8 + 4 + 4) + 1 + (lines * (4 + 4 + 4)) + (4 + 4 + 4));
+    // lfm use acore size 
+    //WorldPacket data(SMSG_ATTACKERSTATEUPDATE, (4 + 8 + 8 + 4 + 4) + 1 + (lines * (4 + 4 + 4)) + (4 + 4 + 4));
+    size_t maxsize = 4 + 5 + 5 + 4 + 4 + 1 + 4 + 4 + 4 + 4 + 4 + 1 + 4 + 4 + 4 + 4 + 4 * 12;
+    WorldPacket data(SMSG_ATTACKERSTATEUPDATE, maxsize);
 
     data << uint32(calcDamageInfo->HitInfo);
     data << calcDamageInfo->attacker->GetPackGUID();
@@ -7084,11 +7087,14 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
         data << float(0);
         data << float(0);
         data << float(0);
-        for (uint8 i = 0; i < 5; ++i)
-        {
-            data << float(0);
-            data << float(0);
-        }
+        // lfm acore in 1 loop 
+        //for (uint8 i = 0; i < 5; ++i)
+        //{
+        //    data << float(0);
+        //    data << float(0);
+        //}
+        data << float(0);
+        data << float(0);
         data << uint32(0);
     }
 

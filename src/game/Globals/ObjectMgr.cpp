@@ -471,7 +471,7 @@ void ObjectMgr::LoadCreatureTemplates()
             if (!difficultyInfo)
             {
                 sLog.outErrorDb("Creature (Entry: %u) have `DifficultyEntry%u`=%u but creature entry %u not exist.",
-                                i, diff + 1, cInfo->DifficultyEntry[diff], cInfo->DifficultyEntry[diff]);
+                    i, diff + 1, cInfo->DifficultyEntry[diff], cInfo->DifficultyEntry[diff]);
                 continue;
             }
 
@@ -494,7 +494,7 @@ void ObjectMgr::LoadCreatureTemplates()
                 if (hasDifficultyEntries[diff2].find(cInfo->DifficultyEntry[diff]) != hasDifficultyEntries[diff2].end())
                 {
                     sLog.outErrorDb("Creature (Entry: %u) have `DifficultyEntry%u`=%u but creature entry %u have difficulty %u entry also.",
-                                    i, diff + 1, cInfo->DifficultyEntry[diff], cInfo->DifficultyEntry[diff], diff2 + 1);
+                        i, diff + 1, cInfo->DifficultyEntry[diff], cInfo->DifficultyEntry[diff], diff2 + 1);
                     continue;
                 }
                 ok2 = true;
@@ -505,7 +505,7 @@ void ObjectMgr::LoadCreatureTemplates()
             if (cInfo->UnitClass != difficultyInfo->UnitClass)
             {
                 sLog.outErrorDb("Creature (Entry: %u, class %u) has different `UnitClass` in difficulty %u mode (Entry: %u, class %u).",
-                                i, cInfo->UnitClass, diff + 1, cInfo->DifficultyEntry[diff], difficultyInfo->UnitClass);
+                    i, cInfo->UnitClass, diff + 1, cInfo->DifficultyEntry[diff], difficultyInfo->UnitClass);
                 continue;
             }
 
@@ -542,14 +542,14 @@ void ObjectMgr::LoadCreatureTemplates()
             if (difficultyInfo->AIName && *difficultyInfo->AIName)
             {
                 sLog.outErrorDb("Difficulty %u mode creature (Entry: %u) has `AIName`, but in any case will used difficulty 0 mode creature (Entry: %u) AIName.",
-                                diff + 1, cInfo->DifficultyEntry[diff], i);
+                    diff + 1, cInfo->DifficultyEntry[diff], i);
                 continue;
             }
 
             if (difficultyInfo->ScriptID)
             {
                 sLog.outErrorDb("Difficulty %u mode creature (Entry: %u) has `ScriptName`, but in any case will used difficulty 0 mode creature (Entry: %u) ScriptName.",
-                                diff + 1, cInfo->DifficultyEntry[diff], i);
+                    diff + 1, cInfo->DifficultyEntry[diff], i);
                 continue;
             }
 
@@ -659,7 +659,7 @@ void ObjectMgr::LoadCreatureTemplates()
         }
 
         if (cInfo->MeleeBaseAttackTime == 0)
-            const_cast<CreatureInfo*>(cInfo)->MeleeBaseAttackTime  = BASE_ATTACK_TIME;
+            const_cast<CreatureInfo*>(cInfo)->MeleeBaseAttackTime = BASE_ATTACK_TIME;
 
         if (cInfo->RangedBaseAttackTime == 0)
             const_cast<CreatureInfo*>(cInfo)->RangedBaseAttackTime = BASE_ATTACK_TIME;
@@ -741,6 +741,11 @@ void ObjectMgr::LoadCreatureTemplates()
             const_cast<CreatureInfo*>(cInfo)->visibilityDistanceType = VisibilityDistanceType::Normal;
         }
 
+        // lfm creature_templates 
+        if (cInfo->Entry == 706 || cInfo->Entry == 808 || cInfo->Entry == 946)
+        {
+            const_cast<CreatureInfo*>(cInfo)->Faction = 107;
+        }
     }
 
     sLog.outString(">> Loaded %u creature definitions", sCreatureStorage.GetRecordCount());
@@ -2145,6 +2150,13 @@ void ObjectMgr::LoadCreatures()
         // reset the entry to 0; this will be processed by Creature::GetCreatureConditionalSpawnEntry
         if (isConditional)
             data.id = 0;
+
+        // lfm spawn time sec 
+        if (data.spawntimesecsmin > 60 && data.spawntimesecsmin < 1500)
+        {
+            data.spawntimesecsmin = 1500;
+            data.spawntimesecsmax = 1800;
+        }
 
         ++count;
     }
@@ -9385,6 +9397,16 @@ void ObjectMgr::LoadTrainers(char const* tableName, bool isTemplates)
 
         uint32 entry  = fields[0].GetUInt32();
         uint32 spell  = fields[1].GetUInt32();
+
+        // lfm trainer 
+        if (spell == 37836 || spell == 54257 || spell == 18261)
+        {
+            continue;
+        }
+        if (spell == 54083 || spell == 18249)
+        {
+            continue;
+        }
 
         SpellEntry const* spellinfo = sSpellTemplate.LookupEntry<SpellEntry>(spell);
         if (!spellinfo)

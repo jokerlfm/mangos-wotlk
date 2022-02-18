@@ -202,21 +202,55 @@ void ChaseMovementGenerator::AddDelay()
 
 float ChaseMovementGenerator::GetDynamicTargetDistance(Unit& owner, bool forRangeCheck) const
 {
+    // lfm dynamic distance 
+    //if (m_moveFurther)
+    //{
+    //    if (!forRangeCheck)
+    //    {
+    //        return this->i_offset + CHASE_DEFAULT_RANGE_FACTOR * this->i_target->GetCombinedCombatReach(&owner, true);
+    //    }
+    //    return this->i_offset + CHASE_RECHASE_RANGE_FACTOR * this->i_target->GetCombinedCombatReach(&owner, true);
+    //}
+    //else
+    //{
+    //    if (!forRangeCheck) // move to melee range and then cut path to simulate retail
+    //        return CHASE_DEFAULT_RANGE_FACTOR * this->i_target->GetCombinedCombatReach(&owner, true);
+
+    //    // check against actual max range setting
+    //    return this->i_offset + this->i_target->GetCombinedCombatReach(&owner, this->i_offset == 0.f ? true : false);
+    //}
+    float resultDistance = 0.0f;
     if (m_moveFurther)
     {
         if (!forRangeCheck)
-            return this->i_offset + CHASE_DEFAULT_RANGE_FACTOR * this->i_target->GetCombinedCombatReach(&owner, true) ;
-
-        return this->i_offset + CHASE_RECHASE_RANGE_FACTOR * this->i_target->GetCombinedCombatReach(&owner, true);
+        {
+            resultDistance = this->i_offset + 0.65f * this->i_target->GetCombinedCombatReach(&owner, true);
+        }
+        else
+        {
+            resultDistance = this->i_offset + 0.75f * this->i_target->GetCombinedCombatReach(&owner, true);
+        }
     }
     else
     {
         if (!forRangeCheck) // move to melee range and then cut path to simulate retail
-            return CHASE_DEFAULT_RANGE_FACTOR * this->i_target->GetCombinedCombatReach(&owner, true);
-
-        // check against actual max range setting
-        return this->i_offset + this->i_target->GetCombinedCombatReach(&owner, this->i_offset == 0.f ? true : false);
+        {
+            resultDistance = 0.65f * this->i_target->GetCombinedCombatReach(&owner, true);
+        }
+        else if (this->i_offset == 0)
+        {
+            resultDistance = this->i_offset + 0.65f * this->i_target->GetCombinedCombatReach(&owner, true);
+        }
+        else
+        {
+            resultDistance = this->i_offset + this->i_target->GetCombinedCombatReach(&owner, false);
+        }
     }
+    if (resultDistance > 1.0f)
+    {
+        resultDistance = resultDistance - 1.0f;
+    }
+    return resultDistance;
 }
 
 void ChaseMovementGenerator::HandleTargetedMovement(Unit& owner, const uint32& time_diff)
