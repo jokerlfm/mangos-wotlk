@@ -105,6 +105,14 @@ void WorldSession::HandleQuestgiverHelloOpcode(WorldPacket& recv_data)
     // Stop the npc if moving
     pCreature->StopMoving();
 
+    // update reputation list if need
+    Unit* unit = ObjectAccessor::GetUnit(*_player, guid);   // can select group members at diff maps
+    if (!unit)
+        return;
+
+    if (FactionTemplateEntry const* factionTemplateEntry = sFactionTemplateStore.LookupEntry(unit->GetFaction()))
+        _player->GetReputationMgr().SetVisible(factionTemplateEntry);
+
     if (sScriptDevAIMgr.OnGossipHello(_player, pCreature))
         return;
 

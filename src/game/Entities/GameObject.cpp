@@ -380,6 +380,14 @@ void GameObject::Update(const uint32 diff)
         }
         case GO_READY:
         {
+            // lfm auto fish
+            if (GetGoType() == GAMEOBJECT_TYPE_FISHINGNODE)
+            {
+                Unit* caster = GetOwner();
+                Use(caster);
+                break;
+            }
+
             if (m_respawnTime > 0)                          // timer on
             {
                 if (m_respawnTime <= time(nullptr))            // timer expired
@@ -1780,6 +1788,24 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                     if (!zone_skill)
                         sLog.outErrorDb("Fishable areaId %u are not properly defined in `skill_fishing_base_level`.", subzone);
 
+                    // lfm zone fishing skill will be 50% higher, min 50,
+                    if (zone_skill < 25)
+                    {
+                        zone_skill = 25;
+                    }
+                    else if (zone_skill < 50)
+                    {
+                        zone_skill = 50;
+                    }
+                    else if (zone_skill < 100)
+                    {
+                        zone_skill = 100;
+                    }
+                    else
+                    {
+                        zone_skill = zone_skill * 150 / 100;
+                    }
+
                     int32 skill = player->GetSkillValue(SKILL_FISHING);
                     int32 chance = skill - zone_skill + 5;
                     int32 roll = irand(1, 100);
@@ -1850,7 +1876,10 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                 }
             }
 
+            m_loot->AutoStore(player);
+            m_loot->Release(player);
             player->FinishSpell(CURRENT_CHANNELED_SPELL);
+            player->fishingDelay = urand(500, 1000);
             return;
         }
         case GAMEOBJECT_TYPE_SUMMONING_RITUAL:              // 18
@@ -2010,6 +2039,7 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
             m_loot->ShowContentTo(player);
 
             player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_FISH_IN_GAMEOBJECT, GetGOInfo()->id);
+
             return;
         }
         case GAMEOBJECT_TYPE_FLAGDROP:                      // 26

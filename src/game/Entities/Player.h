@@ -1070,6 +1070,9 @@ class Player : public Unit
         explicit Player(WorldSession* session);
         ~Player();
 
+        // lfm auto fish
+        int fishingDelay;
+
         void CleanupsBeforeDelete() override;
 
         void AddToWorld() override;

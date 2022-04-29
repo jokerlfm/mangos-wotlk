@@ -2037,6 +2037,15 @@ void ObjectMgr::LoadCreatures()
         data.spawnTemplate = GetCreatureSpawnTemplate(0);
         uint32 spawnDataEntry   = fields[22].GetUInt32();
 
+        // lfm creatures 
+        if (entry == 1134 || entry == 1135)
+        {
+            if (data.spawndist == 0)
+            {
+                continue;
+            }
+        }
+
         MapEntry const* mapEntry = sMapStore.LookupEntry(data.mapid);
         if (!mapEntry)
         {
@@ -2864,18 +2873,18 @@ void ObjectMgr::LoadItemPrototypes()
             if (FactionEntry const* faction = sFactionStore.LookupEntry(HORDE))
                 if ((proto->AllowableRace & faction->BaseRepRaceMask[0]) == 0)
                     sLog.outErrorDb("Item (Entry: %u) have in `AllowableRace` races (%u) only not compatible with ITEM_FLAG2_HORDE_ONLY (%u) in Flags field, item any way will can't be equipped or use by this races.",
-                                    i, proto->AllowableRace, ITEM_FLAG2_FACTION_HORDE);
+                        i, proto->AllowableRace, ITEM_FLAG2_FACTION_HORDE);
 
             if (proto->Flags2 & ITEM_FLAG2_FACTION_ALLIANCE)
                 sLog.outErrorDb("Item (Entry: %u) have in `Flags2` flags ITEM_FLAG2_ALLIANCE_ONLY (%u) and ITEM_FLAG2_HORDE_ONLY (%u) in Flags field, this is wrong combination.",
-                                i, ITEM_FLAG2_FACTION_ALLIANCE, ITEM_FLAG2_FACTION_HORDE);
+                    i, ITEM_FLAG2_FACTION_ALLIANCE, ITEM_FLAG2_FACTION_HORDE);
         }
         else if (proto->Flags2 & ITEM_FLAG2_FACTION_ALLIANCE)
         {
             if (FactionEntry const* faction = sFactionStore.LookupEntry(ALLIANCE))
                 if ((proto->AllowableRace & faction->BaseRepRaceMask[0]) == 0)
                     sLog.outErrorDb("Item (Entry: %u) have in `AllowableRace` races (%u) only not compatible with ITEM_FLAG2_ALLIANCE_ONLY (%u) in Flags field, item any way will can't be equipped or use by this races.",
-                                    i, proto->AllowableRace, ITEM_FLAG2_FACTION_ALLIANCE);
+                        i, proto->AllowableRace, ITEM_FLAG2_FACTION_ALLIANCE);
         }
 
         if (proto->BuyCount <= 0)
@@ -3021,12 +3030,12 @@ void ObjectMgr::LoadItemPrototypes()
 
             switch (proto->ItemStat[j].ItemStatType)
             {
-                case ITEM_MOD_SPELL_HEALING_DONE:
-                case ITEM_MOD_SPELL_DAMAGE_DONE:
-                    sLog.outErrorDb("Item (Entry: %u) has deprecated stat_type%d (%u)", i, j + 1, proto->ItemStat[j].ItemStatType);
-                    break;
-                default:
-                    break;
+            case ITEM_MOD_SPELL_HEALING_DONE:
+            case ITEM_MOD_SPELL_DAMAGE_DONE:
+                sLog.outErrorDb("Item (Entry: %u) has deprecated stat_type%d (%u)", i, j + 1, proto->ItemStat[j].ItemStatType);
+                break;
+            default:
+                break;
             }
         }
 
@@ -3175,7 +3184,7 @@ void ObjectMgr::LoadItemPrototypes()
         if (proto->RandomProperty && proto->RandomSuffix)
         {
             sLog.outErrorDb("Item (Entry: %u) have RandomProperty==%u and RandomSuffix==%u, but must have one from field = 0",
-                            proto->ItemId, proto->RandomProperty, proto->RandomSuffix);
+                proto->ItemId, proto->RandomProperty, proto->RandomSuffix);
             const_cast<ItemPrototype*>(proto)->RandomSuffix = 0;
         }
 
@@ -3245,14 +3254,14 @@ void ObjectMgr::LoadItemPrototypes()
             if (proto->Quality > ITEM_QUALITY_EPIC || proto->Quality < ITEM_QUALITY_UNCOMMON)
             {
                 ERROR_DB_STRICT_LOG("Item (Entry: %u) has unexpected RequiredDisenchantSkill (%u) for non-disenchantable quality (%u), reset it.",
-                                    i, proto->RequiredDisenchantSkill, proto->Quality);
+                    i, proto->RequiredDisenchantSkill, proto->Quality);
                 const_cast<ItemPrototype*>(proto)->RequiredDisenchantSkill = -1;
             }
             else if (proto->Class != ITEM_CLASS_WEAPON && proto->Class != ITEM_CLASS_ARMOR)
             {
                 // some wrong data in wdb for unused items
                 ERROR_DB_STRICT_LOG("Item (Entry: %u) has unexpected RequiredDisenchantSkill (%u) for non-disenchantable item class (%u), reset it.",
-                                    i, proto->RequiredDisenchantSkill, proto->Class);
+                    i, proto->RequiredDisenchantSkill, proto->Class);
                 const_cast<ItemPrototype*>(proto)->RequiredDisenchantSkill = -1;
             }
         }
@@ -3312,6 +3321,15 @@ void ObjectMgr::LoadItemPrototypes()
                     sLog.outErrorDb("Item (Entry: %u) has redundant real-time duration flag in ExtraFlags, item not have duration", i);
                     const_cast<ItemPrototype*>(proto)->ExtraFlags &= ~ITEM_EXTRA_REAL_TIME_DURATION;
                 }
+            }
+        }
+
+        // lfm item templates 
+        if (proto->Class == ItemClass::ITEM_CLASS_TRADE_GOODS && proto->SubClass == ItemSubclassTradeGoods::ITEM_SUBCLASS_METAL_STONE)
+        {
+            if (proto->Stackable > 10)
+            {
+                const_cast<ItemPrototype*>(proto)->Stackable = 10;
             }
         }
     }
@@ -8459,6 +8477,12 @@ void ObjectMgr::LoadQuestRelationsHelper(QuestRelationsMap& map, char const* tab
 
         uint32 id    = fields[0].GetUInt32();
         uint32 quest = fields[1].GetUInt32();
+
+        // lfm quest relations 
+        if (quest == 25229)
+        {
+            continue;
+        }
 
         if (mQuestTemplates.find(quest) == mQuestTemplates.end())
         {

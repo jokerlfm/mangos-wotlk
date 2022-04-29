@@ -693,6 +693,9 @@ Player::Player(WorldSession* session): Unit(), m_taxiTracker(*this), m_mover(thi
 
     m_pendingBindId = 0;
     m_pendingBindTimer = 0;
+
+    // lfm auto fish
+    fishingDelay = 0;
 }
 
 Player::~Player()
@@ -1713,6 +1716,17 @@ void Player::Update(const uint32 diff)
     else if (m_playerbotMgr)
         m_playerbotMgr->UpdateAI(diff);
 #endif
+
+    // lfm auto fish
+    if (fishingDelay > 0)
+    {
+        fishingDelay -= diff;
+        if (fishingDelay <= 0)
+        {
+            CastSpell(this, 7620, TriggerCastFlags::TRIGGERED_NONE);
+            fishingDelay = 0;
+        }
+    }
 }
 
 void Player::Heartbeat()

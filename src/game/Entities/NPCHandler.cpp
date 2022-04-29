@@ -323,6 +323,14 @@ void WorldSession::HandleGossipHelloOpcode(WorldPacket& recv_data)
     if (pCreature->isSpiritGuide())
         pCreature->SendAreaSpiritHealerQueryOpcode(_player);
 
+    // update reputation list if need
+    Unit* unit = ObjectAccessor::GetUnit(*_player, guid);   // can select group members at diff maps
+    if (!unit)
+        return;
+
+    if (FactionTemplateEntry const* factionTemplateEntry = sFactionTemplateStore.LookupEntry(unit->GetFaction()))
+        _player->GetReputationMgr().SetVisible(factionTemplateEntry);
+
     if (!sScriptDevAIMgr.OnGossipHello(_player, pCreature))
     {
         _player->PrepareGossipMenu(pCreature, pCreature->GetDefaultGossipMenuId());
