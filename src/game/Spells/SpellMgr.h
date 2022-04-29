@@ -1891,6 +1891,19 @@ inline Mechanics GetEffectMechanic(SpellEntry const* spellInfo, SpellEffectIndex
     return MECHANIC_NONE;
 }
 
+inline bool IsIgnoreRootSpell(SpellEntry const* spellInfo)
+{
+    if (!spellInfo->HasAttribute(SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY))
+        return false;
+
+    for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+        if (spellInfo->Effect[i] == SPELL_EFFECT_APPLY_AURA && spellInfo->EffectImplicitTargetA[i] == TARGET_UNIT_CASTER &&
+            spellInfo->EffectApplyAuraName[i] == SPELL_AURA_MECHANIC_IMMUNITY && spellInfo->EffectMiscValue[i] == MECHANIC_ROOT)
+            return true;
+
+    return false;
+}
+
 inline uint32 GetDispellMask(DispelType dispel)
 {
     // If dispell all
@@ -2210,6 +2223,10 @@ inline bool IsStackableAuraEffect(SpellEntry const* entry, SpellEntry const* ent
         case SPELL_AURA_MOD_TOTAL_STAT_PERCENTAGE:
         case SPELL_AURA_MOD_PERCENT_STAT:
             nonmui = true;
+            break;
+        case SPELL_AURA_MOD_INCREASE_HEALTH:
+            if (entry->Id == 26522 && entry2->Id == 26522) // Lunar Fortune
+                return false;
             break;
         case SPELL_AURA_MOD_HEALING_DONE:
         case SPELL_AURA_MOD_HEALING_PCT:

@@ -103,7 +103,8 @@ void WorldSession::HandleQuestgiverHelloOpcode(WorldPacket& recv_data)
     }
 
     // Stop the npc if moving
-    pCreature->StopMoving();
+    if (uint32 pauseTimer = pCreature->GetInteractionPauseTimer())
+        pCreature->GetMotionMaster()->PauseWaypoints(pauseTimer);
 
     // update reputation list if need
     Unit* unit = ObjectAccessor::GetUnit(*_player, guid);   // can select group members at diff maps

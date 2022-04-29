@@ -495,22 +495,6 @@ void Spell::EffectSchoolDMG(SpellEffectIndex eff_idx)
                             break;
                     }
                 }
-                // Shadow Bite
-                else if (m_spellInfo->SpellFamilyFlags & uint64(0x0040000000000000))
-                {
-                    Unit* owner = m_caster->GetOwner();
-                    if (!owner)
-                        break;
-
-                    uint32 counter = 0;
-                    Unit::AuraList const& dotAuras = unitTarget->GetAurasByType(SPELL_AURA_PERIODIC_DAMAGE);
-                    for (auto dotAura : dotAuras)
-                        if (dotAura->GetCasterGuid() == owner->GetObjectGuid())
-                            ++counter;
-
-                    if (counter)
-                        damage += (counter * owner->CalculateSpellEffectValue(unitTarget, m_spellInfo, EFFECT_INDEX_2) * damage) / 100.0f;
-                }
                 // Conflagrate - consumes Immolate or Shadowflame
                 else if (m_spellInfo->TargetAuraState == AURA_STATE_CONFLAGRATE)
                 {
@@ -856,14 +840,6 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                         return;
 
                     unitTarget->CastSpell(unitTarget, 9010, TRIGGERED_NONE);
-                    return;
-                }
-                case 9204:                                  // Hate to Zero
-                case 20538:
-                case 26569:
-                case 26637:
-                {
-                    m_caster->getThreatManager().modifyThreatPercent(unitTarget, -100);
                     return;
                 }
                 case 9976:                                  // Polly Eats the E.C.A.C.
@@ -5199,7 +5175,7 @@ void Spell::EffectPowerDrain(SpellEffectIndex eff_idx)
     m_spellLog.AddLog(uint32(SPELL_EFFECT_POWER_DRAIN), unitTarget->GetPackGUID(), new_damage, uint32(powerType), gainMultiplier);
 
     if (int32 gain = int32(new_damage * gainMultiplier))
-        m_caster->EnergizeBySpell(m_caster, m_spellInfo, gain, powerType);
+        m_caster->EnergizeBySpell(m_caster, m_spellInfo, gain, powerType, false);
 }
 
 void Spell::EffectSendEvent(SpellEffectIndex effectIndex)
@@ -6010,6 +5986,7 @@ void Spell::EffectSummonType(SpellEffectIndex eff_idx)
     uint32 amount = 1;
     uint32 health = 0; // totems have HP in base points
     uint32 unk = 0; // no idea what it means, but 4000-25000 cant be right for summon count
+    uint32 creatureLevel = 0;
     if (prop_id == 121 || summon_prop->Title == UNITNAME_SUMMON_TITLE_TOTEM)
     {
         health = damage;
@@ -6022,7 +5999,10 @@ void Spell::EffectSummonType(SpellEffectIndex eff_idx)
                 unk = damage;
                 break;
             default:
-                amount = damage > 0 ? damage : 1; // old code
+                if (m_spellInfo->Id == 18662 || m_spellInfo->Id == 1122)
+                    creatureLevel = damage;
+                else
+                    amount = damage > 0 ? damage : 1; // old code
                 break;
         }
     }
@@ -6033,7 +6013,7 @@ void Spell::EffectSummonType(SpellEffectIndex eff_idx)
 
     // Expected Level
     WorldObject* petInvoker = responsibleCaster ? responsibleCaster : m_trueCaster;
-    uint32 level;
+    uint32 level = 0;
     // Everything considered as guardian or critter pets uses its creature template level by default (may change depending on SpellEffect params)
     if (summon_prop->Title == UNITNAME_SUMMON_TITLE_COMPANION || summon_prop->Flags & SUMMON_PROP_FLAG_USE_CREATURE_LEVEL)
     {
@@ -6059,9 +6039,9 @@ void Spell::EffectSummonType(SpellEffectIndex eff_idx)
     if (!petInvoker->IsPlayer())
     {
         // If EffectMultipleValue <= 0, pets have their calculated level modified by EffectMultipleValue
-        if (m_spellInfo->EffectMultipleValue[eff_idx] <= 0)
+        if (m_spellInfo->EffectMultipleValue[eff_idx] <= 0) // TODO: Check if instead of using level variable, should not use 0 in this check
         {
-            uint32 resultLevel = std::max(petInvoker->GetLevel() + m_spellInfo->EffectMultipleValue[eff_idx], 0.0f);
+            uint32 resultLevel = std::max(level + m_spellInfo->EffectMultipleValue[eff_idx], 0.0f);
 
             // Result level should be a valid level for creatures
             if (resultLevel > 0 && resultLevel <= DEFAULT_MAX_CREATURE_LEVEL)
@@ -6320,7 +6300,6 @@ bool Spell::DoSummonWild(CreatureSummonPositions& list, SummonPropertiesEntry co
             {
                 case 1122: // Warlock Infernal - requires custom code - generalized in WOTLK
                 {
-                    summon->SelectLevel(level); // needs to have casters level
                     // Enslave demon effect, without mana cost and cooldown
                     summon->CastSpell(nullptr, 22707, TRIGGERED_OLD_TRIGGERED);  // short root spell on infernal from sniffs
                     m_caster->CastSpell(summon, 20882, TRIGGERED_OLD_TRIGGERED);
@@ -10042,15 +10021,6 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                     m_caster->CastSpell(m_caster, 50446, TRIGGERED_OLD_TRIGGERED);
                     return;
                 }
-                case 50725:                                 // Vigilance - remove cooldown on Taunt
-                {
-                    Unit* caster = GetAffectiveCaster();
-                    if (!caster || caster->GetTypeId() != TYPEID_PLAYER)
-                        return;
-
-                    caster->RemoveSpellCategoryCooldown(82, true);
-                    return;
-                }
                 case 50894:                                 // Zul'Drak Rat
                 {
                     if (!unitTarget || unitTarget->GetTypeId() != TYPEID_UNIT)
@@ -12746,24 +12716,7 @@ void Spell::EffectWMOChange(SpellEffectIndex effIdx)
     if (!caster)
         return;
 
-    switch (m_spellInfo->EffectMiscValue[effIdx])
-    {
-        case 0:                                             // Set to full health
-            gameObjTarget->ForceGameObjectHealth(gameObjTarget->GetMaxHealth(), caster);
-            break;
-        case 1:                                             // Set to damaged
-            gameObjTarget->ForceGameObjectHealth(gameObjTarget->GetGOInfo()->destructibleBuilding.damagedNumHits, caster);
-            break;
-        case 2:                                             // Set to destroyed
-            gameObjTarget->ForceGameObjectHealth(-int32(gameObjTarget->GetHealth()), caster);
-            break;
-        case 3:                                             // Set to rebuilding
-            gameObjTarget->ForceGameObjectHealth(0, caster);
-            break;
-        default:
-            sLog.outError("Spell::EffectWMOChange, spell Id %u with undefined change value %u", m_spellInfo->Id, m_spellInfo->EffectMiscValue[effIdx]);
-            break;
-    }
+    gameObjTarget->SetDestructibleState(GameObjectDestructibleState(m_spellInfo->EffectMiscValue[effIdx]), m_caster, true);
 }
 
 void Spell::EffectKillCreditPersonal(SpellEffectIndex eff_idx)

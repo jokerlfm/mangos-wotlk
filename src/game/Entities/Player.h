@@ -1145,6 +1145,8 @@ class Player : public Unit
         bool isGMVisible() const { return !(m_ExtraFlags & PLAYER_EXTRA_GM_INVISIBLE); }
         void SetGMVisible(bool on);
         void SetPvPDeath(bool on) { if (on) m_ExtraFlags |= PLAYER_EXTRA_PVP_DEATH; else m_ExtraFlags &= ~PLAYER_EXTRA_PVP_DEATH; }
+        bool isDebuggingAreaTriggers() { return m_isDebuggingAreaTriggers; }
+        void SetDebuggingAreaTriggers(bool on) { m_isDebuggingAreaTriggers = on; }
 
         // 0 = own auction, -1 = enemy auction, 1 = goblin auction
         int GetAuctionAccessMode() const { return m_ExtraFlags & PLAYER_EXTRA_AUCTION_ENEMY ? -1 : (m_ExtraFlags & PLAYER_EXTRA_AUCTION_NEUTRAL ? 1 : 0); }
@@ -1461,6 +1463,8 @@ class Player : public Unit
         bool SatisfyQuestLevel(Quest const* qInfo, bool msg) const;
         bool SatisfyQuestLog(bool msg) const;
         bool SatisfyQuestPreviousQuest(Quest const* qInfo, bool msg) const;
+        bool SatisfyQuestBreadcrumbQuest(Quest const* qInfo, bool msg) const;
+        bool SatisfyQuestDependentBreadcrumbQuests(Quest const* qInfo, bool msg) const;
         bool SatisfyQuestClass(Quest const* qInfo, bool msg) const;
         bool SatisfyQuestRace(Quest const* qInfo, bool msg) const;
         bool SatisfyQuestReputation(Quest const* qInfo, bool msg) const;
@@ -1606,7 +1610,6 @@ class Player : public Unit
         void RegenerateAll(uint32 diff = REGEN_TIME_FULL);
         void Regenerate(Powers power, uint32 diff);
         void RegenerateHealth(uint32 diff);
-        void setRegenTimer(uint32 time) {m_regenTimer = time;}
 
         uint32 GetMoney() const { return GetUInt32Value(PLAYER_FIELD_COINAGE); }
         void ModifyMoney(int32 d)
@@ -1682,6 +1685,7 @@ class Player : public Unit
         void PetSpellInitialize() const;
         void SendPetGUIDs() const;
         void PossessSpellInitialize() const;
+        void VehicleSpellInitialize() const;
         void CharmSpellInitialize() const;
         void CharmCooldownInitialize(WorldPacket& data) const;
         void RemovePetActionBar() const;
@@ -2802,6 +2806,7 @@ class Player : public Unit
         Runes* m_runes;
         EquipmentSets m_EquipmentSets;
 
+        bool m_isDebuggingAreaTriggers;
     private:
         void _HandleDeadlyPoison(Unit* Target, WeaponAttackType attType, SpellEntry const* spellInfo);
         // internal common parts for CanStore/StoreItem functions

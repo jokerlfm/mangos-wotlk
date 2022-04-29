@@ -623,10 +623,6 @@ void Object::BuildValuesUpdate(uint8 updatetype, ByteBuffer* data, UpdateMask* u
                     {
                         // Gamemasters should be always able to select units - remove not selectable flag:
                         value &= ~UNIT_FLAG_NOT_SELECTABLE;
-
-                        // Gamemasters have power to cliffwalk in GM mode:
-                        if (target == this)
-                            value |= UNIT_FLAG_UNK_0;
                     }
 
                     // Client bug workaround: Fix for missing chat channels when resuming taxi flight on login
@@ -2194,6 +2190,8 @@ Creature* WorldObject::SummonCreature(TempSpawnSettings settings, Map* map, uint
     {
         if (CreatureSpawnTemplate const* templateData = sObjectMgr.GetCreatureSpawnTemplate(settings.spawnDataEntry))
         {
+            if (templateData->npcFlags != -1)
+                creature->SetUInt32Value(UNIT_NPC_FLAGS, uint32(templateData->npcFlags));
             if (templateData->unitFlags != -1)
                 creature->SetUInt32Value(UNIT_FIELD_FLAGS, uint32(templateData->unitFlags));
             if (templateData->faction > 0)
@@ -2834,6 +2832,21 @@ bool WorldObject::IsSpellReady(uint32 spellId, ItemPrototype const* itemProto /*
         return false;
 
     return IsSpellReady(*spellEntry, itemProto);
+}
+
+bool WorldObject::IsSpellOnPermanentCooldown(SpellEntry const& spellEntry) const
+{
+    TimePoint now;
+    if (IsInWorld())
+        now = GetMap()->GetCurrentClockTime();
+    else
+        now = World::GetCurrentClockTime();
+
+    auto itr = m_cooldownMap.FindBySpellId(spellEntry.Id);
+    if (itr != m_cooldownMap.end() && !(*itr).second->IsSpellCDExpired(now))
+        return itr->second->IsPermanent();
+
+    return false;
 }
 
 bool WorldObject::HasGCDOrCooldownWithinMargin(SpellEntry const& spellEntry, ItemPrototype const* itemProto /*= nullptr*/)

@@ -1,6 +1,13 @@
+#define MMAP_GENERATOR
+
 #include "GeomData.h"
 #include "MapTree.h"
 #include "ChunkyTriMesh.h"
+#include "WorldModel.h"
+#include <G3D/Quat.h>
+#include "MotionGenerators/MoveMapSharedDefines.h"
+#include "Vmap/VMapDefinitions.h"
+#include <array>
 
 #ifdef WIN32
 #   define snprintf _snprintf
@@ -75,6 +82,12 @@ void MeshDetails::CreateChunckyTriMesh()
     }
 }
 
+void MeshObjects::GetMeshBounds(float const* verts, int vertCount, float* bmin, float* bmax)
+{
+    if (verts && vertCount)
+        rcCalcBounds(verts, vertCount, bmin, bmax);
+}
+
 void MeshObjects::GetTileBounds(unsigned int tileX, unsigned int tileY, float const* verts, int vertCount, float* bmin, float* bmax)
 {
     // this is for elevation
@@ -104,12 +117,24 @@ MeshInfos::MeshInfos(MeshDetails const* sMesh, MeshDetails const* lMesh, float c
     rcVcopy(m_BMax, bmax);
 }
 
-MeshObjects::MeshObjects(unsigned int mapId, unsigned int tileX, unsigned int tileY, BuildContext* ctx) :
-    m_MapId(mapId), m_TileX(tileX), m_TileY(tileY), m_Ctx(ctx),
-    m_MapInfos(NULL), m_VMapInfos(NULL)
+MeshObjects::MeshObjects(const std::string modelName, BuildContext* ctx) :
+    m_MapId(0), m_TileX(0), m_TileY(0), m_tileId(0), m_Ctx(ctx),
+    m_MapInfos(NULL), m_VMapInfos(NULL), m_ModelInfos(nullptr), m_modelName(modelName), m_meshType(MESH_OBJECT_TYPE_OBJECT)
+{
+    LoadObject();
+}
+
+MeshObjects::MeshObjects(unsigned int mapId, unsigned int tileX, unsigned int tileY, uint32 tileId, BuildContext* ctx) :
+    m_MapId(mapId), m_TileX(tileX), m_TileY(tileY), m_tileId(tileId), m_Ctx(ctx),
+    m_MapInfos(NULL), m_VMapInfos(NULL), m_ModelInfos(nullptr), m_meshType(MESH_OBJECT_TYPE_TILE)
 {
     if (mapId < 0 || tileX < 0 || tileX > 64 || tileY < 0 || tileY > 64)
         return;
+
+    std::string fullName(m_Ctx->getDataDir());
+    fullName += "/vmaps/";
+    fullName += VMAP::GAMEOBJECT_MODELS;
+    m_modelList = GameobjectModelData::LoadGameObjectModelList(fullName);
 
     LoadMap();
     LoadVMap();
@@ -139,6 +164,8 @@ MeshObjects::~MeshObjects()
         delete m_MapInfos;
     if (m_VMapInfos)
         delete m_VMapInfos;
+    if (m_ModelInfos)
+        delete m_ModelInfos;
 }
 
 void MeshObjects::LoadMap()
@@ -146,7 +173,7 @@ void MeshObjects::LoadMap()
     if ((m_TileX == m_TileY) && m_TileX == 64)
         return;
 
-    TerrainBuilder* terrainBuilder = new TerrainBuilder(false);
+    TerrainBuilder* terrainBuilder = new TerrainBuilder(false, m_Ctx->getDataDir());
 
     terrainBuilder->loadMap(m_MapId, m_TileY, m_TileX, m_MapMesh);
 
@@ -195,11 +222,58 @@ void MeshObjects::LoadMap()
     delete terrainBuilder;
 }
 
+const std::array<uint32, 6> factorial =
+{
+    1,
+    1,
+    2,
+    6,
+    24,
+    120
+};
+
 void MeshObjects::LoadVMap()
 {
-    TerrainBuilder* terrainBuilder = new TerrainBuilder(false);
+    TerrainBuilder* terrainBuilder = new TerrainBuilder(false, m_Ctx->getDataDir());
 
     terrainBuilder->loadVMap(m_MapId, m_TileX, m_TileY, m_VMapMesh);
+    uint32 mapID = m_MapId;
+    uint32 tileX = m_TileY;
+    uint32 tileY = m_TileX;
+
+    std::vector<TileBuilding const*> buildingsByDefault;
+    std::map<uint32, std::vector<TileBuilding const*>> buildingsInTile;
+    std::map<uint32, std::vector<TileBuilding const*>> buildingsByGroup;
+    std::map<uint32, uint32> flagToGroup;
+
+    std::tie(buildingsByDefault, buildingsInTile, buildingsByGroup, flagToGroup) = GameobjectModelData::GetTileBuildingData(mapID, tileX, tileY, m_modelList);
+
+    if (buildingsByDefault.size())
+    {
+        for (TileBuilding const* building : buildingsByDefault)
+            AddBuildingToMeshData(building, m_VMapMesh, m_Ctx->getDataDir());
+    }
+
+    if (buildingsInTile.size()) // predefined tile ids
+    {
+        for (auto& data : buildingsInTile)
+        {
+            uint32 tileId = data.first;
+            for (TileBuilding const* building : data.second)
+                if (tileId == m_tileId)
+                    AddBuildingToMeshData(building, m_VMapMesh, m_Ctx->getDataDir());
+        }
+    }
+    else if (buildingsByGroup.size())
+    {
+        for (auto& dataUpper : buildingsByGroup)
+        {
+            // groups start at 1
+            if ((1 << (dataUpper.first - 1)) & m_tileId)
+                for (TileBuilding const* building : dataUpper.second)
+                    AddBuildingToMeshData(building, m_VMapMesh, m_Ctx->getDataDir());
+        }
+    }
 
     // get the coord bounds of the model data
     if (m_VMapMesh.solidVerts.size() + m_VMapMesh.liquidVerts.size() == 0)
@@ -246,6 +320,59 @@ void MeshObjects::LoadVMap()
         m_VMapInfos = new MeshInfos(solid, liquid, sBMin, sBMax);
     }
     delete terrainBuilder;
+}
+
+void MeshObjects::LoadObject()
+{
+    TerrainBuilder* terrainBuilder = new TerrainBuilder(false, m_Ctx->getDataDir());
+
+    std::string fullName(m_Ctx->getDataDir());
+    fullName += "/vmaps/" + m_modelName;
+
+    WorldModel m;
+    if (!m.readFile(fullName))
+    {
+        printf("* Unable to open file\n");
+        return;
+    }
+
+    // Load model data into navmesh
+    vector<GroupModel> groupModels;
+    m.getGroupModels(groupModels);
+
+    // all M2s need to have triangle indices reversed
+    bool isM2 = m_modelName.find(".m2") != m_modelName.npos || m_modelName.find(".M2") != m_modelName.npos;
+    MeshDetails* solid = NULL;
+    float sBMin[3], sBMax[3];
+    for (vector<GroupModel>::iterator it = groupModels.begin(); it != groupModels.end(); ++it)
+    {
+        // transform data
+        vector<Vector3> tempVertices;
+        vector<MeshTriangle> tempTriangles;
+        WmoLiquid* liquid = nullptr;
+
+        (*it).getMeshData(tempVertices, tempTriangles, liquid);
+
+        int offset = m_ModelMesh.solidVerts.size() / 3;
+
+        TerrainBuilder::copyVertices(tempVertices, m_ModelMesh.solidVerts);
+        TerrainBuilder::copyIndices(tempTriangles, m_ModelMesh.solidTris, offset, isM2);
+    }
+    // if there is no data, give up now
+    if (!m_ModelMesh.solidVerts.size())
+    {
+        printf("* no solid vertices found\n");
+        return;
+    }
+
+    TerrainBuilder::cleanVertices(m_ModelMesh.solidVerts, m_ModelMesh.solidTris);
+
+    solid = new MeshDetails(m_ModelMesh.solidVerts.getCArray(), m_ModelMesh.solidTris.getCArray(),
+        m_ModelMesh.solidVerts.size() / 3, m_ModelMesh.solidTris.size() / 3);
+
+    MeshObjects::GetMeshBounds(solid->Verts(), solid->VertCount(), sBMin, sBMax);
+
+    m_ModelInfos = new MeshInfos(solid, nullptr, sBMin, sBMax);
 }
 
 void MeshObjects::MergeMeshArrays(G3D::Array<float> &dstVerts, G3D::Array<int> &dstTris, G3D::Array<float> const& srcVerts, G3D::Array<int> const& srcTris) const
@@ -311,14 +438,21 @@ void GeomData::Init(unsigned int mapId, BuildContext* ctx)
     m_Ctx = ctx;
 }
 
-MeshObjects const* GeomData::LoadTile(unsigned int tx, unsigned int ty)
+void GeomData::Init(const std::string modelName, BuildContext* ctx)
+{
+    m_MapId = 0;
+    m_Ctx = ctx;
+    m_modelName = modelName;
+}
+
+MeshObjects const* GeomData::LoadTile(unsigned int tx, unsigned int ty, uint32 tileId)
 {
     unsigned int pxy = StaticMapTree::packTileID(tx, ty);
 
     if (tx == ty && tx == 64)
         m_NoMapFile = true;
 
-    MeshObjects* newObj = new MeshObjects(m_MapId, tx, ty, m_Ctx);
+    MeshObjects* newObj = new MeshObjects(m_MapId, tx, ty, tileId, m_Ctx);
 
     if (newObj->GetMap() || newObj->GetVMap())
     {
@@ -334,6 +468,21 @@ MeshObjects const* GeomData::LoadTile(unsigned int tx, unsigned int ty)
         }
 
         m_MeshObjectsMap.insert(std::make_pair(pxy, newObj));
+        return newObj;
+    }
+
+    delete newObj;
+    return NULL;
+}
+
+MeshObjects const* GeomData::LoadModel(const std::string modelName)
+{
+    MeshObjects* newObj = new MeshObjects(modelName, m_Ctx);
+    if (newObj->GetMap() || newObj->GetVMap() || newObj->GetModel())
+    {
+        rcVcopy(m_BMin, newObj->BMin());
+        rcVcopy(m_BMax, newObj->BMax());
+        m_MeshObjectsMap.insert(std::make_pair(0, newObj));
         return newObj;
     }
 

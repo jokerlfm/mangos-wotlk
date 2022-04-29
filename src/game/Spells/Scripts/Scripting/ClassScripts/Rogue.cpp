@@ -17,8 +17,10 @@
 */
 
 #include "Spells/Scripts/SpellScript.h"
+#include "Spells/SpellAuras.h"
 
-struct spell_preparation : public SpellScript
+// 14185 - Preparation
+struct Preparation : public SpellScript
 {
     void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
     {
@@ -40,6 +42,7 @@ enum
 };
 
 // Warning: Also currently used by Prowl
+// 1784 - Stealth
 struct Stealth : public AuraScript
 {
     bool OnCheckProc(Aura* /*aura*/, ProcExecutionData& data) const override // per 1.12.0 patch notes - no other indication of how it works
@@ -65,25 +68,10 @@ void CastHighestStealthRank(Unit* caster)
         return;
 
     // get highest rank of the Stealth spell
-    SpellEntry const* stealthSpellEntry = nullptr;
-    const PlayerSpellMap& sp_list = static_cast<Player*>(caster)->GetSpellMap();
-    for (const auto& itr : sp_list)
-    {
-        // only highest rank is shown in spell book, so simply check if shown in spell book
-        if (!itr.second.active || itr.second.disabled || itr.second.state == PLAYERSPELL_REMOVED)
-            continue;
-
-        SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(itr.first);
-        if (!spellInfo)
-            continue;
-
-        if (spellInfo->IsFitToFamily(SPELLFAMILY_ROGUE, uint64(0x0000000000400000)))
-        {
-            stealthSpellEntry = spellInfo;
-            break;
-        }
-    }
-
+    uint32 spellId = static_cast<Player*>(caster)->LookupHighestLearnedRank(1784);
+    if (!spellId)
+        return;
+    SpellEntry const* stealthSpellEntry = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
     // no Stealth spell found
     if (!stealthSpellEntry)
         return;
@@ -95,6 +83,7 @@ void CastHighestStealthRank(Unit* caster)
     caster->CastSpell(nullptr, stealthSpellEntry, TRIGGERED_OLD_TRIGGERED);
 }
 
+// 1856 - Vanish
 struct VanishRogue : public SpellScript
 {
     void OnCast(Spell* spell) const override
@@ -103,9 +92,99 @@ struct VanishRogue : public SpellScript
     }
 };
 
+// 13983 - Setup
+struct SetupRogue : public AuraScript
+{
+    bool OnCheckProc(Aura* /*aura*/, ProcExecutionData& data) const override
+    {
+        return data.victim->GetTarget() == data.attacker;
+    }
+};
+
+struct KillingSpreeStorage : public ScriptStorage
+{
+    GuidSet targets;
+};
+
+// 51690 - Killing Spree
+struct KillingSpree : public SpellScript, public AuraScript
+{
+    void OnAuraInit(Aura* aura) const override
+    {
+        // this is likely emulation due to us killing off spell after it ends even though auras still exist
+        if (aura->GetEffIndex() == EFFECT_INDEX_0)
+            aura->SetScriptStorage(new KillingSpreeStorage());
+    }
+
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (!apply || aura->GetEffIndex() != EFFECT_INDEX_0)
+            return;
+
+        Unit* target = aura->GetTarget();
+        target->CastSpell(nullptr, 61851, TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_CURRENT_CASTED_SPELL | TRIGGERED_HIDE_CAST_IN_COMBAT_LOG);
+    }
+
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_1 || !spell->GetUnitTarget())
+            return;
+        // aura is self effect so this must be executed after in all cases
+        if (Aura* aura = spell->GetCaster()->GetAura(spell->m_spellInfo->Id, EFFECT_INDEX_0))
+            if (KillingSpreeStorage* storage = dynamic_cast<KillingSpreeStorage*>(aura->GetScriptStorage()))
+                storage->targets.insert(spell->GetUnitTarget()->GetObjectGuid());
+    }
+
+    void OnPeriodicDummy(Aura* aura) const override
+    {
+        if (KillingSpreeStorage* storage = dynamic_cast<KillingSpreeStorage*>(aura->GetScriptStorage()))
+        {
+            Unit* target = aura->GetTarget();
+            Unit* victim = nullptr;
+            std::vector<Unit*> eligibleUnits;
+            for (ObjectGuid guid : storage->targets)
+                if (Unit* unit = target->GetMap()->GetUnit(guid))
+                    if (unit->IsAlive() && target->CanAttackSpell(unit) && target->IsWithinCombatDistInMap(unit, 10.f))
+                        eligibleUnits.push_back(unit);
+
+            if (eligibleUnits.size() > 0)
+                victim = eligibleUnits[urand(0, eligibleUnits.size() - 1)];
+
+            if (victim)
+            {
+                target->CastSpell(victim, 57840, TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_CURRENT_CASTED_SPELL | TRIGGERED_HIDE_CAST_IN_COMBAT_LOG);
+                target->CastSpell(victim, 57841, TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_CURRENT_CASTED_SPELL | TRIGGERED_HIDE_CAST_IN_COMBAT_LOG);
+            }
+        }
+    }
+};
+
+struct PreyOnTheWeak : public AuraScript
+{
+    void OnPeriodicDummy(Aura* aura) const override
+    {
+        Unit* target = aura->GetTarget();
+        Unit* victim = target->GetTarget();
+        if (victim && target->GetHealthPercent() > victim->GetHealthPercent())
+        {
+            Aura* buff = target->GetAura(58670, EFFECT_INDEX_0);
+            if (!buff || buff->GetAmount() < aura->GetAmount())
+            {
+                int32 basepoints = aura->GetAmount();
+                target->CastCustomSpell(nullptr, 58670, &basepoints, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
+            }
+        }
+        else
+            target->RemoveAurasDueToSpell(58670);
+    }
+};
+
 void LoadRogueScripts()
 {
-    RegisterSpellScript<spell_preparation>("spell_preparation");
+    RegisterSpellScript<Preparation>("spell_preparation");
     RegisterSpellScript<Stealth>("spell_stealth");
     RegisterSpellScript<VanishRogue>("spell_vanish");
+    RegisterSpellScript<SetupRogue>("spell_setup_rogue");
+    RegisterSpellScript<KillingSpree>("spell_killing_spree");
+    RegisterSpellScript<PreyOnTheWeak>("spell_prey_on_the_weak");
 }

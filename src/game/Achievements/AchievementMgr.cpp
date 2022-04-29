@@ -93,6 +93,7 @@ bool AchievementCriteriaRequirement::IsValid(AchievementCriteriaEntry const* cri
         case ACHIEVEMENT_CRITERIA_TYPE_BG_OBJECTIVE_CAPTURE:
         case ACHIEVEMENT_CRITERIA_TYPE_HONORABLE_KILL:
         case ACHIEVEMENT_CRITERIA_TYPE_GET_KILLING_BLOWS:
+        case ACHIEVEMENT_CRITERIA_TYPE_KILL_CREATURE_TYPE:
             break;
         default:
             sLog.outErrorDb("Table `achievement_criteria_requirement` have not supported data for criteria %u (Not supported as of its criteria type: %u), ignore.", criteria->ID, criteria->requiredType);
@@ -260,6 +261,27 @@ bool AchievementCriteriaRequirement::IsValid(AchievementCriteriaEntry const* cri
             }
             return true;
         }
+        case ACHIEVEMENT_CRITERIA_REQUIRE_KILL_CREATURE_TYPE:
+        {
+            if (creatureType.creatureType > CREATURE_TYPE_GAS_CLOUD)
+                return false;
+
+            if (creatureType.customCond > 2)
+                return false;
+
+            return true;
+        }
+        case ACHIEVEMENT_CRITERIA_REQUIRE_MAP_ID:
+        {
+            MapEntry const* map = sMapStore.LookupEntry(mapId.mapId);
+            if (!map)
+            {
+                sLog.outErrorDb("Table `achievement_criteria_requirement` (Entry: %u Type: %u) for requirement ACHIEVEMENT_CRITERIA_REQUIRE_MAP_ID (%u) have unknown map ID in value1 (%u), ignore.",
+                    criteria->ID, criteria->requiredType, requirementType, mapId.mapId);
+                return false;
+            }
+            return true;
+        }
         default:
             sLog.outErrorDb("Table `achievement_criteria_requirement` (Entry: %u Type: %u) have data for not supported data type (%u), ignore.", criteria->ID, criteria->requiredType, requirementType);
             return false;
@@ -391,6 +413,17 @@ bool AchievementCriteriaRequirement::Meets(uint32 criteria_id, Player const* sou
 
             return false;
         }
+        case ACHIEVEMENT_CRITERIA_REQUIRE_KILL_CREATURE_TYPE:
+        {
+            if (creatureType.customCond == 1) // Total Npc Kills
+                return miscvalue1 > 0;
+            else if (creatureType.customCond == 2) // Kill an NPC that yields XP
+                return target && !target->IsTrivialForTarget(source);
+
+            return miscvalue1 == creatureType.creatureType;
+        }
+        case ACHIEVEMENT_CRITERIA_REQUIRE_MAP_ID:
+            return source->GetMapId() == mapId.mapId;
     }
     return false;
 }
@@ -983,6 +1016,16 @@ void AchievementMgr::UpdateAchievementCriteria(AchievementCriteriaTypes type, ui
                 // those requirements couldn't be found in the dbc
                 AchievementCriteriaRequirementSet const* data = sAchievementMgr.GetCriteriaRequirementSet(achievementCriteria);
                 if (!data || !data->Meets(GetPlayer(), unit))
+                    continue;
+
+                change = miscvalue2;
+                progressType = PROGRESS_ACCUMULATE;
+                break;
+            }
+            case ACHIEVEMENT_CRITERIA_TYPE_KILL_CREATURE_TYPE:
+            {
+                AchievementCriteriaRequirementSet const* data = sAchievementMgr.GetCriteriaRequirementSet(achievementCriteria);
+                if (!data || !data->Meets(GetPlayer(), unit, miscvalue1))
                     continue;
 
                 change = miscvalue2;
@@ -1791,11 +1834,6 @@ void AchievementMgr::UpdateAchievementCriteria(AchievementCriteriaTypes type, ui
                 // ToDo: check if player played arena based on map id
                 break;
             }
-            case ACHIEVEMENT_CRITERIA_TYPE_KILL_CREATURE_TYPE:
-            {
-                // ToDo: check creature kill based on creature type
-                break;
-            }
             // std case: not exist in DBC, not triggered in code as result
             case ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_HEALTH:
             case ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_SPELLPOWER:
@@ -1804,8 +1842,37 @@ void AchievementMgr::UpdateAchievementCriteria(AchievementCriteriaTypes type, ui
             case ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_STAT:
             case ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_RATING:
                 break;
-            // FIXME: not triggered in code as result, need to implement
             case ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_DAILY_QUEST_DAILY:
+            {
+                time_t nextDailyResetTime = sWorld.GetNextDailyQuestsResetTime();
+                CriteriaProgress const* progress = GetCriteriaProgress(achievementCriteria);
+
+                if (!miscvalue1) // Login case.
+                {
+                    // reset if player missed one day.
+                    if (progress && progress->date < (nextDailyResetTime - 2 * DAY))
+                        SetCriteriaProgress(achievementCriteria, achievement, 0, PROGRESS_SET);
+                    continue;
+                }
+
+                ProgressType progressType;
+                if (!progress)
+                    // 1st time. Start count.
+                    progressType = PROGRESS_SET;
+                else if (progress->date < (nextDailyResetTime - 2 * DAY))
+                    // last progress is older than 2 days. Player missed 1 day => Retart count.
+                    progressType = PROGRESS_SET;
+                else if (progress->date < (nextDailyResetTime - DAY))
+                    // last progress is between 1 and 2 days. => 1st time of the day.
+                    progressType = PROGRESS_ACCUMULATE;
+                else
+                    // last progress is within the day before the reset => Already counted today.
+                    continue;
+
+                SetCriteriaProgress(achievementCriteria, achievement, 1, progressType);
+                break;
+            }
+            // FIXME: not triggered in code as result, need to implement
             case ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_RAID:
             case ACHIEVEMENT_CRITERIA_TYPE_OWN_RANK:
             case ACHIEVEMENT_CRITERIA_TYPE_EARN_ACHIEVEMENT_POINTS:
@@ -1815,6 +1882,12 @@ void AchievementMgr::UpdateAchievementCriteria(AchievementCriteriaTypes type, ui
 
         SetCriteriaProgress(achievementCriteria, achievement, change, progressType);
     }
+}
+
+CriteriaProgress* AchievementMgr::GetCriteriaProgress(AchievementCriteriaEntry const* entry)
+{
+    auto itr = m_criteriaProgress.find(entry->ID);
+    return itr != m_criteriaProgress.end() ? &(*itr).second : nullptr;
 }
 
 uint32 AchievementMgr::GetCriteriaProgressCounter(AchievementCriteriaEntry const* entry) const
@@ -1842,6 +1915,9 @@ uint32 AchievementMgr::GetCriteriaProgressMaxCounter(AchievementCriteriaEntry co
             break;
         case ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_ACHIEVEMENT:
             resultValue = 1;
+            break;
+        case ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_DAILY_QUEST_DAILY:
+            resultValue = achievementCriteria->raw.count;
             break;
         case ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_QUEST_COUNT:
             resultValue = achievementCriteria->complete_quest_count.totalQuestCount;

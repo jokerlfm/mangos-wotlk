@@ -284,7 +284,7 @@ BattleGround::~BattleGround()
     // skip template bgs as they were never added to visible bg list
     BattleGroundBracketId bracketId = GetBracketId();
     if (bracketId != BG_BRACKET_ID_TEMPLATE)
-        sBattleGroundMgr.DeleteClientVisibleInstanceId(GetTypeId(), bracketId, GetClientInstanceID());
+        sBattleGroundMgr.DeleteClientVisibleInstanceId(GetTypeId(), bracketId, GetClientInstanceId());
 
     // unload map
     // map can be null at bg destruction
@@ -2024,7 +2024,10 @@ void BattleGround::ChangeBgCreatureSpawnState(uint32 dbGuid, uint32 respawntime)
 
     Creature* obj = map->GetCreature(dbGuid);
     if (!obj)
+    {
+        map->GetSpawnManager().RespawnCreature(dbGuid, respawntime);
         return;
+    }
 
     if (respawntime == 0)
     {
@@ -2035,8 +2038,7 @@ void BattleGround::ChangeBgCreatureSpawnState(uint32 dbGuid, uint32 respawntime)
     {
         map->Add(obj);
         obj->SetRespawnDelay(respawntime);
-        obj->SetDeathState(JUST_DIED);
-        obj->RemoveCorpse();
+        obj->ForcedDespawn();
     }
 }
 

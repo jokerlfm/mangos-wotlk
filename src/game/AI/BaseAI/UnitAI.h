@@ -93,6 +93,7 @@ enum AIOrders
     ORDER_RETREATING,
     ORDER_EVADE,
     ORDER_FLEE_FROM_CALL_FOR_HELP,
+    ORDER_CRITTER_FLEE,
     ORDER_CUSTOM,
 };
 
@@ -458,7 +459,7 @@ class UnitAI : public CombatActions
         void SetAIOrder(AIOrders order) { m_currentAIOrder = order; }
         AIOrders GetAIOrder() const { return m_currentAIOrder; }
 
-        bool DoFlee();
+        bool DoFlee(uint32 duration = 0);
         virtual bool DoRetreat() { return false; } // implemented for creatures
         void DoDistance(); // TODO
         virtual void DoCallForHelp(float radius) {} // implemented for creatures
@@ -487,8 +488,10 @@ class UnitAI : public CombatActions
         void SetRootSelf(bool apply, bool combatOnly = false); // must call parent JustDied if this is used
         void ClearSelfRoot();
 
-        virtual void HandleDelayedInstantAnimation(SpellEntry const* spellInfo) {}
+        virtual void HandleDelayedInstantAnimation(SpellEntry const* spellInfo);
         virtual bool IsTargetingRestricted() { return GetCombatScriptStatus(); }
+
+        virtual void OnTaunt() {}
 
         virtual void HandleAssistanceCall(Unit* sender, Unit* invoker) {} // implemented for creatures
 

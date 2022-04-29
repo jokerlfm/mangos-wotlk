@@ -19,6 +19,7 @@
 #include "Spells/Scripts/SpellScript.h"
 #include "Spells/SpellAuras.h"
 
+// 5308 - Execute
 struct WarriorExecute : public SpellScript
 {
     void OnCast(Spell* spell) const override // confirmed main spell can not hit and child still hits
@@ -34,6 +35,7 @@ enum
     SPELL_SUDDEN_DEATH = 52437,
 };
 
+// 20647 - Execute
 struct WarriorExecuteDamage : public SpellScript
 {
     void OnHit(Spell* spell, SpellMissInfo missInfo) const override
@@ -67,6 +69,7 @@ struct WarriorExecuteDamage : public SpellScript
     }
 };
 
+// 34428 - Victory Rush
 struct VictoryRush : public SpellScript
 {
     void OnCast(Spell* spell) const override
@@ -80,6 +83,7 @@ struct VictoryRush : public SpellScript
     }
 };
 
+// 58567 - Sunder Armor
 struct SunderArmor : public SpellScript
 {
     void OnInit(Spell* spell) const override
@@ -92,6 +96,7 @@ struct SunderArmor : public SpellScript
     }
 };
 
+// 20243 - Devastate
 struct WarriorDevastate : public SpellScript
 {
     void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
@@ -126,6 +131,7 @@ struct WarriorDevastate : public SpellScript
     }
 };
 
+// 20230 - Retaliation
 struct RetaliationWarrior : public AuraScript
 {
     SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
@@ -139,6 +145,7 @@ struct RetaliationWarrior : public AuraScript
     }
 };
 
+// 29707 - Heroic Strike
 struct HeroicStrike : public SpellScript
 {
     void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
@@ -160,6 +167,127 @@ struct HeroicStrike : public SpellScript
     }
 };
 
+// 7384 - Overpower
+struct Overpower : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (!apply)
+            return;
+
+        Player* caster = dynamic_cast<Player*>(aura->GetCaster());
+        Unit* target = aura->GetTarget();
+        if (!caster || !target->IsNonMeleeSpellCasted(false))
+            return;
+
+        if (Aura* aura = caster->GetKnownTalentRankAuraById(1860, EFFECT_INDEX_0)) // Unrelenting Assault talent
+        {
+            uint32 spellId = 0;
+            switch (aura->GetId())
+            {
+                case 46859: spellId = 64849; break; // Unrelenting Assault, rank 1
+                case 46860: spellId = 64850; break; // Unrelenting Assault, rank 2
+                default: break;
+            }
+            if (spellId)
+                target->CastSpell(nullptr, spellId, TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_CURRENT_CASTED_SPELL | TRIGGERED_HIDE_CAST_IN_COMBAT_LOG);
+        }
+    }
+};
+
+// 23920 - Spell Reflection
+struct SpellReflection : public SpellScript
+{
+    void OnCast(Spell* spell) const override
+    {
+        if (Player* caster = dynamic_cast<Player*>(spell->GetCaster()))
+            if (Aura* dummy = caster->GetKnownTalentRankAuraById(2247, EFFECT_INDEX_1)) // Improved Spell Reflections
+                caster->CastSpell(nullptr, 59725, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+// 59725 - Spell Reflection
+struct SpellReflectionRaid : public SpellScript, public AuraScript
+{
+    void OnInit(Spell* spell) const override
+    {
+        if (Player* caster = dynamic_cast<Player*>(spell->GetCaster()))
+            if (Aura* dummy = caster->GetKnownTalentRankAuraById(2247, EFFECT_INDEX_1)) // Improved Spell Reflections
+                spell->SetMaxAffectedTargets(dummy->GetAmount());
+
+        spell->SetFilteringScheme(EFFECT_INDEX_0, false, SCHEME_CLOSEST);
+    }
+
+    bool OnCheckTarget(const Spell* spell, Unit* target, SpellEffectIndex /*eff*/) const override
+    {
+        if (spell->GetCaster() == target)
+            return false;
+        return true;
+    }
+
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (!apply && aura->GetRemoveMode() == AURA_REMOVE_BY_DEFAULT)
+        {
+            if (Player* player = dynamic_cast<Player*>(aura->GetTarget()))
+            {
+                if (Group* group = player->GetGroup())
+                {
+                    for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
+                    {
+                        if (itr->getSource()->IsInMap(player))
+                        {
+                            // avoid infinite loop
+                            itr->getSource()->RemoveAurasByCasterSpell(aura->GetId(), aura->GetCasterGuid(), AURA_REMOVE_BY_CANCEL);
+                        }
+                    }
+                }
+            }
+        }
+    }
+};
+
+// 50720 - Vigilance
+struct Vigilance : public AuraScript
+{
+    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
+    {
+        procData.triggeredSpellId = aura->GetSpellProto()->EffectTriggerSpell[aura->GetEffIndex()];
+        procData.triggerTarget = aura->GetCaster();
+        return SPELL_AURA_PROC_OK;
+    }
+};
+
+// 50725 - Vigilance
+struct VigilanceTrigger : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        Unit* target = spell->GetUnitTarget();
+        if (!target || !target->IsPlayer())
+            return;
+
+        target->RemoveSpellCategoryCooldown(82, true); // remove cooldown on Taunt
+    }
+};
+
+// 3411 - Intervene
+struct Intervene : public SpellScript
+{
+    void OnInit(Spell* spell) const override
+    {
+        if (spell->GetCaster()->GetOverrideScript(6953))
+            spell->SetIgnoreRoot(true);
+    }
+
+    void OnCast(Spell* spell) const override
+    {
+        spell->GetCaster()->RemoveAurasAtMechanicImmunity(IMMUNE_TO_ROOT_AND_SNARE_MASK, 0, true);
+        // temporary hack to investigate root flag changes serverside - necessary to make it work
+        spell->GetCaster()->m_movementInfo.RemoveMovementFlag(MOVEFLAG_ROOT);
+    }
+};
+
 void LoadWarriorScripts()
 {
     RegisterSpellScript<WarriorExecute>("spell_warrior_execute");
@@ -169,4 +297,10 @@ void LoadWarriorScripts()
     RegisterSpellScript<WarriorDevastate>("spell_warrior_devastate");
     RegisterSpellScript<RetaliationWarrior>("spell_retaliation_warrior");
     RegisterSpellScript<HeroicStrike>("spell_heroic_strike");
+    RegisterSpellScript<Overpower>("spell_overpower");
+    RegisterSpellScript<SpellReflection>("spell_spell_reflection");
+    RegisterSpellScript<SpellReflectionRaid>("spell_spell_reflection_raid");
+    RegisterSpellScript<Vigilance>("spell_vigilance");
+    RegisterSpellScript<VigilanceTrigger>("spell_vigilance_trigger");
+    RegisterSpellScript<Intervene>("spell_intervene");
 }

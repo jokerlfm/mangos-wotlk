@@ -106,8 +106,8 @@ void ScriptMgr::LoadScripts(ScriptMapMapName& scripts, const char* tablename)
     scripts.first = tablename;
     scripts.second.clear();                                 // need for reload support
 
-    //                                                 0   1      2        3         4          5          6            7              8           9        10        11        12       13 14 15 16  17
-    QueryResult* result = WorldDatabase.PQuery("SELECT id, delay, command, datalong, datalong2, datalong3, buddy_entry, search_radius, data_flags, dataint, dataint2, dataint3, dataint4, x, y, z, o, condition_id FROM %s ORDER BY priority", tablename);
+    //                                                 0   1      2        3         4          5          6            7              8           9        10        11        12               13 14 15 16 17     18            19
+    QueryResult* result = WorldDatabase.PQuery("SELECT id, delay, command, datalong, datalong2, datalong3, buddy_entry, search_radius, data_flags, dataint, dataint2, dataint3, dataint4, datafloat, x, y, z, o, speed, condition_id FROM %s ORDER BY priority", tablename);
 
     uint32 count = 0;
 
@@ -142,11 +142,13 @@ void ScriptMgr::LoadScripts(ScriptMapMapName& scripts, const char* tablename)
         tmp.textId[1]          = fields[10].GetInt32();
         tmp.textId[2]          = fields[11].GetInt32();
         tmp.textId[3]          = fields[12].GetInt32();
-        tmp.x                  = fields[13].GetFloat();
-        tmp.y                  = fields[14].GetFloat();
-        tmp.z                  = fields[15].GetFloat();
-        tmp.o                  = fields[16].GetFloat();
-        tmp.condition_id       = fields[17].GetUInt32();
+        tmp.rawFloat.data[0]   = fields[13].GetFloat();
+        tmp.x                  = fields[14].GetFloat();
+        tmp.y                  = fields[15].GetFloat();
+        tmp.z                  = fields[16].GetFloat();
+        tmp.o                  = fields[17].GetFloat();
+        tmp.speed              = fields[18].GetFloat();
+        tmp.condition_id       = fields[19].GetUInt32();
 
         if (tmp.condition_id && !sConditionStorage.LookupEntry<ConditionEntry>(tmp.condition_id))
         {
@@ -520,7 +522,7 @@ void ScriptMgr::LoadScripts(ScriptMapMapName& scripts, const char* tablename)
             }
             case SCRIPT_COMMAND_MOVEMENT:                   // 20
             {
-                if (tmp.movement.movementType >= MAX_DB_MOTION_TYPE)
+                if (tmp.movement.movementType >= MAX_DB_MOTION_TYPE && tmp.movement.movementType != EFFECT_MOTION_TYPE)
                 {
                     sLog.outErrorDb("Table `%s` SCRIPT_COMMAND_MOVEMENT has invalid MovementType %u for script id %u",
                                     tablename, tmp.movement.movementType, tmp.id);
@@ -719,7 +721,7 @@ void ScriptMgr::LoadScripts(ScriptMapMapName& scripts, const char* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_SET_HOVER:                    // 39
+            case SCRIPT_COMMAND_SET_HOVER:                  // 39
             case SCRIPT_COMMAND_DESPAWN_GO:                 // 40
             case SCRIPT_COMMAND_RESPAWN:                    // 41
                 break;
@@ -1202,7 +1204,7 @@ bool ScriptAction::GetScriptProcessTargets(WorldObject* originalSource, WorldObj
             if (m_script->IsCreatureBuddy())
             {
                 CreatureData const* cData = sObjectMgr.GetCreatureData(m_script->searchRadiusOrGuid);
-                buddy = m_map->GetCreature(cData->GetObjectGuid(m_script->searchRadiusOrGuid));
+                buddy = m_map->GetCreature(m_script->searchRadiusOrGuid);
 
                 if (buddy && ((Creature*)buddy)->IsAlive() == m_script->IsDeadOrDespawnedBuddy())
                 {
@@ -2070,12 +2072,12 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
                     break;
                 case RANDOM_MOTION_TYPE:
                     if (m_script->data_flags & SCRIPT_FLAG_COMMAND_ADDITIONAL)
-                        source->GetMotionMaster()->MoveRandomAroundPoint(pSource->GetPositionX(), pSource->GetPositionY(), pSource->GetPositionZ(), float(m_script->movement.wanderORpathId), 0.f, m_script->movement.timerOrPassTarget);
+                        source->GetMotionMaster()->MoveRandomAroundPoint(pSource->GetPositionX(), pSource->GetPositionY(), pSource->GetPositionZ(), float(m_script->movement.wanderORpathIdORRelayId), 0.f, m_script->movement.timerOrPassTarget);
                     else
                     {
                         float respX, respY, respZ, respO, wander_distance;
                         source->GetRespawnCoord(respX, respY, respZ, &respO, &wander_distance);
-                        wander_distance = m_script->movement.wanderORpathId ? m_script->movement.wanderORpathId : wander_distance;
+                        wander_distance = m_script->movement.wanderORpathIdORRelayId ? m_script->movement.wanderORpathIdORRelayId : wander_distance;
                         source->GetMotionMaster()->MoveRandomAroundPoint(respX, respY, respZ, wander_distance, 0.f, m_script->movement.timerOrPassTarget);
                     }
                     break;
@@ -2083,24 +2085,29 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
                     source->StopMoving();
                     source->GetMotionMaster()->Clear(false, true);
                     if (!m_script->movement.timerOrPassTarget)
-                        source->GetMotionMaster()->MoveWaypoint(m_script->movement.wanderORpathId);
+                        source->GetMotionMaster()->MoveWaypoint(m_script->movement.wanderORpathIdORRelayId);
                     else
-                        source->GetMotionMaster()->MoveWaypoint(m_script->movement.wanderORpathId, 0, 0, 0, ForcedMovement(m_script->textId[0]), pTarget->GetObjectGuid());
+                        source->GetMotionMaster()->MoveWaypoint(m_script->movement.wanderORpathIdORRelayId, 0, 0, 0, ForcedMovement(m_script->textId[0]), pTarget->GetObjectGuid());
                     break;
                 case PATH_MOTION_TYPE:
                     source->StopMoving();
                     if (!m_script->movement.timerOrPassTarget)
-                        source->GetMotionMaster()->MovePath(m_script->movement.wanderORpathId);
+                        source->GetMotionMaster()->MovePath(m_script->movement.wanderORpathIdORRelayId);
                     else
-                        source->GetMotionMaster()->MovePath(m_script->movement.wanderORpathId, PATH_NO_PATH, ForcedMovement(m_script->textId[0]), false, 0.f, false, pTarget->GetObjectGuid());
+                        source->GetMotionMaster()->MovePath(m_script->movement.wanderORpathIdORRelayId, PATH_NO_PATH, ForcedMovement(m_script->textId[0]), false, 0.f, false, pTarget->GetObjectGuid());
                     break;
                 case LINEAR_WP_MOTION_TYPE:
                     source->StopMoving();
                     source->GetMotionMaster()->Clear(false, true);
                     if (!m_script->movement.timerOrPassTarget)
-                        source->GetMotionMaster()->MoveLinearWP(m_script->movement.wanderORpathId);
+                        source->GetMotionMaster()->MoveLinearWP(m_script->movement.wanderORpathIdORRelayId);
                     else
-                        source->GetMotionMaster()->MoveLinearWP(m_script->movement.wanderORpathId, 0, 0, 0, ForcedMovement(m_script->textId[0]), pTarget->GetObjectGuid());
+                        source->GetMotionMaster()->MoveLinearWP(m_script->movement.wanderORpathIdORRelayId, 0, 0, 0, ForcedMovement(m_script->textId[0]), pTarget->GetObjectGuid());
+                    break;
+                case EFFECT_MOTION_TYPE:
+                    source->StopMoving();
+                    float speed = m_script->speed == 0.f ? source->GetSpeed(MOVE_RUN) : m_script->speed;
+                    source->GetMotionMaster()->MoveJumpFacing(Position(m_script->x, m_script->y, m_script->z, 100.f), speed, m_script->movementFloat.verticalSpeed, 10001u, pTarget->GetObjectGuid(), m_script->movement.wanderORpathIdORRelayId);
                     break;
             }
 
@@ -2602,11 +2609,7 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
             if (LogIfNotGameObject(pTarget))
                 break;
 
-            // ToDo: Change this to pGo->ForcedDespawn() when function is implemented!
-            if (((GameObject*)pTarget)->GetSpellId())
-                ((GameObject*)pTarget)->Delete();
-            else
-                ((GameObject*)pTarget)->SetLootState(GO_JUST_DEACTIVATED);
+            static_cast<GameObject*>(pTarget)->ForcedDespawn(m_script->despawnGo.despawnDelay);
 
             break;
         }

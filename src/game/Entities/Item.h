@@ -298,6 +298,7 @@ class Item : public Object
         void DeleteFromInventoryDB() const;
         void LoadLootFromDB(Field* fields);
 
+        bool IsUnlocked() const { return HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_UNLOCKED); }
         bool IsBag() const { return GetProto()->InventoryType == INVTYPE_BAG; }
         bool IsBroken() const { return GetUInt32Value(ITEM_FIELD_MAXDURABILITY) > 0 && GetUInt32Value(ITEM_FIELD_DURABILITY) == 0; }
         bool CanBeTraded(bool mail = false) const;
@@ -386,6 +387,8 @@ class Item : public Object
 
         bool IsUsedInSpell() const { return m_usedInSpell; }
         void SetUsedInSpell(bool state) { m_usedInSpell = state; }
+
+        uint32 GetTotalAP() const;
     private:
         std::string m_text;
         uint8 m_slot;

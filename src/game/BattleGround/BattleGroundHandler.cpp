@@ -51,7 +51,8 @@ void WorldSession::HandleBattlemasterHelloOpcode(WorldPacket& recv_data)
         return;
 
     // Stop the npc if moving
-    pCreature->StopMoving();
+    if (uint32 pauseTimer = pCreature->GetInteractionPauseTimer())
+        pCreature->GetMotionMaster()->PauseWaypoints(pauseTimer);
 
     // update reputation list if need
     Unit* unit = ObjectAccessor::GetUnit(*_player, guid);   // can select group members at diff maps
@@ -73,7 +74,7 @@ void WorldSession::HandleBattlemasterHelloOpcode(WorldPacket& recv_data)
         return;
     }
 
-    SendBattlegGroundList(guid, bgTypeId);
+    SendBattleGroundList(guid, bgTypeId);
 }
 
 /**
@@ -82,7 +83,7 @@ Send battleground list
 @param   guid
 @param   bgTypeId
 */
-void WorldSession::SendBattlegGroundList(ObjectGuid guid, BattleGroundTypeId bgTypeId) const
+void WorldSession::SendBattleGroundList(ObjectGuid guid, BattleGroundTypeId bgTypeId) const
 {
     WorldPacket data;
     sBattleGroundMgr.BuildBattleGroundListPacket(data, guid, _player, bgTypeId, 0);
@@ -211,7 +212,7 @@ void WorldSession::HandleBattlemasterJoinOpcode(WorldPacket& recv_data)
         if (err > ERR_GROUP_JOIN_BATTLEGROUND_FAIL)
         {
             DEBUG_LOG("Battleground: the following players are joining as group:");
-            queueInfo = bgQueue.AddGroup(_player, grp, bgTypeId, bracketEntry, ARENA_TYPE_NONE, false, isPremade, 0);
+            queueInfo = bgQueue.AddGroup(_player, grp, bgTypeId, bracketEntry, ARENA_TYPE_NONE, false, isPremade, instanceId, 0);
             avgTime = bgQueue.GetAverageQueueWaitTime(queueInfo, bracketEntry->GetBracketId());
         }
 
@@ -244,7 +245,7 @@ void WorldSession::HandleBattlemasterJoinOpcode(WorldPacket& recv_data)
     }
     else
     {
-        GroupQueueInfo* queueInfo = bgQueue.AddGroup(_player, nullptr, bgTypeId, bracketEntry, ARENA_TYPE_NONE, false, isPremade, 0);
+        GroupQueueInfo* queueInfo = bgQueue.AddGroup(_player, nullptr, bgTypeId, bracketEntry, ARENA_TYPE_NONE, false, isPremade, instanceId, 0);
         uint32 avgTime = bgQueue.GetAverageQueueWaitTime(queueInfo, bracketEntry->GetBracketId());
         // already checked if queueSlot is valid, now just get it
         uint32 queueSlot = _player->AddBattleGroundQueueId(bgQueueTypeId);
@@ -275,16 +276,22 @@ void WorldSession::HandleBattleGroundPlayerPositionsOpcode(WorldPacket& /*recv_d
         {
             uint32 flagCarrierCount = 0;
 
-            Player* flagCarrierAlliance = sObjectMgr.GetPlayer(((BattleGroundWS*)bg)->GetFlagCarrierGuid(TEAM_INDEX_ALLIANCE));
+            Player* flagCarrierAlliance = sObjectMgr.GetPlayer(static_cast<BattleGroundWS*>(bg)->GetFlagCarrierGuid(TEAM_INDEX_ALLIANCE));
             if (flagCarrierAlliance)
-                ++flagCarrierCount;
+            {
+                if (flagCarrierAlliance->GetTeam() == _player->GetTeam() || static_cast<BattleGroundWS*>(bg)->IsFlagHeldFor45Seconds(flagCarrierAlliance->GetTeam()))
+                    ++flagCarrierCount;
+            }
 
-            Player* flagCarrierHorde = sObjectMgr.GetPlayer(((BattleGroundWS*)bg)->GetFlagCarrierGuid(TEAM_INDEX_HORDE));
+            Player* flagCarrierHorde = sObjectMgr.GetPlayer(static_cast<BattleGroundWS*>(bg)->GetFlagCarrierGuid(TEAM_INDEX_HORDE));
             if (flagCarrierHorde)
-                ++flagCarrierCount;
+            {
+                if (flagCarrierHorde->GetTeam() == _player->GetTeam() || static_cast<BattleGroundWS*>(bg)->IsFlagHeldFor45Seconds(flagCarrierAlliance->GetTeam()))
+                    ++flagCarrierCount;
+            }
 
             WorldPacket data(MSG_BATTLEGROUND_PLAYER_POSITIONS, 4 + 4 + 16 * flagCarrierCount);
-            data << uint32(0);
+            data << uint32(0); // own team position XYZ
             data << uint32(flagCarrierCount);
 
             if (flagCarrierAlliance)

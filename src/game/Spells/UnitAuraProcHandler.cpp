@@ -1683,17 +1683,6 @@ SpellAuraProcResult Unit::HandleDummyAuraProc(ProcExecutionData& data)
                     triggered_spell_id = 17941;
                     break;
                 }
-                // Soul Leech
-                case 30293:
-                case 30295:
-                case 30296:
-                {
-                    // health
-                    basepoints[0] = int32(damage * triggerAmount / 100);
-                    target = this;
-                    triggered_spell_id = 30294;
-                    break;
-                }
                 // Shadowflame (Voidheart Raiment set bonus)
                 case 37377:
                 {
@@ -3814,13 +3803,6 @@ SpellAuraProcResult Unit::HandleProcTriggerSpellAuraProc(ProcExecutionData& data
             target = pVictim;
             break;
         }
-        // Combo points add triggers (need add combopoint only for main target, and after possible combopoints reset)
-        case 15250: // Rogue Setup
-        {
-            if (!pVictim || pVictim != GetVictim())  // applied only for main target
-                return SPELL_AURA_PROC_FAILED;
-            break;                                   // continue normal case
-        }
         // Finishing moves that add combo points
         case 14189: // Seal Fate (Netherblade set)
         case 14157: // Ruthlessness
@@ -4099,9 +4081,6 @@ SpellAuraProcResult Unit::HandleOverrideClassScriptAuraProc(ProcExecutionData& d
             return SPELL_AURA_PROC_OK;
         case 5510:                                          // Flexibility - T4 Holy Priest bonus
             RemoveAurasDueToSpell(37565);
-            return SPELL_AURA_PROC_OK;
-        case 6953:                                          // Warbringer
-            RemoveAurasAtMechanicImmunity(IMMUNE_TO_ROOT_AND_SNARE_MASK, 0, true);
             return SPELL_AURA_PROC_OK;
         case 7010:                                          // Revitalize (rank 1)
         case 7011:                                          // Revitalize (rank 2)

@@ -305,6 +305,28 @@ void Player::UpdateAttackPowerAndDamage(bool ranged)
                     if (SpellShapeshiftFormEntry const* entry = sSpellShapeshiftFormStore.LookupEntry(form))
                         if (entry->flags1 & SHAPESHIFT_FLAG_AGILITY_ATTACK_BONUS)
                             val2 += GetStat(STAT_AGILITY);
+
+                switch (GetShapeshiftForm())
+                {
+                    case FORM_CAT:
+                    case FORM_BEAR:
+                    case FORM_DIREBEAR:
+                    {
+                        uint32 weaponAP = m_baseFeralAP;
+                        if (Aura* predatoryStrikes = GetKnownTalentRankAuraById(803, EFFECT_INDEX_1))
+                        {
+                            uint32 totalWeaponAP = 0;
+                            if (Item* weapon = GetWeaponForAttack(BASE_ATTACK))
+                                totalWeaponAP = weapon->GetTotalAP() + m_baseFeralAP;
+                            weaponAP += totalWeaponAP * predatoryStrikes->GetAmount() / 100;
+                        }
+                        val2 += weaponAP;
+                        break;
+                    }
+                    case FORM_MOONKIN:
+                        val2 += m_baseFeralAP;
+                        break;
+                }
                 break;
             }
             case CLASS_MAGE:    val2 =              GetStat(STAT_STRENGTH)                         - 10.0f; break;
@@ -712,7 +734,7 @@ void Player::UpdateManaRegen()
 {
     // need to award mana based on previous rate - Patch 2.2
     if (GetHealth() > 0) // on death we must never do this
-        RegenerateAll();
+        RegenerateAll(std::min(uint32(REGEN_TIME_FULL), m_regenTimer));
 
     float Intellect = GetStat(STAT_INTELLECT);
     // Mana regen from spirit and intellect
@@ -750,7 +772,7 @@ void Player::UpdateEnergyRegen()
 {
     // need to award mana based on previous rate - Patch 2.2
     if (GetHealth() > 0) // on death we must never do this
-        RegenerateAll();
+        RegenerateAll(std::min(uint32(REGEN_TIME_FULL), m_regenTimer));
 
     m_energyRegenRate = GetTotalAuraMultiplierByMiscValue(SPELL_AURA_MOD_POWER_REGEN_PERCENT, POWER_ENERGY);
 }

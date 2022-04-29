@@ -2683,7 +2683,7 @@ void GameObject::ForceGameObjectHealth(int32 diff, Unit* caster)
     {
         DEBUG_FILTER_LOG(LOG_FILTER_DAMAGE, "DestructibleGO: %s set to full health %u", GetGuidStr().c_str(), m_useTimes);
 
-        RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_UNK_9 | GO_FLAG_DAMAGED | GO_FLAG_DESTROYED);
+        RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_DAMAGED | GO_FLAG_DESTROYED);
         newDisplayId = m_goInfo->displayId;
 
         // Start Event if exist
@@ -2696,7 +2696,7 @@ void GameObject::ForceGameObjectHealth(int32 diff, Unit* caster)
         {
             DEBUG_FILTER_LOG(LOG_FILTER_DAMAGE, "DestructibleGO: %s got destroyed", GetGuidStr().c_str());
 
-            RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_UNK_9 | GO_FLAG_DAMAGED);
+            RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_DAMAGED);
             SetFlag(GAMEOBJECT_FLAGS, GO_FLAG_DESTROYED);
 
             // Get destroyed DisplayId
@@ -2744,6 +2744,37 @@ void GameObject::ForceGameObjectHealth(int32 diff, Unit* caster)
 
     // Set health
     SetGoAnimProgress(GetMaxHealth() ? m_useTimes * 255 / GetMaxHealth() : 255);
+}
+
+void GameObject::SetDestructibleState(GameObjectDestructibleState state, Unit* attackerOrHealer /*= nullptr*/, bool setHealth /*= false*/)
+{
+    // the user calling this must know he is already operating on destructible gameobject
+    MANGOS_ASSERT(GetGoType() == GAMEOBJECT_TYPE_DESTRUCTIBLE_BUILDING);
+
+    switch (state)
+    {
+        case GO_DESTRUCTIBLE_INTACT:                        // Set to full health
+            ForceGameObjectHealth(GetMaxHealth(), attackerOrHealer);
+            break;
+        case GO_DESTRUCTIBLE_DAMAGED:                       // Set to damaged
+            ForceGameObjectHealth(GetGOInfo()->destructibleBuilding.damagedNumHits, attackerOrHealer);
+            break;
+        case GO_DESTRUCTIBLE_DESTROYED:                     // Set to destroyed
+            ForceGameObjectHealth(-int32(GetHealth()), attackerOrHealer);
+            break;
+        case GO_DESTRUCTIBLE_REBUILDING:                    // Set to rebuilding
+            ForceGameObjectHealth(0, attackerOrHealer);
+            break;
+    }
+}
+
+GameObjectDestructibleState GameObject::GetDestructibleState() const
+{
+    if (HasFlag(GAMEOBJECT_FLAGS, GO_FLAG_DESTROYED))
+        return GO_DESTRUCTIBLE_DESTROYED;
+    if (HasFlag(GAMEOBJECT_FLAGS, GO_FLAG_DAMAGED))
+        return GO_DESTRUCTIBLE_DAMAGED;
+    return GO_DESTRUCTIBLE_INTACT;
 }
 
 float GameObject::GetInteractionDistance() const
@@ -3065,6 +3096,14 @@ void GameObject::ForcedDespawn(uint32 timeMSToDespawn)
 
     SetForcedDespawn();
     SetLootState(GO_JUST_DEACTIVATED);
+
+    // some GOs have respawn time not filled to prevent despawn on action - need to override that this time
+    if (!m_respawnDelay && GetDbGuid() && !m_respawnOverriden)
+    {
+        // only static spawns should arrive here
+        if (GameObjectData const* data = sObjectMgr.GetGOData(GetDbGuid()))
+            SetRespawnDelay(data->GetRandomRespawnTime(), true);
+    }
 }
 
 bool ForcedDespawnDelayGameObjectEvent::Execute(uint64 /*e_time*/, uint32 /*p_time*/)

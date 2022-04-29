@@ -24,7 +24,9 @@ public:
     ~MMapData();
 
     dtNavMesh* Init(unsigned int mapId, BuildContext* ctx);
-    bool       LoadTile(unsigned int tx, unsigned int ty);
+    bool       LoadNavmesh(const char* fileName, TileInfos& tInfos);
+    bool       LoadObjectNavMesh(const std::string fileName);
+    bool       LoadTile(unsigned int tx, unsigned int ty, unsigned int id);
     bool       LoadTile(float const* bmin, float const* bmax);
     bool       RemoveTile(unsigned int tx, unsigned int ty);
     void       RemoveAllTiles();

@@ -238,8 +238,10 @@ m_DrawVMapMesh(true),
 m_DrawMapMesh(true),
 m_showLevel(SHOW_LEVEL_NONE),
 m_GeomChanged(false),
+m_switchingTileVersion(false),
 m_tool(NULL),
-m_SelectedTile(NULL)
+m_SelectedTile(NULL),
+m_currentAlternate(-1)
 {
     for (int i = 0; i < MAX_TOOLS; i++)
         m_toolStates[i] = NULL;
@@ -260,6 +262,7 @@ void CMaNGOS_Map::Init()
     memset(m_tileBmax, 0, sizeof(m_tileBmax));
     memset(m_tileFileName, 0, sizeof(m_tileFileName));
     m_TileButtonStr = "Click to choose a tile";
+    m_transportButtonStr = "Click to choose a transport";
     ScanFoldersForMaps();
     if (m_mapID < 0)
         return;
@@ -268,8 +271,6 @@ void CMaNGOS_Map::Init()
     m_MapInfos->Init(m_mapID, m_ctx);
     m_navMesh = m_MapInfos->GetNavMesh();
     m_navQuery = m_MapInfos->GetNavMeshQuery();
-
-
 }
 
 void CMaNGOS_Map::ClearAllGeoms()
@@ -425,6 +426,34 @@ bool CMaNGOS_Map::ShowTilesLevel(int height, int width)
                         }
                     }
                 }
+
+                m_AlternateTiles.clear();
+                char tileNamePrefix[20];
+
+                snprintf(tileNamePrefix, sizeof(tileNamePrefix), "%03d%02d%02d\0", m_mapID, x, y);
+                for (auto& mmapFile : m_MMapFiles)
+                {
+                    int prefSize = (int) strlen(tileNamePrefix);
+                    if (strncmp(tileNamePrefix, mmapFile.c_str(), prefSize) == 0)
+                    {
+                        m_AlternateTiles.push_back(mmapFile);
+//                         if (mmapFile[prefSize] == '_')
+//                         {
+//                             char currIdStr[3];
+// 
+//                             strncpy(currIdStr, mmapFile.c_str() + prefSize + 1, 2);
+//                             currIdStr[2] = ('\0');
+//                             char* end;
+//                             int currId = (int) strtol(currIdStr, &end, 10);
+//                             if (currIdStr != end)
+//                             {
+//                                 m_AlternateTiles.insert(mmapFile);
+//                             }
+//                         }
+                    }
+                }
+                if (!m_AlternateTiles.empty())
+                    m_currentAlternate = 0;
             }
 
             if (LoadTileData(x, y))
@@ -436,6 +465,115 @@ bool CMaNGOS_Map::ShowTilesLevel(int height, int width)
                 m_TileButtonStr = "Add neighbor tile";
             else
                 m_TileButtonStr = "No neighbor tile to add";
+        }
+    }
+    imguiEndScrollArea();
+    return mouseOverMenu;
+}
+
+bool CMaNGOS_Map::ShowTransportLevel(int height, int width)
+{
+    bool mouseOverMenu = false;
+    static int levelScroll = 0;
+    unsigned int winHSize = height - 20;
+    const unsigned int winWSize = 300;
+    if (imguiBeginScrollArea("Choose transport", width - 10 - 250 - 10 - winWSize, height - 10 - winHSize, winWSize, winHSize, &levelScroll))
+        mouseOverMenu = true;
+
+    for (auto transportData : TransportMap)
+    {
+        if (imguiItem(transportData.second.c_str()))
+        {
+            if (!m_MapInfos->IsEmpty())
+            {
+                ClearAllGeoms();
+                m_MapInfos = new MapInfos();
+                m_MapInfos->Init(m_mapID, m_ctx);
+                m_navMesh = m_MapInfos->GetNavMesh();
+                m_navQuery = m_MapInfos->GetNavMeshQuery();
+            }
+
+            if (m_MapInfos->LoadModel(transportData.second, transportData.first))
+                m_showLevel = SHOW_LEVEL_NONE;
+
+            if (m_MapInfos->IsEmpty())
+                m_transportButtonStr = "Click to choose a transport";
+            else
+                m_transportButtonStr = transportData.second;
+        }
+    }
+    imguiEndScrollArea();
+    return mouseOverMenu;
+}
+
+bool CMaNGOS_Map::ShowAlternativeLevel(int height, int width)
+{
+    bool mouseOverMenu = false;
+    static int levelScroll = 0;
+    unsigned int winHSize = height - 20;
+    const unsigned int winWSize = 300;
+    if (imguiBeginScrollArea("Choose alternative", width - 10 - 250 - 10 - winWSize, height - 10 - winHSize, winWSize, winHSize, &levelScroll))
+        mouseOverMenu = true;
+
+    for (int i = 0; i < m_AlternateTiles.size(); ++i)
+    {
+        auto& alternateFile = m_AlternateTiles[i];
+        if (imguiItem(alternateFile.c_str()))
+        {
+            m_showLevel = SHOW_LEVEL_NONE;
+
+            char txStr[3];
+            char tyStr[3];
+            char tIdStr[3];
+            strncpy(txStr, alternateFile.c_str() + 3, 2);
+            strncpy(tyStr, alternateFile.c_str() + 5, 2);
+            strncpy(tIdStr, alternateFile.c_str() + 8, 2);
+
+            char* end;
+            int tx = -1;
+            int ty = -1;
+            int tId = 0;
+            tx = (int)strtol(txStr, &end, 10);
+            if (txStr != end)
+            {
+                ty = (int)strtol(tyStr, &end, 10);
+                if (tyStr != end)
+                {
+                    if (alternateFile.size() > 14) // 0001122_33.mmtile if > 14 then it contain id
+                    {
+                        tId = (int)strtol(tIdStr, &end, 10);
+                    }
+                }
+            }
+
+            if (tx >= 0 && ty >= 0)
+            {
+                m_MapInfos->RemoveTile(tx, ty);
+                m_switchingTileVersion = true;
+                if (LoadTileData(tx, ty, tId))
+                {
+                    m_currentAlternate = i;
+                    m_showLevel = SHOW_LEVEL_NONE;
+                }
+                m_switchingTileVersion = false;
+            }
+
+//             if (!m_MapInfos->IsEmpty())
+//             {
+//                 ClearAllGeoms();
+//                 m_MapInfos = new MapInfos();
+//                 m_MapInfos->Init(m_mapID, m_ctx);
+//                 m_navMesh = m_MapInfos->GetNavMesh();
+//                 m_navQuery = m_MapInfos->GetNavMeshQuery();
+//             }
+// 
+//             if (m_MapInfos->LoadModel(transportData.second, transportData.first))
+//                 m_showLevel = SHOW_LEVEL_NONE;
+// 
+//             if (m_MapInfos->IsEmpty())
+//                 m_transportButtonStr = "Click to choose a transport";
+//             else
+//                 m_transportButtonStr = transportData.second;
         }
     }
     imguiEndScrollArea();
@@ -457,14 +595,16 @@ bool CMaNGOS_Map::ShowLevel(int height, int width)
     {
         case SHOW_LEVEL_MAP: return ShowMapLevel(height, width); break;
         case SHOW_LEVEL_NEIGHBOR_TILES: return ShowNeighborTiles(height, width); break;
+        case SHOW_LEVEL_ALTERNATIVE_TILES: return ShowAlternativeLevel(height, width); break;
         case SHOW_LEVEL_TILES: return ShowTilesLevel(height, width); break;
+        case SHOW_LEVEL_TRANSPORT: return ShowTransportLevel(height, width); break;
         default: return false; break;
     }
 }
 
 void CMaNGOS_Map::handleExtraSettings()
 {
-    imguiLabel("Map Id");
+    imguiLabel("Map Id:");
     char buff[4];
     memset(buff, 0, sizeof(buff));
     itoa(m_mapID, buff, 10);
@@ -480,10 +620,10 @@ void CMaNGOS_Map::handleExtraSettings()
         }
     }
 
-    imguiLabel("Tile");
+    imguiLabel("Tile:");
     if (imguiButton(m_TileButtonStr.c_str()))
     {
-        if (m_showLevel == SHOW_LEVEL_TILES || m_showLevel == SHOW_LEVEL_NEIGHBOR_TILES)
+        if (m_showLevel != SHOW_LEVEL_NONE)
         {
             m_showLevel = SHOW_LEVEL_NONE;
         }
@@ -494,6 +634,33 @@ void CMaNGOS_Map::handleExtraSettings()
             else if (!m_NeighborTiles.empty())
                     m_showLevel = SHOW_LEVEL_NEIGHBOR_TILES;
         }
+    }
+
+    if (!m_AlternateTiles.empty())
+    {
+        imguiLabel("Alternate tiles:");
+        if (imguiButton(m_AlternateTiles[m_currentAlternate].c_str()))
+        {
+            if (m_showLevel != SHOW_LEVEL_NONE)
+            {
+                m_showLevel = SHOW_LEVEL_NONE;
+            }
+            else
+            {
+                m_showLevel = SHOW_LEVEL_ALTERNATIVE_TILES;
+            }
+        }
+    }
+
+    imguiLabel("Transport objects:");
+    if (imguiButton(m_transportButtonStr.c_str()))
+    {
+        if (m_showLevel != SHOW_LEVEL_NONE)
+        {
+            m_showLevel = SHOW_LEVEL_NONE;
+        }
+        else
+            m_showLevel = SHOW_LEVEL_TRANSPORT;
     }
 
     if (!m_MapInfos->IsEmpty())
@@ -530,8 +697,8 @@ void CMaNGOS_Map::handleExtraSettings()
 
 void CMaNGOS_Map::ScanFoldersForMaps()
 {
-    scanDirectory("maps", "*.map", m_MapFiles);
-    scanDirectory("vmaps", "*.vmtree", m_VMapFiles);
+    scanDirectory(m_ctx->getMapFolder(), "*.map", m_MapFiles);
+    scanDirectory(m_ctx->getVMapFolder(), "*.vmtree", m_VMapFiles);
 
     m_MapsFound.clear();
     for (FileList::const_iterator itr = m_MapFiles.begin(); itr != m_MapFiles.end(); itr++)
@@ -568,11 +735,11 @@ void CMaNGOS_Map::scanFoldersForTiles()
 
     char buff[20];
     snprintf(buff, sizeof(buff), "%03d*.map", m_mapID);
-    scanDirectory("maps", buff, m_MapFiles);
+    scanDirectory(m_ctx->getMapFolder(), buff, m_MapFiles);
     snprintf(buff, sizeof(buff), "%03d*.vmtile", m_mapID);
-    scanDirectory("vmaps", buff, m_VMapFiles);
+    scanDirectory(m_ctx->getVMapFolder(), buff, m_VMapFiles);
     snprintf(buff, sizeof(buff), "%03d*.mmtile", m_mapID);
-    scanDirectory("mmaps", buff, m_MMapFiles);
+    scanDirectory(m_ctx->getMMapFolder(), buff, m_MMapFiles);
 
     for (FileList::const_iterator itr = m_MapFiles.begin(); itr != m_MapFiles.end(); itr++)
     {
@@ -621,7 +788,7 @@ void CMaNGOS_Map::handleSettings()
             bText = "Load selected tile navmesh";
             if (imguiButton(bText.c_str()))
             {
-                if (m_MapInfos->LoadNavMeshOfTile(m_SelectedTile->tx, m_SelectedTile->ty))
+                if (m_MapInfos->LoadNavMeshOfTile(m_SelectedTile->tx, m_SelectedTile->ty, m_SelectedTile->id))
                     setTool(new NavMeshTesterTool);
             }
 
@@ -1154,11 +1321,11 @@ void CMaNGOS_Map::handleRenderOverlay(double* proj, double* model, int* view)
         m_isBuilded = true;
         */
 
-bool CMaNGOS_Map::LoadTileData(unsigned int tx, unsigned int ty)
+bool CMaNGOS_Map::LoadTileData(unsigned int tx, unsigned int ty, unsigned int tileId /*= 0*/)
 {
     bool setGridCoord = m_MapInfos->IsEmpty();
 
-    if (m_MapInfos->LoadTile(tx, ty))
+    if (m_MapInfos->LoadTile(tx, ty, tileId))
     {
         setTool(new NavMeshTesterTool);
         m_isBuilded = false;
@@ -1168,7 +1335,8 @@ bool CMaNGOS_Map::LoadTileData(unsigned int tx, unsigned int ty)
             rcVcopy(m_GridBMin, m_MapInfos->BMin());
             m_GridBMin[0] -= RecastDemo::BLOCK_SIZE + border;
             m_GridBMin[2] -= RecastDemo::BLOCK_SIZE + border;
-            m_GeomChanged = true;
+            if (!m_switchingTileVersion)
+                m_GeomChanged = true;
         }
         return true;
     }
@@ -1206,10 +1374,10 @@ void CMaNGOS_Map::handleRender()
         {
             MeshInfos const* mmi = itr->second->GetMap();
             MeshInfos const* vmi = itr->second->GetVMap();
+            MeshInfos const* gmi = itr->second->GetModel();
 
             if (m_DrawMapMesh && mmi)
             {
-
                 MeshDetails const* mmd = mmi->GetSolidMesh();
                 MeshDetails const* mlmi = mmi->GetLiquidMesh();
                 if (mmd)
@@ -1232,6 +1400,17 @@ void CMaNGOS_Map::handleRender()
                 }
                 if (vlmi)
                     duDebugDrawLiquidTriMesh(&dd, vlmi->Verts(), vlmi->VertCount(), vlmi->Tris(), vlmi->Normals(), vlmi->TrisCount(), texScale);
+            }
+
+            if (m_DrawMapMesh && gmi)
+            {
+                MeshDetails const* mmd = gmi->GetSolidMesh();
+                //MeshDetails const* mlmi = mmi->GetLiquidMesh();
+                if (mmd)
+                {
+                    duDebugDrawTriMeshSlope(&dd, mmd->Verts(), mmd->VertCount(), mmd->Tris(), mmd->Normals(), mmd->TrisCount(),
+                        m_agentMaxSlope, texScale);
+                }
             }
         }
     }
@@ -1434,7 +1613,7 @@ void CMaNGOS_Map::SelectTile(float const* p)
     }
     else
         m_MapInfos->GetNavMeshTileBounds(tx, ty, bmin, bmax);
-    m_SelectedTile = new SelectedTile(tx, ty, bmin, bmax);
+    m_SelectedTile = new SelectedTile(tx, ty, 0, bmin, bmax);
 }
 
 void CMaNGOS_Map::handleClick(const float* s, const float* p, bool shift, bool control)

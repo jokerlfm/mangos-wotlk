@@ -2013,7 +2013,7 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
             calcDamageInfo->blocked_amount = calcDamageInfo->target->GetShieldBlockValue();
 
             // Target has a chance to double the blocked amount if it has SPELL_AURA_MOD_BLOCK_CRIT_CHANCE
-            if (roll_chance_i(pVictim->GetTotalAuraModifier(SPELL_AURA_MOD_BLOCK_CRIT_CHANCE)))
+            if (calcDamageInfo->target->IsBlockCritical())
                 calcDamageInfo->blocked_amount *= 2;
 
             if (calcDamageInfo->blocked_amount >= calcDamageInfo->totalDamage)
@@ -2863,12 +2863,12 @@ void Unit::CalculateDamageAbsorbAndResist(Unit* caster, SpellSchoolMask schoolMa
 
             uint32 splitted = currentAbsorb;
             uint32 splitted_absorb = 0;
-            Unit::DealDamageMods(this, caster, splitted, &splitted_absorb, DIRECT_DAMAGE, (*i)->GetSpellProto());
+            Unit::DealDamageMods(this, caster, splitted, &splitted_absorb, SPLIT_DAMAGE, (*i)->GetSpellProto());
 
             Unit::SendSpellNonMeleeDamageLog(this, caster, (*i)->GetSpellProto()->Id, splitted, schoolMask, splitted_absorb, 0, (damagetype == DOT), 0, false, true);
 
             CleanDamage cleanDamage(splitted, BASE_ATTACK, MELEE_HIT_NORMAL, splitted > 0);
-            Unit::DealDamage(this, caster, splitted, &cleanDamage, DIRECT_DAMAGE, schoolMask, (*i)->GetSpellProto(), false);
+            Unit::DealDamage(this, caster, splitted, &cleanDamage, SPLIT_DAMAGE, schoolMask, (*i)->GetSpellProto(), false);
         }
 
         AuraList const& vSplitDamagePct = GetAurasByType(SPELL_AURA_SPLIT_DAMAGE_PCT);
@@ -2896,12 +2896,12 @@ void Unit::CalculateDamageAbsorbAndResist(Unit* caster, SpellSchoolMask schoolMa
             }
 
             uint32 split_absorb = 0;
-            Unit::DealDamageMods(this, caster, splitted, &split_absorb, DIRECT_DAMAGE, (*i)->GetSpellProto());
+            Unit::DealDamageMods(this, caster, splitted, &split_absorb, SPLIT_DAMAGE, (*i)->GetSpellProto());
 
             Unit::SendSpellNonMeleeDamageLog(this, caster, (*i)->GetSpellProto()->Id, splitted, schoolMask, split_absorb, 0, (damagetype == DOT), 0, false, true);
 
             CleanDamage cleanDamage(splitted, BASE_ATTACK, MELEE_HIT_NORMAL, splitted > 0);
-            Unit::DealDamage(this, caster, splitted, &cleanDamage, DIRECT_DAMAGE, schoolMask, (*i)->GetSpellProto(), false);
+            Unit::DealDamage(this, caster, splitted, &cleanDamage, SPLIT_DAMAGE, schoolMask, (*i)->GetSpellProto(), false);
         }
     }
 
@@ -2954,7 +2954,10 @@ void Unit::CalculateAbsorbResistBlock(Unit* caster, SpellNonMeleeDamage* spellDa
 {
     if (RollAbilityPartialBlockOutcome(caster, attType, spellProto))
     {
-        spellDamageInfo->blocked = std::min(GetShieldBlockValue(), spellDamageInfo->damage);
+        uint32 blockValue = GetShieldBlockValue();
+        if (IsBlockCritical())
+            blockValue *= 2;
+        spellDamageInfo->blocked = std::min(blockValue, spellDamageInfo->damage);
         spellDamageInfo->damage -= spellDamageInfo->blocked;
     }
 
@@ -3387,6 +3390,15 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
     }
 
     return SPELL_MISS_NONE;
+}
+
+bool Unit::IsBlockCritical() const
+{
+    int32 chance = GetTotalAuraModifier(SPELL_AURA_MOD_BLOCK_CRIT_CHANCE);
+    if (!chance) // dont roll if no chance
+        return false;
+
+    return roll_chance_i(chance);
 }
 
 uint32 Unit::GetDefenseSkillValue(Unit const* target) const
@@ -5268,6 +5280,14 @@ bool Unit::IsUnderwater() const
     return GetTerrain()->IsUnderWater(GetPositionX(), GetPositionY(), GetPositionZ());
 }
 
+bool Unit::IsAboveGround(float diff) const
+{
+    float x, y, z;
+    GetPosition(x, y, z);
+    float floorZ = GetMap()->GetHeight(GetPhaseMask(), x, y, z);
+    return std::abs(z - floorZ) > diff;
+}
+
 void Unit::DeMorph()
 {
     SetDisplayId(GetNativeDisplayId());
@@ -6126,6 +6146,20 @@ void Unit::RemoveAurasWithInterruptFlags(uint32 flags)
     for (SpellAuraHolderMap::iterator iter = m_spellAuraHolders.begin(); iter != m_spellAuraHolders.end();)
     {
         if (iter->second->GetSpellProto()->AuraInterruptFlags & flags)
+        {
+            RemoveSpellAuraHolder(iter->second);
+            iter = m_spellAuraHolders.begin();
+        }
+        else
+            ++iter;
+    }
+}
+
+void Unit::RemoveAurasWithInterruptFlags(uint32 flags, SpellAuraHolder* except)
+{
+    for (SpellAuraHolderMap::iterator iter = m_spellAuraHolders.begin(); iter != m_spellAuraHolders.end();)
+    {
+        if (iter->second->GetSpellProto()->AuraInterruptFlags & flags && iter->second != except)
         {
             RemoveSpellAuraHolder(iter->second);
             iter = m_spellAuraHolders.begin();
@@ -7162,7 +7196,7 @@ void Unit::SendAttackStateUpdate(uint32 HitInfo, Unit* target, SpellSchoolMask d
     SendAttackStateUpdate(&dmgInfo);
 }
 
-void Unit::SetPowerType(Powers new_powertype)
+void Unit::SetPowerType(Powers new_powertype, bool sendUpdate/*=true*/)
 {
     // set power type
     SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_POWER_TYPE, new_powertype);
@@ -7333,9 +7367,9 @@ bool Unit::Attack(Unit* victim, bool meleeAttack)
     if (CanHaveThreatList())
         getThreatManager().setCurrentVictimByTarget(victim);
 
-    // delay offhand weapon attack to next attack time
+    // delay offhand weapon attack to half of offhand attack speed
     if (hasOffhandWeaponForAttack())
-        resetAttackTimer(OFF_ATTACK);
+        setAttackTimer(OFF_ATTACK, (GetAttackTime(OFF_ATTACK) * m_modAttackSpeedPct[OFF_ATTACK]) / 2);
 
     if (meleeAttack)
         MeleeAttackStart(m_attacking);
@@ -8048,9 +8082,10 @@ void Unit::SendEnvironmentalDamageLog(uint8 type, uint32 damage, uint32 absorb, 
     SendMessageToSet(data, true);
 }
 
-void Unit::EnergizeBySpell(Unit* victim, SpellEntry const* spellInfo, uint32 damage, Powers powerType)
+void Unit::EnergizeBySpell(Unit* victim, SpellEntry const* spellInfo, uint32 damage, Powers powerType, bool sendLog)
 {
-    SendEnergizeSpellLog(victim, spellInfo->Id, damage, powerType);
+    if (sendLog)
+        SendEnergizeSpellLog(victim, spellInfo->Id, damage, powerType);
     // needs to be called after sending spell log
     victim->ModifyPower(powerType, damage);
     victim->getHostileRefManager().threatAssist(this, float(damage) * 0.5f * sSpellMgr.GetSpellThreatMultiplier(spellInfo), spellInfo);
@@ -9674,7 +9709,10 @@ void Unit::SetInCombatState(bool PvP, Unit* enemy)
                         enemy->GetCombatManager().TriggerCombatTimer(controller);
                 }
                 else
+                {
+                    MANGOS_ASSERT(controller->AI()); // a player without UNIT_FLAG_PLAYER_CONTROLLED should always have AI
                     controller->AI()->AttackStart(enemy);
+                }
             }
         }
     }
@@ -10470,13 +10508,24 @@ bool Unit::SelectHostileTarget()
     if (!AI())
         return false;
 
+    auto evadeFunc = [&]()
+    {
+        // enter in evade mode in other case
+        FixateTarget(nullptr);
+        AI()->EnterEvadeMode();
+    };
+
     if (!AI()->CanExecuteCombatAction())
     {
         if (Unit* target = GetMap()->GetUnit(GetTargetGuid()))
             if (target != this)
                 SetInFront(target);
 
-        return !((AI()->GetCombatScriptStatus() || IsStunned()) && getThreatManager().isThreatListEmpty());
+        // do not evade during combat script running
+        // some scripts start in combat and disengage all attackers but npc is still locked in combat
+        if (IsInCombat() && getThreatManager().isThreatListEmpty() && IsCrowdControlled() && !AI()->GetCombatScriptStatus())
+            evadeFunc();
+        return !((AI()->GetCombatScriptStatus() || IsCrowdControlled()) && getThreatManager().isThreatListEmpty());
     }
 
     Unit* target = nullptr;
@@ -10559,9 +10608,7 @@ bool Unit::SelectHostileTarget()
         }
     }
 
-    // enter in evade mode in other case
-    FixateTarget(nullptr);
-    AI()->EnterEvadeMode();
+    evadeFunc();
 
     return false;
 }
@@ -11112,7 +11159,7 @@ void Unit::SetHealthPercent(float percent)
     SetHealth(newHealth);
 }
 
-void Unit::SetPower(Powers power, uint32 val)
+void Unit::SetPower(Powers power, uint32 val, bool withPowerUpdate /*= true*/)
 {
     if (GetPower(power) == val)
         return;
@@ -11122,6 +11169,15 @@ void Unit::SetPower(Powers power, uint32 val)
         val = maxPower;
 
     SetStatInt32Value(UNIT_FIELD_POWER1 + power, val);
+
+    if (withPowerUpdate)
+    {
+        WorldPacket data(SMSG_POWER_UPDATE, 8 + 1 + 4);
+        data << GetPackGUID();
+        data << uint8(power);
+        data << uint32(val);
+        SendMessageToSet(data, GetTypeId() == TYPEID_PLAYER);
+    }
 
     // group update
     if (GetTypeId() == TYPEID_PLAYER)
@@ -13301,10 +13357,21 @@ bool Unit::TakePossessOf(Unit* possessed)
     possessed->SetCharmerGuid(GetObjectGuid());
     SetCharm(possessed);
 
-    // stop any generated movement TODO:: this may not be correct! what about possessing a feared creature?
-    possessed->GetMotionMaster()->Clear();
-    possessed->GetMotionMaster()->MoveIdle();
+    const bool panic = possessed->IsInPanic(), fleeing = possessed->IsFleeing(), confused = possessed->IsConfused();
+
+    // stop any generated movement: current solution
     possessed->StopMoving(true);
+    possessed->GetMotionMaster()->Clear(false, true);
+    possessed->GetMotionMaster()->MoveIdle();
+
+    if (confused)
+        possessed->GetMotionMaster()->MoveConfused();
+    else if (fleeing && !panic)
+    {
+        AuraList const& fears = possessed->GetAurasByType(SPELL_AURA_MOD_FEAR);
+        Unit* source = (fears.empty() ? nullptr : fears.back()->GetCaster());
+        possessed->GetMotionMaster()->MoveFleeing(source ? source : this);
+    }
 
     Position combatStartPosition;
 
@@ -13361,7 +13428,7 @@ bool Unit::TakePossessOf(Unit* possessed)
     {
         player->GetCamera().SetView(possessed);
         // Force client control (required to function propely)
-        player->UpdateClientControl(possessed, true, true);
+        player->UpdateClientControl(possessed, !IsCrowdControlled(), true);
         player->SetMover(possessed);
         player->SendForcedObjectUpdate();
 

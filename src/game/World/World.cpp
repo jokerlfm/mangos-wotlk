@@ -71,6 +71,7 @@
 #include "Maps/TransportMgr.h"
 #include "Anticheat/Anticheat.hpp"
 #include "LFG/LFGMgr.h"
+#include "Vmap/GameObjectModel.h"
 
 #ifdef BUILD_AHBOT
  #include "AuctionHouseBot/AuctionHouseBot.h"
@@ -84,8 +85,6 @@
 #include <mutex>
 
 INSTANTIATE_SINGLETON_1(World);
-
-extern void LoadGameObjectModelList();
 
 volatile bool World::m_stopEvent = false;
 uint8 World::m_ExitCode = SHUTDOWN_EXIT_CODE;
@@ -789,6 +788,8 @@ void World::LoadConfigSettings(bool reload)
     setConfig(CONFIG_UINT32_ENVIRONMENTAL_DAMAGE_MIN, "EnvironmentalDamage.Min", 605);
     setConfigMin(CONFIG_UINT32_ENVIRONMENTAL_DAMAGE_MAX, "EnvironmentalDamage.Max", 610, getConfig(CONFIG_UINT32_ENVIRONMENTAL_DAMAGE_MIN));
 
+    setConfig(CONFIG_UINT32_INTERACTION_PAUSE_TIMER, "InteractionPauseTimer", 180000);
+
     setConfig(CONFIG_BOOL_PET_UNSUMMON_AT_MOUNT,      "PetUnsummonAtMount", false);
     setConfig(CONFIG_BOOL_PET_ATTACK_FROM_BEHIND,     "PetAttackFromBehind", true);
 
@@ -1008,7 +1009,7 @@ void World::SetInitialWorldSettings()
     MMAP::MMapFactory::createOrGetMMapManager()->loadAllGameObjectModels(transportDisplayIds);
 
     sLog.outString("Loading GameObject models...");
-    LoadGameObjectModelList();
+    GameObjectModel::LoadGOVmapModels();
     sLog.outString();
 
     // loads GO data
@@ -1122,9 +1123,6 @@ void World::SetInitialWorldSettings()
     sLog.outString("Loading SpellsScriptTarget...");
     sSpellMgr.LoadSpellScriptTarget();                      // must be after LoadCreatureTemplates, LoadCreatures and LoadGameobjectInfo
 
-    sLog.outString("Loading Spawn Groups");                 // must be after creature and GO load
-    sObjectMgr.LoadSpawnGroups();
-
     sLog.outString("Generating SpellTargetMgr data...\n");
     SpellTargetMgr::Initialize(); // must be after LoadSpellScriptTarget
 
@@ -1167,8 +1165,14 @@ void World::SetInitialWorldSettings()
     sLog.outString(">>> Game Event Data loaded");
     sLog.outString();
 
+    sLog.outString("Loading WorldState Names...");          // must be before conditions and dbscripts
+    sObjectMgr.LoadWorldStateNames();
+
     sLog.outString("Loading Conditions...");                // Load Conditions
     sObjectMgr.LoadConditions();
+
+    sLog.outString("Loading Spawn Groups");                 // must be after creature and GO load
+    sObjectMgr.LoadSpawnGroups();
 
     // Not sure if this can be moved up in the sequence (with static data loading) as it uses MapManager
     sLog.outString("Loading Transports...");
@@ -1394,6 +1398,9 @@ void World::SetInitialWorldSettings()
     // after SD2
     sLog.outString("Loading spell scripts...");
     SpellScriptMgr::LoadScripts();
+
+    // after spellscripts
+    sScriptDevAIMgr.CheckScriptNames();
 
     ///- Initialize game time and timers
     sLog.outString("Initialize game time and timers");

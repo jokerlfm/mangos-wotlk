@@ -551,6 +551,7 @@ enum DamageEffectType
     SELF_DAMAGE             = 6,
     INSTAKILL               = 7,                            //< used to instakill - no message
     SPELL_DAMAGE_SHIELD     = 8,                            // doesnt put in combat
+    SPLIT_DAMAGE            = 9,                            // puts in combat but doesnt do pushback
 };
 
 enum GameobjectTypes
@@ -604,10 +605,10 @@ enum GameObjectFlags
     GO_FLAG_NO_INTERACT     = 0x00000010,                   // players cannot interact with this go (often need to remove flag in event)
     GO_FLAG_NODESPAWN       = 0x00000020,                   // never despawn, typically for doors, they just change state
     GO_FLAG_TRIGGERED       = 0x00000040,                   // typically, summoned objects. Triggered by spell or other events
-    GO_FLAG_UNK_8           = 0x00000080,
-    GO_FLAG_UNK_9           = 0x00000100,                   //? Seen on type 33, meaning unknown
-    GO_FLAG_DAMAGED         = 0x00000200,                   //? Seen on type 33, likely damaged
-    GO_FLAG_DESTROYED       = 0x00000400                    //? Seen on type 33, likely destroyed
+    GO_FLAG_AI_OBSTACLE     = 0x00000080,                   // makes the client register the object in something called AIObstacleMgr, unknown what it does
+    GO_FLAG_FREEZE_ANIMATION= 0x00000100,
+    GO_FLAG_DAMAGED         = 0x00000200,
+    GO_FLAG_DESTROYED       = 0x00000400
 };
 
 enum GameObjectDynamicLowFlags
@@ -1377,7 +1378,6 @@ enum HolidayIds
     HOLIDAY_HARVEST_FESTIVAL         = 321,
     HOLIDAY_HALLOWS_END              = 324,
     HOLIDAY_LUNAR_FESTIVAL           = 327,
-    HOLIDAY_LOVE_IS_IN_THE_AIR       = 335,
     HOLIDAY_FIRE_FESTIVAL            = 341,
     HOLIDAY_CALL_TO_ARMS_EY          = 353,
     HOLIDAY_BREWFEST                 = 372,
@@ -1389,7 +1389,8 @@ enum HolidayIds
     HOLIDAY_PILGRIMS_BOUNTY          = 404,
     HOLIDAY_WOTLK_LAUNCH             = 406,
     HOLIDAY_DAY_OF_DEAD              = 409,
-    HOLIDAY_CALL_TO_ARMS_ISLE_OF_C   = 420
+    HOLIDAY_CALL_TO_ARMS_ISLE_OF_C   = 420,
+    HOLIDAY_LOVE_IS_IN_THE_AIR       = 423,
 };
 
 // values based at QuestSort.dbc

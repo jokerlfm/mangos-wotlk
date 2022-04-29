@@ -126,6 +126,16 @@ UPDATE gameobject_template SET ScriptName='go_containment_coffer' WHERE entry=12
 UPDATE gameobject_template SET ScriptName='go_large_jack_o_lantern' WHERE entry=186887;
 UPDATE gameobject_template SET ScriptName='go_imp_in_a_ball' WHERE entry=185898;
 
+/* Outdoor PVP*/
+-- si
+UPDATE gameobject_template SET ScriptName='go_outdoor_pvp_notify' WHERE entry IN(181597,181598);
+-- ep
+UPDATE gameobject_template SET ScriptName='go_outdoor_pvp_notify' WHERE entry IN(181682,181955);
+-- halaa
+UPDATE gameobject_template SET ScriptName='go_outdoor_pvp_notify' WHERE entry IN(182297,182298,182299,182300,182266,182275,182276,182277);
+UPDATE gameobject_template SET ScriptName='go_outdoor_pvp_notify' WHERE entry IN(182301,182302,182303,182304,182267,182280,182281,182282);
+UPDATE gameobject_template SET ScriptName='go_outdoor_pvp_notify' WHERE entry IN(182222,182272,182273,182274,182305,182306,182307,182308);
+
 /* GUARD */
 UPDATE creature_template SET ScriptName='guard_azuremyst' WHERE entry=18038;
 UPDATE creature_template SET ScriptName='guard_orgrimmar' WHERE entry IN (3296,14304);
@@ -780,6 +790,7 @@ UPDATE creature_template SET ScriptName='boss_crusader_shaman_enha' WHERE entry 
 UPDATE creature_template SET ScriptName='boss_crusader_shaman_resto' WHERE entry IN (34470,34444);
 UPDATE creature_template SET ScriptName='boss_crusader_warlock' WHERE entry IN (34474,34450);
 UPDATE creature_template SET ScriptName='boss_crusader_warrior' WHERE entry IN (34475,34453);
+UPDATE gameobject_template SET ScriptName='go_coliseum_floor' WHERE entry IN(195527);
 
 /* DALARAN */
 UPDATE creature_template SET ScriptName='npc_dalaran_guardian_mage' WHERE entry IN (29255, 29254);
@@ -975,7 +986,6 @@ UPDATE instance_template SET ScriptName='instance_shattered_halls' WHERE map=540
 UPDATE instance_template SET ScriptName='instance_magtheridons_lair' WHERE map=544;
 UPDATE gameobject_template SET ScriptName='go_manticron_cube' WHERE entry=181713;
 UPDATE creature_template SET ScriptName='boss_magtheridon' WHERE entry=17257;
-UPDATE creature_template SET ScriptName='mob_abyssal' WHERE entry=17454;
 UPDATE creature_template SET ScriptName='mob_hellfire_channeler' WHERE entry=17256;
 
 /* HELLFIRE PENINSULA */
@@ -1870,6 +1880,7 @@ UPDATE creature_template SET ScriptName='npc_tirion_fordring' WHERE entry=12126;
 /* WESTFALL */
 UPDATE creature_template SET ScriptName='npc_daphne_stilwell' WHERE entry=6182;
 UPDATE creature_template SET ScriptName='npc_defias_traitor' WHERE entry=467;
+UPDATE creature_template SET ScriptName='npc_foreman_klaven_mortwake' WHERE entry=7053;
 
 /* WETLANDS */
 UPDATE creature_template SET ScriptName='npc_tapoke_slim_jahn' WHERE entry=4962;

@@ -162,6 +162,7 @@ struct CreatureInfo
     uint32  EquipmentTemplateId;
     uint32  VehicleTemplateId;
     uint32  GossipMenuId;
+    uint32  InteractionPauseTimer;
     VisibilityDistanceType visibilityDistanceType;
     uint32  CorpseDelay;
     uint32  SpellList;
@@ -226,6 +227,7 @@ enum SpawnFlags
 struct CreatureSpawnTemplate
 {
     uint32 entry;
+    int32 npcFlags;
     int64 unitFlags;
     uint32 faction;
     uint32 modelId;
@@ -774,6 +776,7 @@ class Creature : public Unit
 
         void SetDefaultGossipMenuId(uint32 menuId) { m_gossipMenuId = menuId; }
         uint32 GetDefaultGossipMenuId() const { return m_gossipMenuId; }
+        uint32 GetInteractionPauseTimer() const { return m_interactionPauseTimer; }
 
         GridReference<Creature>& GetGridRef() { return m_gridRef; }
         bool IsRegeneratingHealth() const { return (GetCreatureInfo()->RegenerateStats & REGEN_FLAG_HEALTH) != 0 && !(GetCreatureInfo()->CreatureTypeFlags & CREATURE_TYPEFLAGS_SIEGE_WEAPON); }
@@ -876,6 +879,8 @@ class Creature : public Unit
         void SetNoWeaponSkillGain(bool state) { m_noWeaponSkillGain = state; }
         bool IsNoWeaponSkillGain() const override { return m_noWeaponSkillGain; }
 
+        virtual uint32 GetDuration() const { return 0; }
+
     protected:
         bool CreateFromProto(uint32 guidlow, CreatureInfo const* cinfo, const CreatureData* data = nullptr, GameEventCreatureData const* eventData = nullptr);
         bool InitEntry(uint32 Entry, const CreatureData* data = nullptr, GameEventCreatureData const* eventData = nullptr);
@@ -907,6 +912,7 @@ class Creature : public Unit
         bool m_canAggro;                                    // controls response of creature to attacks
         bool m_checkForHelp;                                // controls checkforhelp in ai
         float m_respawnradius;
+        uint32 m_interactionPauseTimer;                     // (msecs) waypoint pause time when interacted with
 
         CreatureSubtype m_subtype;                          // set in Creatures subclasses for fast it detect without dynamic_cast use
         void RegeneratePower(float timerMultiplier);
