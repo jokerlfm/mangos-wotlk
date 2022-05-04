@@ -22,6 +22,8 @@
 #include "Common.h"
 #include "Entities/ObjectGuid.h"
 
+class Quest;
+
 enum LfgFlags
 {
     LFG_FLAG_XREALM                              = 0x1,
@@ -39,6 +41,33 @@ enum LfgType
     LFG_TYPE_ZONE                 = 4,
     LFG_TYPE_HEROIC_DUNGEON       = 5,
     LFG_TYPE_RANDOM_DUNGEON       = 6
+};
+
+enum LfgProposalState
+{
+    LFG_PROPOSAL_INITIATING  = 0,
+    LFG_PROPOSAL_FAILED      = 1,
+    LFG_PROPOSAL_SUCCESS     = 2
+};
+
+enum LfgAnswer
+{
+    LFG_ANSWER_PENDING  = -1,
+    LFG_ANSWER_DENY     = 0,
+    LFG_ANSWER_AGREE    = 1
+};
+
+// Teleport errors
+enum LfgTeleportError
+{
+    // 7 = "You can't do that right now" | 5 = No client reaction
+    LFG_TELEPORTERROR_OK                         = 0,      // Internal use
+    LFG_TELEPORTERROR_PLAYER_DEAD                = 1,
+    LFG_TELEPORTERROR_FALLING                    = 2,
+    LFG_TELEPORTERROR_IN_VEHICLE                 = 3,
+    LFG_TELEPORTERROR_FATIGUE                    = 4,
+    LFG_TELEPORTERROR_INVALID_LOCATION           = 6,
+    LFG_TELEPORTERROR_CHARMING                   = 8       // FIXME - It can be 7 or 8 (Need proper data)
 };
 
 /// Instance lock types
@@ -87,6 +116,13 @@ enum LfgSpells
     LFG_SPELL_DUNGEON_COOLDOWN = 71328,
     LFG_SPELL_DUNGEON_DESERTER = 71041,
     LFG_SPELL_LUCK_OF_THE_DRAW = 72221,
+};
+
+enum LfgTimers
+{
+    LFG_TIME_ROLECHECK  = 45,
+    LFG_TIME_BOOT       = 120,
+    LFG_TIME_PROPOSAL   = 45,
 };
 
 // Role check states
@@ -161,6 +197,14 @@ enum LFGEnum
     LFG_DPS_NEEDED                               = 3
 };
 
+enum SeasonalDungeons
+{
+    SEASONAL_HEADLESS_HORSEMAN  = 285,
+    SEASONAL_AHUNE              = 286,
+    SEASONAL_COREN_DIREBREW     = 287,
+    SEASONAL_CROWN_CHEMICAL_CO  = 288,
+};
+
 typedef std::map<uint32, uint32> LfgLockMap;
 typedef std::map<ObjectGuid, LfgLockMap> LfgLockPartyMap;
 typedef std::set<uint32> LfgDungeonSet;
@@ -196,6 +240,16 @@ struct LfgUpdateData
     bool partialClear;
     std::string comment;
     uint8 m_roles[ROLE_INDEX_COUNT];
+};
+
+struct LfgPlayerRewardData
+{
+    LfgPlayerRewardData(uint32 random, uint32 current, bool done, Quest const* quest) :
+        rdungeonEntry(random), sdungeonEntry(current), done(done), quest(quest) { }
+    uint32 rdungeonEntry;
+    uint32 sdungeonEntry;
+    bool done;
+    Quest const* quest;
 };
 
 #endif

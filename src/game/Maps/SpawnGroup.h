@@ -40,6 +40,7 @@ class SpawnGroup
 {
     public:
         SpawnGroup(SpawnGroupEntry const& entry, Map& map, uint32 typeId);
+        virtual ~SpawnGroup() {}
         virtual void AddObject(uint32 dbGuid, uint32 entry);
         virtual void RemoveObject(WorldObject* wo);
         uint32 GetGuidEntry(uint32 dbGuid) const;
@@ -64,6 +65,7 @@ class SpawnGroup
         Map& m_map;
         std::map<uint32, uint32> m_objects;
         std::map<uint32, uint32> m_chosenEntries; // dungeon saving for entry per dynguid
+        std::map<uint32, bool> m_chosenSpawns;
         uint32 m_objectTypeId;
         bool m_enabled;
 };

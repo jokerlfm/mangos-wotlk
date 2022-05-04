@@ -93,10 +93,15 @@ void WorldSession::HandleLfgLeaveOpcode(WorldPacket& /*recv_data*/)
 
 void WorldSession::HandleLfgProposalResultOpcode(WorldPacket& recv_data)
 {
-    uint32 lfgGroupID; // Internal lfgGroupID
-    bool accept; // Accept to join?
-    recv_data >> lfgGroupID;
+    uint32 proposalId;
+    bool accept; // Accept to join
+    recv_data >> proposalId;
     recv_data >> accept;
+
+    sWorld.GetLFGQueue().GetMessager().AddMessage([playerGuid = GetPlayer()->GetObjectGuid(), proposalId, accept](LFGQueue* queue)
+    {
+        queue->UpdateProposal(playerGuid, proposalId, accept);
+    });
 }
 
 void WorldSession::HandleLfgSetRolesOpcode(WorldPacket& recv_data)
@@ -206,6 +211,9 @@ void WorldSession::HandleLfgTeleportOpcode(WorldPacket& recv_data)
 {
     bool out;
     recv_data >> out;
+
+    Player* player = GetPlayer();
+    sLFGMgr.TeleportPlayer(player, out, true);
 }
 
 void WorldSession::HandleLfgPlayerLockInfoRequestOpcode(WorldPacket& recv_data)
@@ -246,7 +254,7 @@ void WorldSession::HandleLfgPlayerLockInfoRequestOpcode(WorldPacket& recv_data)
         {
             data << uint8(done);
             data << uint32(quest->GetRewOrReqMoney());
-            data << uint32(quest->XPValue(GetPlayer()));
+            data << uint32(quest->GetXPReward(GetPlayer()));
             data << uint32(0); // money variance per missing member when queueing - not actually used back then
             data << uint32(0); // experience variance per missing member when queueing - not actually used back then
             data << uint8(quest->GetRewItemsCount());
@@ -342,7 +350,7 @@ WorldPacket WorldSession::BuildLfgUpdate(LfgUpdateData const& updateData, bool i
             }
             else
             {
-                queued = false;
+                queued = true;
             }
             break;
         case LFG_UPDATETYPE_ADDED_TO_QUEUE:                // Rolecheck Success
@@ -407,10 +415,18 @@ WorldPacket WorldSession::BuildLfgRoleCheckUpdate(LFGQueueData const& queueData)
 
     data << uint32(queueData.m_roleCheckState);               // Check result
     data << uint8(queueData.m_roleCheckState == LFG_ROLECHECK_INITIALITING);
-    data << uint8(queueData.m_dungeons.size());               // Number of dungeons
-    if (!queueData.m_dungeons.empty())
-        for (auto itr = queueData.m_dungeons.begin(); itr != queueData.m_dungeons.end(); ++itr)
-            data << uint32(sLFGMgr.GetLFGDungeonEntry(*itr)); // Dungeon
+    if (queueData.m_randomDungeonId)
+    {
+        data << uint8(1);
+        data << uint32(sLFGMgr.GetLFGDungeonEntry(queueData.m_randomDungeonId));
+    }
+    else
+    {
+        data << uint8(queueData.m_dungeons.size());               // Number of dungeons
+        if (!queueData.m_dungeons.empty())
+            for (auto itr = queueData.m_dungeons.begin(); itr != queueData.m_dungeons.end(); ++itr)
+                data << uint32(sLFGMgr.GetLFGDungeonEntry(*itr)); // Dungeon
+    }
 
     data << uint8(queueData.m_playerInfoPerGuid.size());      // Players in group
     if (!queueData.m_playerInfoPerGuid.empty())
@@ -425,6 +441,84 @@ WorldPacket WorldSession::BuildLfgRoleCheckUpdate(LFGQueueData const& queueData)
         }
     }
     return data;
+}
+
+WorldPacket WorldSession::BuildLfgUpdateProposal(LfgProposal const& proposal, uint32 randomDungeonId, ObjectGuid guid)
+{
+    ObjectGuid gguid = proposal.players.find(guid)->second.group;
+    bool silent = !proposal.isNew && gguid == proposal.group;
+    uint32 dungeonEntry = proposal.dungeonId;
+
+    // show random dungeon if player selected random dungeon and it's not lfg group
+    if (!silent)
+        dungeonEntry = randomDungeonId;
+
+    dungeonEntry = sLFGMgr.GetLFGDungeonEntry(dungeonEntry);
+
+    WorldPacket data(SMSG_LFG_PROPOSAL_UPDATE, 4 + 1 + 4 + 4 + 1 + 1 + proposal.players.size() * (4 + 1 + 1 + 1 + 1 + 1));
+    data << uint32(dungeonEntry);                          // Dungeon
+    data << uint8(proposal.state);                         // Proposal state
+    data << uint32(proposal.id);                           // Proposal ID
+    data << uint32(proposal.encounters);                   // encounters done
+    data << uint8(silent);                                 // Show proposal window
+    data << uint8(proposal.players.size());                // Group size
+
+    for (LfgProposalPlayerContainer::const_iterator itr = proposal.players.begin(); itr != proposal.players.end(); ++itr)
+    {
+        LfgProposalPlayer const& player = itr->second;
+        data << uint32(player.role);                       // Role
+        data << uint8(itr->first == guid);                 // Self player
+        if (!player.group)                                 // Player not it a group
+        {
+            data << uint8(0);                              // Not in dungeon
+            data << uint8(0);                              // Not same group
+        }
+        else
+        {
+            data << uint8(player.group == proposal.group); // In dungeon (silent)
+            data << uint8(player.group == gguid);          // Same Group than player
+        }
+        data << uint8(player.answer != LFG_ANSWER_PENDING);// Answered
+        data << uint8(player.answer == LFG_ANSWER_AGREE);  // Accepted
+    }
+
+    return data;
+}
+
+void WorldSession::SendLfgPlayerReward(LfgPlayerRewardData const& rewardData)
+{
+    if (!rewardData.rdungeonEntry || !rewardData.sdungeonEntry || !rewardData.quest)
+        return;
+
+    sLog.outDebug("SMSG_LFG_PLAYER_REWARD %s rdungeonEntry: %u, sdungeonEntry: %u, done: %u",
+        GetPlayer()->GetName(), rewardData.rdungeonEntry, rewardData.sdungeonEntry, rewardData.done);
+
+    uint8 itemNum = rewardData.quest->GetRewItemsCount();
+
+    WorldPacket data(SMSG_LFG_PLAYER_REWARD, 4 + 4 + 1 + 4 + 4 + 4 + 4 + 4 + 1 + itemNum * (4 + 4 + 4));
+    data << uint32(rewardData.rdungeonEntry);              // Random Dungeon Finished
+    data << uint32(rewardData.sdungeonEntry);              // Dungeon Finished
+    data << uint8(rewardData.done);
+    data << uint32(1);
+    data << uint32(rewardData.quest->GetRewOrReqMoney());
+    data << uint32(rewardData.quest->GetXPReward(GetPlayer()));
+    data << uint32(0);
+    data << uint32(0);
+    data << uint8(itemNum);
+    if (itemNum)
+    {
+        for (uint8 i = 0; i < QUEST_REWARDS_COUNT; ++i)
+        {
+            if (uint32 itemId = rewardData.quest->RewItemId[i])
+            {
+                ItemPrototype const* item = sObjectMgr.GetItemPrototype(itemId);
+                data << uint32(itemId);
+                data << uint32(item ? item->DisplayInfoID : 0);
+                data << uint32(rewardData.quest->RewItemCount[i]);
+            }
+        }
+    }
+    SendPacket(data);
 }
 
 void WorldSession::SendLfgDisabled()
