@@ -2238,6 +2238,12 @@ Creature* WorldObject::SummonCreature(TempSpawnSettings settings, Map* map, uint
             if (UnitAI* ai = spawnerCreature->AI())
                 ai->JustSummoned(creature);
 
+    // lfm spawner 
+    Unit* cs = creature->GetSpawner();
+    ObjectGuid csog = creature->GetSpawnerGuid();
+    uint32 csoglow = csog.GetCounter();
+    uint64 csograw = csog.GetRawValue();
+
     // Creature Linking, Initial load is handled like respawn
     if (creature->IsLinkingEventTrigger())
         map->GetCreatureLinkingHolder()->DoCreatureLinkingEvent(LINKING_EVENT_RESPAWN, creature);

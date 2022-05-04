@@ -501,6 +501,12 @@ class World
         World();
         ~World();
 
+        // lfm ninger 
+        std::unordered_map<uint32, WorldSession*> GetAllSessions()
+        {
+            return m_sessions;
+        }
+
         void CleanupsBeforeStop();
 
         WorldSession* FindSession(uint32 id) const;

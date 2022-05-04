@@ -933,6 +933,44 @@ void Creature::UpdateDamagePhysical(WeaponAttackType attType)
     float weapon_mindamage = GetBaseWeaponDamage(attType, MINDAMAGE);
     float weapon_maxdamage = GetBaseWeaponDamage(attType, MAXDAMAGE);
 
+    // lfm creature damage
+    float lfmMultiplier = 1.0f;
+    if (const CreatureInfo* ci = GetCreatureInfo())
+    {
+        switch (ci->Rank)
+        {
+        case CreatureEliteType::CREATURE_ELITE_NORMAL:
+        {
+            lfmMultiplier = 1.5f;
+            break;
+        }
+        case CreatureEliteType::CREATURE_ELITE_ELITE:
+        {            
+            if (!sNingerManager->IsInstanceEncounter(GetEntry()))
+            {
+                lfmMultiplier = 1.5f;
+            }
+            break;
+        }
+        case CreatureEliteType::CREATURE_ELITE_RARE:
+        {
+            lfmMultiplier = 2.0f;
+            break;
+        }
+        case CreatureEliteType::CREATURE_ELITE_RAREELITE:
+        {
+            lfmMultiplier = 2.5f;
+            break;
+        }
+        default:
+        {
+            break;
+        }
+        }        
+    }
+    weapon_mindamage = weapon_mindamage * lfmMultiplier;
+    weapon_maxdamage = weapon_maxdamage * lfmMultiplier;
+
     float mindamage = ((base_value + weapon_mindamage) * base_pct + total_value) * total_pct;
     float maxdamage = ((base_value + weapon_maxdamage) * base_pct + total_value) * total_pct;
 

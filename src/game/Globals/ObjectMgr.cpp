@@ -746,6 +746,53 @@ void ObjectMgr::LoadCreatureTemplates()
         {
             const_cast<CreatureInfo*>(cInfo)->Faction = 107;
         }
+        else if (cInfo->Entry == 20899)
+        {
+            const_cast<CreatureInfo*>(cInfo)->RegenerateStats = 0;
+            const_cast<CreatureInfo*>(cInfo)->UnitFlags = 0;
+        }
+        else if (cInfo->Entry == 20071)
+        {
+            const_cast<CreatureInfo*>(cInfo)->UnitFlags = 0;
+        }
+        else if (cInfo->Entry == 21409)
+        {
+            if (cInfo->UnitFlags & UnitFlags::UNIT_FLAG_IMMUNE_TO_PLAYER)
+            {
+                const_cast<CreatureInfo*>(cInfo)->UnitFlags = cInfo->UnitFlags ^ UNIT_FLAG_IMMUNE_TO_PLAYER;
+            }
+        }
+        else if (cInfo->Entry == 20854)
+        {
+            if (cInfo->UnitFlags & UnitFlags::UNIT_FLAG_IMMUNE_TO_PLAYER)
+            {
+                const_cast<CreatureInfo*>(cInfo)->UnitFlags = cInfo->UnitFlags ^ UNIT_FLAG_IMMUNE_TO_PLAYER;
+            }
+        }
+        else if (cInfo->Entry == 22912)
+        {
+            const_cast<CreatureInfo*>(cInfo)->MinLevel = 70;
+            const_cast<CreatureInfo*>(cInfo)->MaxLevel = 70;
+        }
+        else if (cInfo->Entry == 32666)
+        {
+            const_cast<CreatureInfo*>(cInfo)->ExtraFlags = cInfo->ExtraFlags | CreatureFlagsExtra::CREATURE_EXTRA_FLAG_NO_MELEE;
+            const_cast<CreatureInfo*>(cInfo)->ExtraFlags = cInfo->ExtraFlags | CreatureFlagsExtra::CREATURE_EXTRA_FLAG_NO_PARRY;
+            const_cast<CreatureInfo*>(cInfo)->ExtraFlags = cInfo->ExtraFlags | CreatureFlagsExtra::CREATURE_EXTRA_FLAG_NO_BLOCK;
+            const_cast<CreatureInfo*>(cInfo)->ExtraFlags = cInfo->ExtraFlags | CreatureFlagsExtra::CREATURE_EXTRA_FLAG_NO_SKILL_GAINS;
+
+            const_cast<CreatureInfo*>(cInfo)->MechanicImmuneMask = 0;
+
+            QueryResult* qr = WorldDatabase.Query("SELECT entry FROM creature_template_addon where entry = 32666");
+            if (!qr)
+            {
+                if (WorldDatabase.Execute("INSERT INTO creature_template_addon (`entry`, `mount`, `bytes1`, `b2_0_sheath`, `b2_1_pvp_state`, `emote`, `moveflags`) VALUES ('32666', '0', '0', '0', '0', '0', '2048')"))
+                {
+                    sLog.outBasic("lfm - creature_template_addon added : 32666");
+                }
+            }
+            delete qr;
+        }
     }
 
     sLog.outString(">> Loaded %u creature definitions", sCreatureStorage.GetRecordCount());
@@ -847,10 +894,19 @@ void ObjectMgr::LoadCreatureAddons(SQLStorage& creatureaddons, char const* entry
 
     // check data correctness and convert 'auras'
     for (uint32 i = 1; i < creatureaddons.GetMaxEntry(); ++i)
-    {
+    {        
         CreatureDataAddon const* addon = creatureaddons.LookupEntry<CreatureDataAddon>(i);
         if (!addon)
             continue;
+
+        // lfm creature_addon 
+        if (addon->guidOrEntry == 21337)
+        {
+            if (addon->bytes1 & 33554432)
+            {
+                const_cast<CreatureDataAddon*>(addon)->bytes1 = addon->bytes1 ^ 33554432;
+            }
+        }
 
         if (addon->mount)
         {
@@ -1616,6 +1672,13 @@ void ObjectMgr::LoadCreatureModelInfo()
         if (!minfo)
             continue;
 
+        // lfm creature model 
+        if (minfo->modelid == 21170)
+        {
+            const_cast<CreatureModelInfo*>(minfo)->bounding_radius = 10;
+            const_cast<CreatureModelInfo*>(minfo)->combat_reach = 10;
+        }
+
         if (!sCreatureDisplayInfoStore.LookupEntry(minfo->modelid))
             sLog.outErrorDb("Table `creature_model_info` has model for nonexistent model id (%u).", minfo->modelid);
 
@@ -2213,6 +2276,11 @@ void ObjectMgr::LoadCreatures()
         {
             data.spawntimesecsmin = 1500;
             data.spawntimesecsmax = 1800;
+        }
+        if (entry == 21315)
+        {
+            data.spawntimesecsmin = 120;
+            data.spawntimesecsmax = 180;
         }
 
         ++count;
@@ -3363,6 +3431,10 @@ void ObjectMgr::LoadItemPrototypes()
                 const_cast<ItemPrototype*>(proto)->Stackable = 10;
             }
         }
+        if (proto->ItemId == 5060)
+        {
+            const_cast<ItemPrototype*>(proto)->TotemCategory = 1;
+        }
     }
 
     // check some dbc referenced items (avoid duplicate reports)
@@ -4179,6 +4251,10 @@ void ObjectMgr::LoadPlayerInfo()
             PlayerClassLevelInfo* pClassLevelInfo = &pClassInfo->levelInfo[current_level - 1];
 
             pClassLevelInfo->basehealth = fields[2].GetUInt16();
+
+            // lfm player base health
+            pClassLevelInfo->basehealth = pClassLevelInfo->basehealth * 150 / 100;
+
             pClassLevelInfo->basemana   = fields[3].GetUInt16();
 
             bar.step();
@@ -4385,6 +4461,17 @@ void ObjectMgr::LoadPlayerInfo()
                 continue;
             }
             // PlayerXPperLevel
+            // 
+            // lfm xp
+            if (current_level >= 70)
+            {
+                current_xp = current_xp * 150 / 100;
+            }
+            else if (current_level >= 60)
+            {
+                current_xp = current_xp * 2;
+            }
+
             mPlayerXPperLevel[current_level] = current_xp;
             bar.step();
             ++count;

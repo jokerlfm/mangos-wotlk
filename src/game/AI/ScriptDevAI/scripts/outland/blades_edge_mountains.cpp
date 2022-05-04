@@ -1127,6 +1127,9 @@ struct npc_vimgol_AI : public ScriptedAI
     uint32 m_uiVolleyTimer;
     uint32 m_uiCastTimer;
 
+    // lfm vimgol 
+    bool growing;
+
     npc_vimgol_AI(Creature* pCreature) : ScriptedAI(pCreature)
     {
         Reset();
@@ -1134,16 +1137,29 @@ struct npc_vimgol_AI : public ScriptedAI
 
     void Reset() override
     {
+        growing = false;
         m_uiEnrage = false;
         m_uiVolleyTimer = 5000;
         m_uiCastTimer = 0;
     }
 
+    // lfm vimgol
+    void JustRespawned() override
+    {
+        if (const BroadcastText* btext = sObjectMgr.GetBroadcastText(20773))
+        {
+            m_creature->MonsterYell(btext->GetText(0).c_str(), Language::LANG_UNIVERSAL);
+        }
+    }
+
     void MovementInform(uint32 /*uiMovementType*/, uint32 /*uiData*/) override
     {
         m_creature->GetMotionMaster()->Clear();
+        // lfm vimgol
+        m_creature->SetImmobilizedState(true);
+        growing = true;
         m_creature->CastSpell(m_creature, SPELL_UNHOLY_GROWTH, TRIGGERED_NONE);
-        m_creature->GetMotionMaster()->MoveChase(m_creature->GetVictim());
+        //m_creature->GetMotionMaster()->MoveChase(m_creature->GetVictim());
     }
 
     void JustDied(Unit* /*pKiller*/) override
@@ -1168,6 +1184,21 @@ struct npc_vimgol_AI : public ScriptedAI
                     m_creature->UpdateAllowedPositionZ(x, y, z);
                     m_creature->GetMotionMaster()->MovePoint(1, x, y, z);
                 }
+            }
+        }
+
+        // lfm vimgol 
+        if (growing)
+        {
+            if (m_creature->IsNonMeleeSpellCasted(false))
+            {
+                return;
+            }
+            else
+            {
+                growing = false;
+                m_creature->SetImmobilizedState(false);
+                m_creature->GetMotionMaster()->MoveChase(m_creature->GetVictim());
             }
         }
 

@@ -122,6 +122,27 @@ void ScriptMgr::LoadScripts(ScriptMapMapName& scripts, const char* tablename)
 
     BarGoLink bar(result->GetRowCount());
 
+    // lfm db scripts 
+    //std::unordered_set<uint32> ethereumPrisonSet;
+    //std::string nameStr = std::string(tablename);
+    //if (nameStr == "dbscripts_on_go_template_use")
+    //{
+    //    ethereumPrisonSet.insert(184418);
+    //    ethereumPrisonSet.insert(184419);
+    //    ethereumPrisonSet.insert(184420);
+    //    ethereumPrisonSet.insert(184421);
+    //    ethereumPrisonSet.insert(184422);
+    //    ethereumPrisonSet.insert(184423);
+    //    ethereumPrisonSet.insert(184424);
+    //    ethereumPrisonSet.insert(184425);
+    //    ethereumPrisonSet.insert(184426);
+    //    ethereumPrisonSet.insert(184427);
+    //    ethereumPrisonSet.insert(184428);
+    //    ethereumPrisonSet.insert(184429);
+    //    ethereumPrisonSet.insert(184430);
+    //    ethereumPrisonSet.insert(184431);
+    //}
+
     do
     {
         bar.step();
@@ -149,6 +170,18 @@ void ScriptMgr::LoadScripts(ScriptMapMapName& scripts, const char* tablename)
         tmp.o                  = fields[17].GetFloat();
         tmp.speed              = fields[18].GetFloat();
         tmp.condition_id       = fields[19].GetUInt32();
+
+        // lfm scripts 
+        //if (nameStr == "dbscripts_on_go_template_use")
+        //{
+        //    if (ethereumPrisonSet.find(tmp.id) != ethereumPrisonSet.end())
+        //    {
+        //        if (tmp.command == 18)
+        //        {
+        //            tmp.delay = 180000;
+        //        }
+        //    }
+        //}
 
         if (tmp.condition_id && !sConditionStorage.LookupEntry<ConditionEntry>(tmp.condition_id))
         {

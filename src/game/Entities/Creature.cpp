@@ -488,6 +488,12 @@ bool Creature::InitEntry(uint32 Entry, CreatureData const* data /*=nullptr*/, Ga
                 m_corpseDelay = sWorld.getConfig(CONFIG_UINT32_CORPSE_DECAY_NORMAL);
                 break;
         }
+
+        // lfm corpse decay 
+        if (data)
+        {
+            m_corpseDelay = data->spawntimesecsmin * 2 / 3;
+        }
     }
 
     if (cinfo->InteractionPauseTimer != -1)

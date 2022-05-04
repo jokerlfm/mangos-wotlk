@@ -114,6 +114,9 @@ bool Group::Create(ObjectGuid guid, const char* name)
     m_masterLooterGuid = guid;
     m_currentLooterGuid = guid;                                             // used for round robin looter
 
+    // lfm free loot 
+    m_lootMethod = LootMethod::FREE_FOR_ALL;
+
     m_dungeonDifficulty = DUNGEON_DIFFICULTY_NORMAL;
     m_raidDifficulty = RAID_DIFFICULTY_10MAN_NORMAL;
     if (!IsBattleGroup())
@@ -1712,4 +1715,26 @@ void Group::RewardGroupAtKill(Unit* pVictim, Player* player_tap)
                 RewardGroupAtKill_helper(player_tap, pVictim, count, PvP, group_rate, sum_level, is_dungeon, not_gray_member_with_max_level, member_with_max_level, xp);
         }
     }
+}
+
+// lfm ninger 
+ObjectGuid Group::GetGuidByTargetIcon(uint32 pmIcon)
+{
+    if (pmIcon >= 0 && pmIcon < TARGET_ICON_COUNT)
+    {
+        return m_targetIcons[pmIcon];
+    }
+    return ObjectGuid();
+}
+
+uint32 Group::GetTargetIconByGuid(ObjectGuid pmOG)
+{
+    for (uint32 i = 0; i < TARGET_ICON_COUNT; ++i)
+    {
+        if (m_targetIcons[i] == pmOG)
+        {
+            return i;
+        }
+    }
+    return -1;
 }

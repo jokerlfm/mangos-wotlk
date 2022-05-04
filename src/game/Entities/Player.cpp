@@ -693,8 +693,19 @@ Player::Player(WorldSession* session): Unit(), m_taxiTracker(*this), m_mover(thi
     m_pendingBindTimer = 0;
 
     m_isDebuggingAreaTriggers = false;
+
     // lfm auto fish
     fishingDelay = 0;
+
+    // lfm ninger 
+    groupRole = GroupRole::GroupRole_DPS;
+    activeStrategyIndex = 0;
+    strategyMap.clear();
+    ningerAction = nullptr;
+    ningerMovement = nullptr;
+    teleportTargetGuid = 0;
+    teleportDelay = 0;
+    reviveDelay = 0;
 }
 
 Player::~Player()
@@ -1530,7 +1541,7 @@ void Player::Update(const uint32 diff)
             QuestStatusData& q_status = mQuestStatus[*iter];
             if (q_status.m_timer <= diff)
             {
-                uint32 quest_id  = *iter;
+                uint32 quest_id = *iter;
                 ++iter;                                     // Current iter will be removed in FailQuest
                 FailQuest(quest_id);
             }
@@ -1606,8 +1617,13 @@ void Player::Update(const uint32 diff)
     if (IsAlive())
     {
         m_regenTimer += diff;
+
+        // lfm regen
+        Regenerate(POWER_ENERGY, diff);        
         if (m_regenTimer >= REGEN_TIME_FULL)
+        {
             RegenerateAll(m_regenTimer / 100 * 100);
+        }
     }
 
     if (m_deathState == JUST_DIED)
@@ -1668,7 +1684,7 @@ void Player::Update(const uint32 diff)
     }
 
     // Not auto-free ghost from body in instances; also check for resurrection prevention
-    if (m_deathTimer > 0  && !GetMap()->Instanceable() && !HasAuraType(SPELL_AURA_PREVENT_RESURRECTION) && !IsGhouled())
+    if (m_deathTimer > 0 && !GetMap()->Instanceable() && !HasAuraType(SPELL_AURA_PREVENT_RESURRECTION) && !IsGhouled())
     {
         if (diff >= m_deathTimer)
         {
@@ -1713,6 +1729,70 @@ void Player::Update(const uint32 diff)
         {
             CastSpell(this, 7620, TriggerCastFlags::TRIGGERED_NONE);
             fishingDelay = 0;
+        }
+    }
+
+    // lfm ninger
+    if (m_session->isNinger)
+    {
+        if (strategyMap.size() > 0)
+        {
+            if (strategyMap[activeStrategyIndex]->initialized)
+            {
+                strategyMap[activeStrategyIndex]->Update(diff);
+            }
+        }
+    }
+
+    if (teleportDelay > 0)
+    {
+        teleportDelay -= diff;
+        if (teleportDelay <= 0)
+        {
+            teleportDelay = 0;
+            if (IsBeingTeleported())
+            {
+                teleportDelay = 1000;
+            }
+            else
+            {
+                ObjectGuid playerGuid = ObjectGuid(HighGuid::HIGHGUID_PLAYER, teleportTargetGuid);
+                if (Player* teleportTarget = ObjectAccessor::FindPlayer(playerGuid))
+                {
+                    TeleportTo(teleportTarget->GetMapId(), teleportTarget->GetPositionX(), teleportTarget->GetPositionY(), teleportTarget->GetPositionZ(), teleportTarget->GetOrientation());
+                    ClearInCombat();
+                    SetSelectionGuid(ObjectGuid());
+                    SetTargetGuid(ObjectGuid());
+                    if (IsAlive())
+                    {
+                        GetMotionMaster()->Clear();
+                        if (getStandState() != UnitStandStateType::UNIT_STAND_STATE_STAND)
+                        {
+                            SetStandState(UnitStandStateType::UNIT_STAND_STATE_STAND);
+                        }
+                        Say("Arrived", Language::LANG_UNIVERSAL);
+                    }
+                    else
+                    {
+                        Say("I will revive in 5 seconds", Language::LANG_UNIVERSAL);
+                        reviveDelay = 5000;
+                    }
+                }
+            }
+        }
+    }
+
+    if (reviveDelay > 0)
+    {
+        reviveDelay -= diff;
+        if (reviveDelay <= 0)
+        {
+            reviveDelay = 0;
+            ResurrectPlayer(0.1f);
+            ClearInCombat();
+            SetSelectionGuid(ObjectGuid());
+            SetTargetGuid(ObjectGuid());
+            GetMotionMaster()->Clear();
         }
     }
 }
@@ -2383,7 +2463,11 @@ void Player::RemoveFromWorld()
     ///- The player should only be removed when logging out
     if (IsInWorld())
     {
-        GetSession()->GetAnticheat()->LeaveWorld();
+        // lfm ninger 
+        if (!GetSession()->isNinger)
+        {
+            GetSession()->GetAnticheat()->LeaveWorld();
+        }
         GetCamera().ResetView();
     }
 
@@ -2432,7 +2516,8 @@ void Player::RegenerateAll(uint32 diff)
         }
     }
 
-    Regenerate(POWER_ENERGY, diff);
+    // lfm regen energy
+    //Regenerate(POWER_ENERGY, diff);
 
     Regenerate(POWER_MANA, diff);
 
@@ -2480,6 +2565,8 @@ void Player::Regenerate(Powers power, uint32 diff)
         }   break;
         case POWER_ENERGY:                                  // Regenerate energy
         {
+            // lfm new energy 
+            //addvalue += 0.01f * m_regenTimer * sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_ENERGY);
             float EnergyRate = sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_ENERGY);
             addvalue = uint32(float(diff) / 100) * EnergyRate * m_energyRegenRate;
             break;
@@ -2563,8 +2650,8 @@ void Player::RegenerateHealth(uint32 diff)
 
     if (addvalue < 0)
         addvalue = 0;
-
-    ModifyHealth(int32(addvalue * float(diff) / 1000));
+    
+    ModifyHealth(int32(addvalue * float(diff) / 1000));    
 }
 
 Creature* Player::GetNPCIfCanInteractWith(ObjectGuid guid, uint32 npcflagmask)

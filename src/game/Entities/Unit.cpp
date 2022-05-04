@@ -8181,7 +8181,41 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellEntry const* spellProto, ui
 
     // Creature damage
     if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
+    {
         DoneTotalMod *= Creature::_GetSpellDamageMod(((Creature*)this)->GetCreatureInfo()->Rank);
+
+        // lfm creature spell damage mod
+        switch (((Creature*)this)->GetCreatureInfo()->Rank)
+        {
+        case CreatureEliteType::CREATURE_ELITE_NORMAL:
+        {
+            DoneTotalMod = DoneTotalMod * 1.5f;
+            break;
+        }
+        case CreatureEliteType::CREATURE_ELITE_ELITE:
+        {            
+            if (!sNingerManager->IsInstanceEncounter(GetEntry()))
+            {
+                DoneTotalMod = DoneTotalMod * 1.5f;
+            }
+            break;
+        }
+        case CreatureEliteType::CREATURE_ELITE_RARE:
+        {
+            DoneTotalMod = DoneTotalMod * 2.0f;
+            break;
+        }
+        case CreatureEliteType::CREATURE_ELITE_RAREELITE:
+        {
+            DoneTotalMod = DoneTotalMod * 2.5f;
+            break;
+        }
+        default:
+        {
+            break;
+        }
+        }
+    }
 
     AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
     for (auto i : mModDamagePercentDone)

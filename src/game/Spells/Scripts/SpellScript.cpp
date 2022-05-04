@@ -94,6 +94,12 @@ void SpellScriptMgr::LoadScripts()
                 continue;
             }
 
+            // lfm spell scripts 
+            if (scriptName == "spell_drink_animation")
+            {
+                scriptName = "spell_drink";
+            }
+
             bool found = false;
             if (SpellScript* script = GetSpellScript(scriptName))
                 SetSpellScript(spellId, script), found = true;

@@ -166,25 +166,28 @@ struct npc_ethereum_prisonerAI : public ScriptedAI
             m_stasisGuid = go->GetObjectGuid();
         m_creature->RemoveAurasDueToSpell(SPELL_C_C_D);
         m_creature->RemoveAurasDueToSpell(SPELL_PURPLE_BANISH_STATE);
-        uint32 newEntry;
+        uint32 newEntry = 0;
         switch (type)
         {
-            case EVENT_PRISON: newEntry = npcPrisonEntry[urand(0, countof(npcPrisonEntry) - 1)]; break;
-            case EVENT_PRISON_ALPHA: newEntry = NPC_THUK; break;
-            case EVENT_PRISON_GROUP: newEntry = npcStasisEntry[urand(0, countof(npcStasisEntry) - 1)]; break;
+        case EVENT_PRISON: newEntry = npcPrisonEntry[urand(0, countof(npcPrisonEntry) - 1)]; break;
+        case EVENT_PRISON_ALPHA: newEntry = NPC_THUK; break;
+        case EVENT_PRISON_GROUP: newEntry = npcStasisEntry[urand(0, countof(npcStasisEntry) - 1)]; break;
         }
-        m_creature->UpdateEntry(newEntry);
-        switch (newEntry)
+        if (newEntry != 0)
         {
+            m_creature->UpdateEntry(newEntry);
+            switch (newEntry)
+            {
             case NPC_FORGOSH:
                 DoCastSpellIfCan(nullptr, SPELL_SHADOWFORM_1, (CAST_AURA_NOT_PRESENT | CAST_TRIGGERED));
                 DoCastSpellIfCan(nullptr, SPELL_SHADOWFORM_2, (CAST_AURA_NOT_PRESENT | CAST_TRIGGERED));
                 break;
+            }
+            if (m_creature->IsEnemy(player))
+                ResetTimer(PRISONER_ATTACK, 1000);
+            else
+                ResetTimer(PRISONER_TALK, 3500);
         }
-        if (m_creature->IsEnemy(player))
-            ResetTimer(PRISONER_ATTACK, 1000);
-        else
-            ResetTimer(PRISONER_TALK, 3500);
     }
 
     int32 GetTextId()
@@ -232,7 +235,9 @@ bool GOUse_go_ethereum_prison(Player* player, GameObject* go)
         ai->StartEvent(player, go, EVENT_PRISON);
     }
 
-    return false;
+    // lfm prison
+    //return false;
+    return true;
 }
 
 /*######

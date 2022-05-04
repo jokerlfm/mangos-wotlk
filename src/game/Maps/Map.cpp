@@ -2180,7 +2180,7 @@ Player* Map::GetPlayer(ObjectGuid guid)
  * @param guid must be creature or vehicle guid (HIGHGUID_UNIT HIGHGUID_VEHICLE)
  */
 Creature* Map::GetCreature(ObjectGuid guid)
-{
+{    
     return m_objectsStore.find<Creature>(guid, (Creature*)nullptr);
 }
 
