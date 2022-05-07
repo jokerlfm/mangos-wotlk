@@ -2363,8 +2363,11 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                     }
                     if (go)
                     {
-                        go->SetRespawnTime(1);
-                        go->SetLootState(GO_JUST_DEACTIVATED);
+                        // lfm skygurad bomb                        
+                        //go->SetRespawnTime(1);
+                        //go->SetLootState(GO_JUST_DEACTIVATED);                  
+                        go->SetRespawnTime(60000);
+                        go->ForcedDespawn(500);
                     }
                     static_cast<Creature*>(unitTarget)->ForcedDespawn();
                     return;

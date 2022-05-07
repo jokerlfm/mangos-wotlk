@@ -2029,6 +2029,21 @@ void ObjectMgr::LoadCreatureSpawnEntry()
 void ObjectMgr::LoadCreatures()
 {
     uint32 count = 0;
+
+    // lfm creatures
+    if (!WorldDatabase.Query("SELECT * FROM creature where id = 23040;"))
+    {
+        WorldDatabase.Execute("INSERT INTO `creature` (`id`, `map`, `spawnMask`, `phaseMask`, `modelid`, `equipment_id`, `position_x`, `position_y`, `position_z`, `orientation`, `spawntimesecsmin`, `spawntimesecsmax`, `spawndist`, `currentwaypoint`, `curhealth`, `curmana`, `DeathState`, `MovementType`) VALUES ('23040', '530', '1', '1', '0', '0', '3257.15', '4653.61', '214.627', '0.221839', '25', '25', '0', '0', '0', '0', '0', '0');");
+        WorldDatabase.Execute("INSERT INTO `creature` (`id`, `map`, `spawnMask`, `phaseMask`, `modelid`, `equipment_id`, `position_x`, `position_y`, `position_z`, `orientation`, `spawntimesecsmin`, `spawntimesecsmax`, `spawndist`, `currentwaypoint`, `curhealth`, `curmana`, `DeathState`, `MovementType`) VALUES ('23040', '530', '1', '1', '0', '0', '3279.22', '4664.14', '214.147', '0.410334', '25', '25', '0', '0', '0', '0', '0', '0');");
+        WorldDatabase.Execute("INSERT INTO `creature` (`id`, `map`, `spawnMask`, `phaseMask`, `modelid`, `equipment_id`, `position_x`, `position_y`, `position_z`, `orientation`, `spawntimesecsmin`, `spawntimesecsmax`, `spawndist`, `currentwaypoint`, `curhealth`, `curmana`, `DeathState`, `MovementType`) VALUES ('23040', '530', '1', '1', '0', '0', '3304.2', '4644.04', '214.601', '5.51856', '25', '25', '0', '0', '0', '0', '0', '0');");
+        WorldDatabase.Execute("INSERT INTO `creature` (`id`, `map`, `spawnMask`, `phaseMask`, `modelid`, `equipment_id`, `position_x`, `position_y`, `position_z`, `orientation`, `spawntimesecsmin`, `spawntimesecsmax`, `spawndist`, `currentwaypoint`, `curhealth`, `curmana`, `DeathState`, `MovementType`) VALUES ('23040', '530', '1', '1', '0', '0', '3292.77', '4620.03', '214.64', '3.57863', '25', '25', '0', '0', '0', '0', '0', '0');");
+        WorldDatabase.Execute("INSERT INTO `creature` (`id`, `map`, `spawnMask`, `phaseMask`, `modelid`, `equipment_id`, `position_x`, `position_y`, `position_z`, `orientation`, `spawntimesecsmin`, `spawntimesecsmax`, `spawndist`, `currentwaypoint`, `curhealth`, `curmana`, `DeathState`, `MovementType`) VALUES ('23040', '530', '1', '1', '0', '0', '3262.07', '4625.63', '214.53', '2.68327', '25', '25', '0', '0', '0', '0', '0', '0');");
+    }
+    if (!WorldDatabase.Query("SELECT * FROM creature where id = 23081;"))
+    {
+        WorldDatabase.Execute("INSERT INTO `creature` (`id`, `map`, `spawnMask`, `phaseMask`, `modelid`, `equipment_id`, `position_x`, `position_y`, `position_z`, `orientation`, `spawntimesecsmin`, `spawntimesecsmax`, `spawndist`, `currentwaypoint`, `curhealth`, `curmana`, `DeathState`, `MovementType`) VALUES ('23081', '530', '1', '1', '0', '0', '3279.77', '4640.29', '216.526', '1.04179', '25', '25', '0', '0', '0', '0', '0', '0');");
+    }
+
     //                                                0                       1   2    3
     QueryResult* result = WorldDatabase.Query("SELECT creature.guid, creature.id, map, modelid,"
                           //   4             5           6           7           8            9             10                   11           12
@@ -10146,6 +10161,20 @@ void ObjectMgr::LoadGossipMenuItems(std::set<uint32>& gossipScriptSet)
         gMenuItem.box_text              = fields[12].GetCppString();
         gMenuItem.box_broadcast_text    = fields[13].GetUInt32();
         gMenuItem.conditionId           = fields[14].GetUInt16();
+
+        // lfm gossip menu item 
+        if (gMenuItem.menu_id == 8703)
+        {
+            gMenuItem.conditionId = 882;
+        }
+        else if (gMenuItem.menu_id == 8704)
+        {
+            gMenuItem.conditionId = 883;
+        }
+        else if (gMenuItem.menu_id == 8672&& gMenuItem.action_script_id == 867201)
+        {
+            gMenuItem.conditionId = 433;
+        }
 
         if (gMenuItem.menu_id)                              // == 0 id is special and not have menu_id data
         {
