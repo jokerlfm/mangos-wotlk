@@ -372,7 +372,7 @@ void VehicleInfo::UnBoard(Unit* passenger, bool changeVehicle)
             // SMSG_PET_DISMISS_SOUND (?)
         }
 
-        if (passenger->IsRooted())
+        if (passenger->hasUnitState(UNIT_STAT_ROOT) && !passenger->HasAuraType(SPELL_AURA_MOD_ROOT))
             passenger->SetImmobilizedState(false);
 
         Movement::MoveSplineInit init(*passenger);
@@ -643,6 +643,7 @@ void VehicleInfo::ApplySeatMods(Unit* passenger, uint32 seatFlags)
             }
         }
 
+        pVehicle->SendForcedObjectUpdate(); // TODO: both of these should be one packet
         pPlayer->SendForcedObjectUpdate();
 
         if (seatFlags & SEAT_FLAG_CAN_CAST)
