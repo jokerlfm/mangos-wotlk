@@ -19,6 +19,9 @@ NingerAction_Priest::NingerAction_Priest() :NingerAction_Base()
 	spell_Prayer_of_Healing = 0;
 	spell_Prayer_of_Spirit = 0;
 	spell_Prayer_of_Fortitude = 0;
+	spell_InnerFocus = 0;
+	spell_GuardianSpirit = 0;
+	aura_Surge_of_Light = 0;
 }
 
 void NingerAction_Priest::InitializeCharacter(uint32 pmTargetLevel, uint32 pmSpecialtyTabIndex)
@@ -124,6 +127,7 @@ void NingerAction_Priest::InitializeCharacter(uint32 pmTargetLevel, uint32 pmSpe
 	{
 		spell_PowerWord_Fortitude = 2791;
 		spell_PowerWord_Shield = 6066;
+		aura_Surge_of_Light = 33151;
 	}
 	if (myLevel >= 38)
 	{
@@ -192,6 +196,7 @@ void NingerAction_Priest::InitializeCharacter(uint32 pmTargetLevel, uint32 pmSpe
 		spell_Prayer_of_Spirit = 27681;
 		spell_Prayer_of_Fortitude = 21564;
 		spell_Prayer_of_Healing = 10961;
+		spell_GuardianSpirit = 47788;
 	}
 	if (myLevel >= 61)
 	{
@@ -230,6 +235,10 @@ void NingerAction_Priest::InitializeCharacter(uint32 pmTargetLevel, uint32 pmSpe
 	{
 		spell_GreaterHeal = 48062;
 		spell_FlashHeal = 48070;
+	}
+	if (myLevel >= 74)
+	{
+		spell_InnerFocus = 14751;
 	}
 	if (myLevel >= 75)
 	{
@@ -276,33 +285,61 @@ void NingerAction_Priest::ResetTalent()
 	me->SendTalentsInfoData(false);
 
 	// talent tab : 201 - discipline, 202 - holy, 203 - shadow
-	LearnTalent(1898);
-	LearnTalent(344);
-	LearnTalent(352);
-	LearnTalent(343);
-	LearnTalent(347);
-	LearnTalent(348);
-	LearnTalent(341);
-	LearnTalent(351);
-	LearnTalent(1201);
-	LearnTalent(1771);
-	LearnTalent(1772);
-	LearnTalent(1773);
-	LearnTalent(322);
-	LearnTalent(1896);
-	LearnTalent(2235);
-	LearnTalent(1901);
-	LearnTalent(1895, 2);
-	LearnTalent(1774);
-	LearnTalent(1202);
-	LearnTalent(1897);
-	LearnTalent(1895, 3);
 
+	// discipline
+	//LearnTalent(1898);
+	//LearnTalent(344);
+	//LearnTalent(352);
+	//LearnTalent(343);
+	//LearnTalent(347);
+	//LearnTalent(348);
+	//LearnTalent(341);
+	//LearnTalent(351);
+	//LearnTalent(1201);
+	//LearnTalent(1771);
+	//LearnTalent(1772);
+	//LearnTalent(1773);
+	//LearnTalent(322);
+	//LearnTalent(1896);
+	//LearnTalent(2235);
+	//LearnTalent(1901);
+	//LearnTalent(1895, 2);
+	//LearnTalent(1774);
+	//LearnTalent(1202);
+	//LearnTalent(1897);
+	//LearnTalent(1895, 3);
+
+	//LearnTalent(406);
+	//LearnTalent(401);
+	//LearnTalent(1181);
+
+	//LearnTalent(1894);
+
+	// holy
 	LearnTalent(406);
 	LearnTalent(401);
 	LearnTalent(1181);
+	LearnTalent(442);
+	LearnTalent(361);
+	LearnTalent(408);
+	LearnTalent(1561);
+	LearnTalent(402);
+	LearnTalent(1766);
+	LearnTalent(404);
+	LearnTalent(1768);
+	LearnTalent(1765);
+	LearnTalent(1767);
+	LearnTalent(1902);
+	LearnTalent(1903);
+	LearnTalent(1911);
+	LearnTalent(1904);
 
-	LearnTalent(1894);
+	LearnTalent(1898);
+	LearnTalent(352);
+	LearnTalent(344);
+	LearnTalent(347);
+	LearnTalent(348);
+	LearnTalent(343);
 
 	me->SendTalentsInfoData(false);
 
@@ -506,6 +543,31 @@ bool NingerAction_Priest::Heal(Unit* pmTarget)
 	{
 		return false;
 	}
+	if (me->GetPowerPercent() < 30.0f)
+	{
+		ManaPotion();
+	}
+	switch (specialty)
+	{
+	case 0:
+	{
+		return Heal_Discipline(pmTarget);
+	}
+	case 1:
+	{
+		return Heal_Holy(pmTarget);
+	}
+	default:
+	{
+		break;
+	}
+	}
+
+	return false;
+}
+
+bool NingerAction_Priest::Heal_Discipline(Unit* pmTarget)
+{
 	float targetHealthPct = pmTarget->GetHealthPercent();
 	if (targetHealthPct < 30.0f)
 	{
@@ -582,6 +644,98 @@ bool NingerAction_Priest::Heal(Unit* pmTarget)
 			if (CastSpell(pmTarget, spell_Renew, true, true))
 			{
 				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+bool NingerAction_Priest::Heal_Holy(Unit* pmTarget)
+{
+	float targetHealthPct = pmTarget->GetHealthPercent();
+	if (targetHealthPct < 90.0f)
+	{
+		if (aura_Surge_of_Light > 0)
+		{
+			if (me->HasAura(aura_Surge_of_Light))
+			{
+				if (CastSpell(pmTarget, spell_FlashHeal))
+				{
+					return true;
+				}
+			}
+		}
+		if (targetHealthPct < 30.0f)
+		{
+			if (spell_PowerWord_Shield > 0)
+			{
+				if (!pmTarget->HasAura(spell_Weakened_Soul))
+				{
+					if (CastSpell(pmTarget, spell_PowerWord_Shield))
+					{
+						return true;
+					}
+				}
+			}
+			if (spell_GuardianSpirit > 0)
+			{
+				if (CastSpell(pmTarget, spell_GuardianSpirit))
+				{
+					return true;
+				}
+			}
+			if (spell_FlashHeal > 0)
+			{
+				if (CastSpell(pmTarget, spell_FlashHeal))
+				{
+					return true;
+				}
+			}
+		}
+		if (spell_Renew > 0)
+		{
+			if (CastSpell(pmTarget, spell_Renew, true, true))
+			{
+				return true;
+			}
+		}
+		if (targetHealthPct < 70.0f)
+		{
+			if (spell_PowerWord_Shield > 0)
+			{
+				if (!pmTarget->HasAura(spell_Weakened_Soul))
+				{
+					if (CastSpell(pmTarget, spell_PowerWord_Shield))
+					{
+						return true;
+					}
+				}
+			}
+			if (spell_GreaterHeal > 0)
+			{
+				if (spell_InnerFocus > 0)
+				{
+					CastSpell(me, spell_InnerFocus);
+				}
+				if (CastSpell(pmTarget, spell_GreaterHeal))
+				{
+					return true;
+				}
+			}
+			if (spell_Heal > 0)
+			{
+				if (CastSpell(pmTarget, spell_Heal))
+				{
+					return true;
+				}
+			}
+			if (spell_LesserHeal > 0)
+			{
+				if (CastSpell(pmTarget, spell_LesserHeal))
+				{
+					return true;
+				}
 			}
 		}
 	}

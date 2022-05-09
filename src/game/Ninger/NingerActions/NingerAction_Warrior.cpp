@@ -596,7 +596,11 @@ bool NingerAction_Warrior::Tank(Unit* pmTarget, bool pmAOE)
 	if (targetDistance > VISIBILITY_DISTANCE_NORMAL)
 	{
 		return false;
-	}	
+	}
+	if (me->GetHealthPercent() < 30.0f)
+	{
+		HealthPotion();
+	}
 	me->ningerMovement->Tank(pmTarget);
 	me->Attack(pmTarget, true);
 	bool canMelee = me->CanReachWithMeleeAttack(pmTarget);

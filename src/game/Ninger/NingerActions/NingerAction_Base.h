@@ -88,6 +88,8 @@ public:
     void CancelAura(uint32 pmSpellID);
     bool Eat();
     bool Drink();
+    bool HealthPotion();
+    bool ManaPotion();
     bool RandomTeleport();
 
     void ChooseTarget(Unit* pmTarget);

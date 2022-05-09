@@ -184,6 +184,7 @@ void NingerManager::InitializeManager()
 		} while (icQR->NextRow());
 	}
 	delete icQR;
+	instanceEncounterEntrySet.insert(21838);
 	sLog.outBasic("ninger initialized");
 }
 
@@ -450,7 +451,7 @@ void NingerManager::CreateNinger(uint32 pmLevel, bool pmAlliance, uint32 pmGroup
 		else if (pmGroupRole == GroupRole::GroupRole_Healer)
 		{
 			target_class = Classes::CLASS_PRIEST;
-			target_specialty = 0;
+			target_specialty = 1;
 		}
 		else
 		{
@@ -838,6 +839,72 @@ void NingerManager::HandleChatCommand(Player* pmCommander, std::string pmContent
 			HandleChatCommand(pmCommander, pmContent, pmCommander, pmTargetGroup);
 		}
 	}
+	else if (commandName == "apexis")
+	{
+		std::ostringstream replyStream;
+		if (pmTargetPlayer)
+		{
+			if (commandVector.size() > 1)
+			{
+				std::string color = commandVector.at(1);
+				uint32 entry = 0;
+				if (color == "red")
+				{
+					entry = 185794;
+				}
+				else if (color == "yellow")
+				{
+					entry = 185792;
+				}
+				else if (color == "blue")
+				{
+					entry = 185795;
+				}
+				else if (color == "green")
+				{
+					entry = 185793;
+				}
+				if (entry > 0)
+				{
+					if (GameObject* pGo = GetClosestGameObjectWithEntry(pmTargetPlayer, entry, INTERACTION_DISTANCE))
+					{
+						pGo->Use(pmTargetPlayer);
+					}
+					else
+					{
+						replyStream << "No " << entry << " in range " << INTERACTION_DISTANCE;
+					}
+				}
+				else
+				{
+					replyStream << "No color";
+				}
+			}
+			else
+			{
+				replyStream << "No color";
+			}
+			pmTargetPlayer->Say(replyStream.str(), Language::LANG_UNIVERSAL);
+		}
+		else if (pmTargetGroup)
+		{
+			for (GroupReference* groupRef = pmTargetGroup->GetFirstMember(); groupRef != nullptr; groupRef = groupRef->next())
+			{
+				Player* member = groupRef->getSource();
+				if (member)
+				{
+					if (member->GetObjectGuid() != pmCommander->GetObjectGuid())
+					{
+						HandleChatCommand(pmCommander, pmContent, member, pmTargetGroup);
+					}
+				}
+			}
+		}
+		else
+		{
+			HandleChatCommand(pmCommander, pmContent, pmCommander);
+		}
+	}
 	else if (commandName == "nearpoint")
 	{
 		std::ostringstream replyStream;
@@ -881,7 +948,7 @@ void NingerManager::HandleChatCommand(Player* pmCommander, std::string pmContent
 		}
 		else
 		{
-			HandleChatCommand(pmCommander, pmContent, pmCommander, pmTargetGroup);
+			HandleChatCommand(pmCommander, pmContent, pmCommander);
 		}
 	}
 	else if (commandName == "closepoint")
@@ -1912,232 +1979,280 @@ void NingerManager::HandleChatCommand(Player* pmCommander, std::string pmContent
 			std::ostringstream replyStream;
 			if (commandVector.size() > 1)
 			{
-				std::string itemName = commandVector.at(1);
-				std::ostringstream queryStream;
-				queryStream << "SELECT entry FROM item_template name = '" << itemName << "'";
-				QueryResult* itemQR = WorldDatabase.Query(queryStream.str().c_str());
-				if (itemQR)
+				uint32 entry = 0;
+				std::string equipTypeName = commandVector.at(1);
+				if (equipTypeName == "name")
 				{
-					do
+					if (commandVector.size() > 2)
 					{
-						Field* fields = itemQR->Fetch();
-						uint32 entry = fields[0].GetUInt32();
-						if (const ItemPrototype* proto = sObjectMgr.GetItemPrototype(entry))
+						std::string itemName = commandVector.at(2);
+						std::ostringstream queryStream;
+						queryStream << "SELECT entry FROM item_template where name = '" << itemName << "'";
+						QueryResult* itemQR = WorldDatabase.Query(queryStream.str().c_str());
+						if (itemQR)
 						{
-							if (Item* pItem = Item::CreateItem(entry, 1))
+							do
 							{
-								uint32 equipSlot = 0;
-								switch (proto->InventoryType)
+								Field* fields = itemQR->Fetch();
+								entry = fields[0].GetUInt32();
+								break;
+							} while (itemQR->NextRow());
+						}
+						delete itemQR;
+					}
+					else
+					{
+						replyStream << "Missing name";
+					}
+				}
+				else if (equipTypeName == "entry")
+				{
+					if (commandVector.size() > 2)
+					{
+						std::string entryStr = commandVector.at(2);
+						entry = std::atoi(entryStr.c_str());
+					}
+					else
+					{
+						replyStream << "Missing entry";
+					}
+				}
+				if (entry > 0)
+				{
+					std::ostringstream queryStream;
+					queryStream << "SELECT entry FROM item_template where entry = " << entry << "";
+					QueryResult* itemQR = WorldDatabase.Query(queryStream.str().c_str());
+					if (itemQR)
+					{
+						do
+						{
+							Field* fields = itemQR->Fetch();
+							uint32 entry = fields[0].GetUInt32();
+							if (const ItemPrototype* proto = sObjectMgr.GetItemPrototype(entry))
+							{
+								if (Item* pItem = Item::CreateItem(entry, 1))
 								{
-								case INVTYPE_HEAD:
-								{
-									equipSlot = EQUIPMENT_SLOT_HEAD;
-									break;
-								}
-								case INVTYPE_NECK:
-								{
-									equipSlot = EQUIPMENT_SLOT_NECK;
-									break;
-								}
-								case INVTYPE_SHOULDERS:
-								{
-									equipSlot = EQUIPMENT_SLOT_SHOULDERS;
-									break;
-								}
-								case INVTYPE_BODY:
-								{
-									equipSlot = EQUIPMENT_SLOT_BODY;
-									break;
-								}
-								case INVTYPE_CHEST:
-								{
-									equipSlot = EQUIPMENT_SLOT_CHEST;
-									break;
-								}
-								case INVTYPE_ROBE:
-								{
-									equipSlot = EQUIPMENT_SLOT_CHEST;
-									break;
-								}
-								case INVTYPE_WAIST:
-								{
-									equipSlot = EQUIPMENT_SLOT_WAIST;
-									break;
-								}
-								case INVTYPE_LEGS:
-								{
-									equipSlot = EQUIPMENT_SLOT_LEGS;
-									break;
-								}
-								case INVTYPE_FEET:
-								{
-									equipSlot = EQUIPMENT_SLOT_FEET;
-									break;
-								}
-								case INVTYPE_WRISTS:
-								{
-									equipSlot = EQUIPMENT_SLOT_WRISTS;
-									break;
-								}
-								case INVTYPE_HANDS:
-								{
-									equipSlot = EQUIPMENT_SLOT_HANDS;
-									break;
-								}
-								case INVTYPE_FINGER:
-								{
-									equipSlot = EQUIPMENT_SLOT_FINGER1;
-									//viable_slots[1] = EQUIPMENT_SLOT_FINGER2;
-									break;
-								}
-								case INVTYPE_TRINKET:
-								{
-									equipSlot = EQUIPMENT_SLOT_TRINKET1;
-									//viable_slots[1] = EQUIPMENT_SLOT_TRINKET2;
-									break;
-								}
-								case INVTYPE_CLOAK:
-								{
-									equipSlot = EQUIPMENT_SLOT_BACK;
-									break;
-								}
-								case INVTYPE_WEAPON:
-								{
-									equipSlot = EQUIPMENT_SLOT_MAINHAND;
-									//if (CanDualWield())
-									//{										
-									//	viable_slots[1] = EQUIPMENT_SLOT_OFFHAND;
-									//}
-									break;
-								}
-								case INVTYPE_SHIELD:
-								{
-									equipSlot = EQUIPMENT_SLOT_OFFHAND;
-									break;
-								}
-								case INVTYPE_RANGED:
-								{
-									equipSlot = EQUIPMENT_SLOT_RANGED;
-									break;
-								}
-								case INVTYPE_2HWEAPON:
-								{
-									equipSlot = EQUIPMENT_SLOT_MAINHAND;
-									//if (CanDualWield() && CanTitanGrip())
-									//{										
-									//	viable_slots[1] = EQUIPMENT_SLOT_OFFHAND;
-									//}
-									break;
-								}
-								case INVTYPE_TABARD:
-								{
-									equipSlot = EQUIPMENT_SLOT_TABARD;
-									break;
-								}
-								case INVTYPE_WEAPONMAINHAND:
-								{
-									equipSlot = EQUIPMENT_SLOT_MAINHAND;
-									break;
-								}
-								case INVTYPE_WEAPONOFFHAND:
-								{
-									equipSlot = EQUIPMENT_SLOT_OFFHAND;
-									break;
-								}
-								case INVTYPE_HOLDABLE:
-								{
-									equipSlot = EQUIPMENT_SLOT_OFFHAND;
-									break;
-								}
-								case INVTYPE_THROWN:
-								{
-									equipSlot = EQUIPMENT_SLOT_RANGED;
-									break;
-								}
-								case INVTYPE_RANGEDRIGHT:
-								{
-									equipSlot = EQUIPMENT_SLOT_RANGED;
-									break;
-								}
-								case INVTYPE_BAG:
-								{
-									equipSlot = INVENTORY_SLOT_BAG_START + 0;
-									//viable_slots[1] = INVENTORY_SLOT_BAG_START + 1;
-									//viable_slots[2] = INVENTORY_SLOT_BAG_START + 2;
-									//viable_slots[3] = INVENTORY_SLOT_BAG_START + 3;
-									break;
-								}
-								case INVTYPE_RELIC:
-								{
-									//pClass = getClass();
-									//if (pClass)
-									//{
-									//	switch (proto->SubClass)
-									//	{
-									//	case ITEM_SUBCLASS_ARMOR_LIBRAM:											
-									//		if (pClass == CLASS_PALADIN)
-									//		{
-									//			equipSlot = EQUIPMENT_SLOT_RANGED;
-									//		}
-									//		break;
-									//	case ITEM_SUBCLASS_ARMOR_IDOL:											
-									//		if (pClass == CLASS_DRUID)
-									//		{
-									//			equipSlot = EQUIPMENT_SLOT_RANGED;
-									//		}
-									//		break;
-									//	case ITEM_SUBCLASS_ARMOR_TOTEM:											
-									//		if (pClass == CLASS_SHAMAN)
-									//		{
-									//			equipSlot = EQUIPMENT_SLOT_RANGED;
-									//		}
-									//		break;
-									//	case ITEM_SUBCLASS_ARMOR_MISC:											
-									//		if (pClass == CLASS_WARLOCK)
-									//		{
-									//			equipSlot = EQUIPMENT_SLOT_RANGED;
-									//		}
-									//		break;
-									//	case ITEM_SUBCLASS_ARMOR_SIGIL:											
-									//		if (pClass == CLASS_DEATH_KNIGHT)
-									//		{
-									//			equipSlot = EQUIPMENT_SLOT_RANGED;
-									//		}
-									//		break;
-									//	default:											
-									//		break;
-									//	}
-									//}
-									break;
-								}
-								default:
-								{
-									break;
-								}
-								}
-								if (Item* currentEquip = pmTargetPlayer->GetItemByPos(INVENTORY_SLOT_BAG_0, equipSlot))
-								{
-									if (const ItemPrototype* checkIT = currentEquip->GetProto())
+									uint32 equipSlot = 0;
+									switch (proto->InventoryType)
 									{
-										pmTargetPlayer->DestroyItem(INVENTORY_SLOT_BAG_0, equipSlot, true);
+									case INVTYPE_HEAD:
+									{
+										equipSlot = EQUIPMENT_SLOT_HEAD;
+										break;
+									}
+									case INVTYPE_NECK:
+									{
+										equipSlot = EQUIPMENT_SLOT_NECK;
+										break;
+									}
+									case INVTYPE_SHOULDERS:
+									{
+										equipSlot = EQUIPMENT_SLOT_SHOULDERS;
+										break;
+									}
+									case INVTYPE_BODY:
+									{
+										equipSlot = EQUIPMENT_SLOT_BODY;
+										break;
+									}
+									case INVTYPE_CHEST:
+									{
+										equipSlot = EQUIPMENT_SLOT_CHEST;
+										break;
+									}
+									case INVTYPE_ROBE:
+									{
+										equipSlot = EQUIPMENT_SLOT_CHEST;
+										break;
+									}
+									case INVTYPE_WAIST:
+									{
+										equipSlot = EQUIPMENT_SLOT_WAIST;
+										break;
+									}
+									case INVTYPE_LEGS:
+									{
+										equipSlot = EQUIPMENT_SLOT_LEGS;
+										break;
+									}
+									case INVTYPE_FEET:
+									{
+										equipSlot = EQUIPMENT_SLOT_FEET;
+										break;
+									}
+									case INVTYPE_WRISTS:
+									{
+										equipSlot = EQUIPMENT_SLOT_WRISTS;
+										break;
+									}
+									case INVTYPE_HANDS:
+									{
+										equipSlot = EQUIPMENT_SLOT_HANDS;
+										break;
+									}
+									case INVTYPE_FINGER:
+									{
+										equipSlot = EQUIPMENT_SLOT_FINGER1;
+										//viable_slots[1] = EQUIPMENT_SLOT_FINGER2;
+										break;
+									}
+									case INVTYPE_TRINKET:
+									{
+										equipSlot = EQUIPMENT_SLOT_TRINKET1;
+										//viable_slots[1] = EQUIPMENT_SLOT_TRINKET2;
+										break;
+									}
+									case INVTYPE_CLOAK:
+									{
+										equipSlot = EQUIPMENT_SLOT_BACK;
+										break;
+									}
+									case INVTYPE_WEAPON:
+									{
+										equipSlot = EQUIPMENT_SLOT_MAINHAND;
+										//if (CanDualWield())
+										//{										
+										//	viable_slots[1] = EQUIPMENT_SLOT_OFFHAND;
+										//}
+										break;
+									}
+									case INVTYPE_SHIELD:
+									{
+										equipSlot = EQUIPMENT_SLOT_OFFHAND;
+										break;
+									}
+									case INVTYPE_RANGED:
+									{
+										equipSlot = EQUIPMENT_SLOT_RANGED;
+										break;
+									}
+									case INVTYPE_2HWEAPON:
+									{
+										equipSlot = EQUIPMENT_SLOT_MAINHAND;
+										//if (CanDualWield() && CanTitanGrip())
+										//{										
+										//	viable_slots[1] = EQUIPMENT_SLOT_OFFHAND;
+										//}
+										break;
+									}
+									case INVTYPE_TABARD:
+									{
+										equipSlot = EQUIPMENT_SLOT_TABARD;
+										break;
+									}
+									case INVTYPE_WEAPONMAINHAND:
+									{
+										equipSlot = EQUIPMENT_SLOT_MAINHAND;
+										break;
+									}
+									case INVTYPE_WEAPONOFFHAND:
+									{
+										equipSlot = EQUIPMENT_SLOT_OFFHAND;
+										break;
+									}
+									case INVTYPE_HOLDABLE:
+									{
+										equipSlot = EQUIPMENT_SLOT_OFFHAND;
+										break;
+									}
+									case INVTYPE_THROWN:
+									{
+										equipSlot = EQUIPMENT_SLOT_RANGED;
+										break;
+									}
+									case INVTYPE_RANGEDRIGHT:
+									{
+										equipSlot = EQUIPMENT_SLOT_RANGED;
+										break;
+									}
+									case INVTYPE_BAG:
+									{
+										equipSlot = INVENTORY_SLOT_BAG_START + 0;
+										//viable_slots[1] = INVENTORY_SLOT_BAG_START + 1;
+										//viable_slots[2] = INVENTORY_SLOT_BAG_START + 2;
+										//viable_slots[3] = INVENTORY_SLOT_BAG_START + 3;
+										break;
+									}
+									case INVTYPE_RELIC:
+									{
+										//pClass = getClass();
+										//if (pClass)
+										//{
+										//	switch (proto->SubClass)
+										//	{
+										//	case ITEM_SUBCLASS_ARMOR_LIBRAM:											
+										//		if (pClass == CLASS_PALADIN)
+										//		{
+										//			equipSlot = EQUIPMENT_SLOT_RANGED;
+										//		}
+										//		break;
+										//	case ITEM_SUBCLASS_ARMOR_IDOL:											
+										//		if (pClass == CLASS_DRUID)
+										//		{
+										//			equipSlot = EQUIPMENT_SLOT_RANGED;
+										//		}
+										//		break;
+										//	case ITEM_SUBCLASS_ARMOR_TOTEM:											
+										//		if (pClass == CLASS_SHAMAN)
+										//		{
+										//			equipSlot = EQUIPMENT_SLOT_RANGED;
+										//		}
+										//		break;
+										//	case ITEM_SUBCLASS_ARMOR_MISC:											
+										//		if (pClass == CLASS_WARLOCK)
+										//		{
+										//			equipSlot = EQUIPMENT_SLOT_RANGED;
+										//		}
+										//		break;
+										//	case ITEM_SUBCLASS_ARMOR_SIGIL:											
+										//		if (pClass == CLASS_DEATH_KNIGHT)
+										//		{
+										//			equipSlot = EQUIPMENT_SLOT_RANGED;
+										//		}
+										//		break;
+										//	default:											
+										//		break;
+										//	}
+										//}
+										break;
+									}
+									default:
+									{
+										break;
+									}
+									}
+									if (Item* currentEquip = pmTargetPlayer->GetItemByPos(INVENTORY_SLOT_BAG_0, equipSlot))
+									{
+										if (const ItemPrototype* checkIT = currentEquip->GetProto())
+										{
+											pmTargetPlayer->DestroyItem(INVENTORY_SLOT_BAG_0, equipSlot, true);
+										}
+									}
+									uint16 dest = 0;
+									if (pmTargetPlayer->CanEquipItem(equipSlot, dest, pItem, false) == InventoryResult::EQUIP_ERR_OK)
+									{
+										pmTargetPlayer->EquipItem(dest, pItem, true);
+										replyStream << "Equiped " << pItem->GetProto()->Name1;
+									}
+									else
+									{
+										replyStream << "Can not equip " << pItem->GetProto()->Name1;
 									}
 								}
-								uint16 dest = 0;
-								if (pmTargetPlayer->CanEquipItem(equipSlot, dest, pItem, false) == InventoryResult::EQUIP_ERR_OK)
-								{
-									pmTargetPlayer->EquipItem(dest, pItem, true);
-									replyStream << "Equiped " << pItem->GetProto()->Name1;
-								}
-								else
-								{
-									replyStream << "Can not equip " << pItem->GetProto()->Name1;
-								}
 							}
-						}
-						break;
-					} while (itemQR->NextRow());
+							break;
+						} while (itemQR->NextRow());
+					}
+					else
+					{
+						replyStream << "Item not found : " << entry;
+					}
+					delete itemQR;
 				}
-				delete itemQR;
+				else
+				{
+					replyStream << "Item entry not found : " << entry;
+				}
 			}
 			else
 			{
@@ -2171,6 +2286,10 @@ void NingerManager::HandleChatCommand(Player* pmCommander, std::string pmContent
 					}
 				}
 			}
+		}
+		else
+		{
+			//HandleChatCommand(pmCommander, pmContent, pmCommander);
 		}
 	}
 	else if (commandName == "rush")

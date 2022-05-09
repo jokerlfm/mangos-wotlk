@@ -1508,6 +1508,16 @@ SpellCastResult Unit::CastSpell(Unit* Victim, SpellEntry const* spellInfo, uint3
         }
     }
 
+    // lfm debug 
+    if (spellInfo->Id == 41036)
+    {
+        bool breakPoint = true;
+    }
+    if (spellInfo->Id == 41035)
+    {
+        bool breakPoint = true;
+    }
+
     Spell* spell = new Spell(this, spellInfo, triggeredFlags, originalCaster, triggeredBy);
 
     SpellCastTargets targets;
@@ -12185,10 +12195,35 @@ void Unit::UpdateModelData()
 {
     if (CreatureModelInfo const* modelInfo = sObjectMgr.GetCreatureModelInfo(GetDisplayId()))
     {
+        // lfm creature size 
         // we expect values in database to be relative to scale = 1.0
-        SetFloatValue(UNIT_FIELD_BOUNDINGRADIUS, GetObjectScale() * modelInfo->bounding_radius);
-
-        SetFloatValue(UNIT_FIELD_COMBATREACH, GetObjectScale() * modelInfo->combat_reach);
+        //SetFloatValue(UNIT_FIELD_BOUNDINGRADIUS, GetObjectScale() * modelInfo->bounding_radius);
+        //SetFloatValue(UNIT_FIELD_COMBATREACH, GetObjectScale() * modelInfo->combat_reach);
+        float br = modelInfo->bounding_radius;
+        float cr = modelInfo->combat_reach;
+        float size = GetCollisionWidth();
+        if (br > size)
+        {
+            size = br;
+        }
+        if (cr > size)
+        {
+            size = cr;
+        }
+        br = size / 2.0f;
+        cr = size;
+        float scale = GetObjectScale();
+        uint32 modelId = GetDisplayId();
+        if (CreatureModelDataEntry const* modelData = sCreatureModelDataStore.LookupEntry(modelId))
+        {
+            if (scale < modelData->Scale)
+            {
+                scale = modelData->Scale;
+            }
+        }
+        // we expect values in database to be relative to scale = 1.0
+        SetFloatValue(UNIT_FIELD_BOUNDINGRADIUS, scale * br);
+        SetFloatValue(UNIT_FIELD_COMBATREACH, scale * cr);
 
         SetBaseWalkSpeed(modelInfo->SpeedWalk);
         SetBaseRunSpeed(modelInfo->SpeedRun, false);
@@ -14098,13 +14133,17 @@ float Unit::GetCollisionWidth() const
     }
 
     //! Dismounting case - use basic default model data
-    CreatureDisplayInfoEntry const* displayInfo = sCreatureDisplayInfoStore.LookupEntry(GetNativeDisplayId());
-    MANGOS_ASSERT(displayInfo);
-    CreatureModelDataEntry const* modelData = sCreatureModelDataStore.LookupEntry(displayInfo->ModelId);
-    MANGOS_ASSERT(modelData);
+    if (CreatureDisplayInfoEntry const* displayInfo = sCreatureDisplayInfoStore.LookupEntry(GetNativeDisplayId()))
+    {
+        MANGOS_ASSERT(displayInfo);
+        CreatureModelDataEntry const* modelData = sCreatureModelDataStore.LookupEntry(displayInfo->ModelId);
+        MANGOS_ASSERT(modelData);
 
-    float const collisionWidth = scaleMod * modelData->CollisionWidth * modelData->Scale * displayInfo->scale;
-    return collisionWidth == 0.0f ? DEFAULT_COLLISION_WIDTH : collisionWidth;
+        float const collisionWidth = scaleMod * modelData->CollisionWidth * modelData->Scale * displayInfo->scale;
+        return collisionWidth == 0.0f ? DEFAULT_COLLISION_WIDTH : collisionWidth;
+    }
+
+    return 0.0f;
 }
 
 Player* Unit::GetNextRandomRaidMember(float radius, AuraType noAuraType)

@@ -22,8 +22,8 @@ public:
     bool DPS(Unit* pmTarget, bool pmAOE, bool pmRush = false);
     bool Buff(Unit* pmTarget);
     bool Petting(bool pmSummon = true, bool pmReset = false);
-    void PetAttack(Unit* pmTarget);
     void PetStop();
+    void PetAttack(Unit* pmTarget);
 
     uint32 aspectType;
 
@@ -37,6 +37,7 @@ private:
     uint32 spell_Volley;
     uint32 spell_SteadyShot;
     uint32 spell_AspectOfTheHawk;
+    uint32 spell_AspectOfTheViper;
     uint32 spell_CallPet;
     uint32 spell_DismissPet;
     uint32 spell_RevivePet;

@@ -4981,9 +4981,33 @@ void Spell::EffectTeleportUnits(SpellEffectIndex eff_idx)   // TODO - Use target
     {
         if (unitTarget->IsPlayer() && unitTarget->IsMoving())
             position.z += 0.5f;
-        unitTarget->NearTeleportTo(position.x, position.y, position.z, orientation, unitTarget == m_caster,
-            m_spellInfo->EffectImplicitTargetA[eff_idx] == TARGET_LOCATION_DATABASE ||
-            m_spellInfo->EffectImplicitTargetB[eff_idx] == TARGET_LOCATION_DATABASE); // TODO: Fill this with m_targets instead and compare against target
+
+        // lfm shadowstep will be a little more back
+        if (m_spellInfo->Id == 36563)
+        {
+            float gap = unitTarget->GetCombatReach() * 2.0f / 3.0f;
+            float ori = position.o;
+            float destX = position.x;
+            float destY = position.y;
+            float destZ = position.z;
+            if (ori < 0.0f)
+            {
+                ori = ori + M_PI * 2;
+            }
+            ori = ori + M_PI;
+            destX = destX + gap * std::cos(ori);
+            destY = destY + gap * std::sin(ori);
+            unitTarget->UpdateGroundPositionZ(destX, destY, destZ);
+            unitTarget->NearTeleportTo(destX, destY, destZ, ori + M_PI, unitTarget == m_caster,
+                m_spellInfo->EffectImplicitTargetA[eff_idx] == TARGET_LOCATION_DATABASE ||
+                m_spellInfo->EffectImplicitTargetB[eff_idx] == TARGET_LOCATION_DATABASE);
+        }
+        else
+        {
+            unitTarget->NearTeleportTo(position.x, position.y, position.z, orientation, unitTarget == m_caster,
+                m_spellInfo->EffectImplicitTargetA[eff_idx] == TARGET_LOCATION_DATABASE ||
+                m_spellInfo->EffectImplicitTargetB[eff_idx] == TARGET_LOCATION_DATABASE); // TODO: Fill this with m_targets instead and compare against target
+        }
     }
     else if (unitTarget->GetTypeId() == TYPEID_PLAYER)
     {

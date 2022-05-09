@@ -468,7 +468,7 @@ enum
     SPELL_SIMON_BUTTON_PRESSED      = 39999,
     SPELL_GOOD_PRESS                = 40063,
     SPELL_BAD_PRESS                 = 41241,            // single player punishment
-    SPELL_SIMON_GROUP_REWARD        = 41952,            // group punishment
+    SPELL_SIMON_GROUP_REWARD        = 41952,            // group reward
 
     // quest rewards
     SPELL_APEXIS_VIBRATIONS         = 40310,            // quest complete spell
@@ -683,9 +683,10 @@ struct npc_simon_game_bunnyAI : public ScriptedAI
     // Cleanup event - called when event fails
     void DoCleanupGame()
     {
-        if (m_bIsLargeEvent)
-            if (Player* player = m_creature->GetMap()->GetPlayer(m_masterPlayerGuid))
-                player->CastSpell(player, SPELL_SIMON_GROUP_REWARD, TRIGGERED_OLD_TRIGGERED);
+        // lfm only summon apexis guard on complete 
+        //if (m_bIsLargeEvent)
+        //    if (Player* player = m_creature->GetMap()->GetPlayer(m_masterPlayerGuid))
+        //        player->CastSpell(player, SPELL_SIMON_GROUP_REWARD, TRIGGERED_OLD_TRIGGERED);
 
         // lock the buttons
         DoCastSpellIfCan(m_creature, SPELL_GAME_END_RED, CAST_TRIGGERED);

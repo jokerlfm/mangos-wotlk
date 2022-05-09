@@ -559,6 +559,10 @@ bool NingerAction_Rogue::DPS(Unit* pmTarget, bool pmAOE, bool pmRush)
 	{
 		return false;
 	}
+	if (me->GetHealthPercent() < 30.0f)
+	{
+		HealthPotion();
+	}
 	me->ningerMovement->Chase(pmTarget);
 	if (targetDistance > FOLLOW_NORMAL_DISTANCE)
 	{

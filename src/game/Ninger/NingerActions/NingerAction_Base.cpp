@@ -1154,6 +1154,136 @@ bool NingerAction_Base::Drink()
 	return false;
 }
 
+bool NingerAction_Base::HealthPotion()
+{
+	if (!me)
+	{
+		return false;
+	}
+	else if (!me->IsAlive())
+	{
+		return false;
+	}
+	else if (!me->IsInCombat())
+	{
+		return false;
+	}
+	uint32 potionEntry = 0;
+	uint32 myLevel = me->GetLevel();
+	if (myLevel >= 70)
+	{
+		potionEntry = 33447;
+	}
+	else if (myLevel >= 55)
+	{
+		potionEntry = 22829;
+	}
+	else if (myLevel >= 45)
+	{
+		potionEntry = 13446;
+	}
+	else if (myLevel >= 35)
+	{
+		potionEntry = 3928;
+	}
+	else if (myLevel >= 21)
+	{
+		potionEntry = 1710;
+	}
+	else if (myLevel >= 12)
+	{
+		potionEntry = 929;
+	}
+	else if (myLevel >= 3)
+	{
+		potionEntry = 858;
+	}
+	else
+	{
+		potionEntry = 118;
+	}
+	if (!me->HasItemCount(potionEntry, 1))
+	{
+		me->StoreNewItemInBestSlots(potionEntry, 20);
+	}
+	Item* pPotion = GetItemInInventory(potionEntry);
+	if (pPotion && !pPotion->IsInTrade())
+	{
+		if (UseItem(pPotion, me))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool NingerAction_Base::ManaPotion()
+{
+	if (!me)
+	{
+		return false;
+	}
+	else if (!me->IsAlive())
+	{
+		return false;
+	}
+	else if (!me->IsInCombat())
+	{
+		return false;
+	}
+	uint32 potionEntry = 0;
+	uint32 myLevel = me->GetLevel();
+	if (myLevel >= 70)
+	{
+		potionEntry = 33448;
+	}
+	else if (myLevel >= 55)
+	{
+		potionEntry = 22832;
+	}
+	else if (myLevel >= 49)
+	{
+		potionEntry = 13444;
+	}
+	else if (myLevel >= 41)
+	{
+		potionEntry = 13443;
+	}
+	else if (myLevel >= 31)
+	{
+		potionEntry = 6149;
+	}
+	else if (myLevel >= 22)
+	{
+		potionEntry = 3827;
+	}
+	else if (myLevel >= 14)
+	{
+		potionEntry = 3385;
+	}
+	else if (myLevel >= 5)
+	{
+		potionEntry = 2455;
+	}
+	if (potionEntry > 0)
+	{
+		if (!me->HasItemCount(potionEntry, 1))
+		{
+			me->StoreNewItemInBestSlots(potionEntry, 20);
+		}
+		Item* pPotion = GetItemInInventory(potionEntry);
+		if (pPotion && !pPotion->IsInTrade())
+		{
+			if (UseItem(pPotion, me))
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
 bool NingerAction_Base::RandomTeleport()
 {
 	int myLevel = me->GetLevel();
