@@ -1,8 +1,6 @@
 #ifndef NINGER_MANAGER_H
 #define NINGER_MANAGER_H
 
-#define enum_to_string(x) #x
-
 #include "NingerEntity.h"
 
 #include <string>
@@ -52,15 +50,13 @@ public:
     void LogoutNingers(bool pmInstant=false);
     void DeleteNingers();
     bool LoginNinger(uint32 pmLevel, uint32 pmCount);
-    void HandleChatCommand(Player* pmCommander, std::string pmContent, Player* pmTargetPlayer = nullptr, Group* pmTargetGroup = nullptr);
-    bool StringEndWith(const std::string& str, const std::string& tail);
-    bool StringStartWith(const std::string& str, const std::string& head);
-    bool IsInstanceEncounter(uint32 pmEntry);
-    std::vector<std::string> SplitString(std::string srcStr, std::string delimStr, bool repeatedCharIgnored);
-    std::string TrimString(std::string srcStr);
-    static NingerManager* instance();    
 
+    bool IsPolymorphed(Unit* pmTarget);
+
+    void HandleChatCommand(Player* pmCommander, std::string pmContent, Player* pmTargetPlayer = nullptr, Group* pmTargetGroup = nullptr);    
     void HandleNingerPacket(const WorldSession* pmSession, WorldPacket pmPacket);
+
+    static NingerManager* instance();
 
 public:
     std::unordered_map<uint32, std::unordered_map<uint32, uint32>> allianceRaces;

@@ -737,63 +737,6 @@ void ObjectMgr::LoadCreatureTemplates()
 			sLog.outErrorDb("Creature (Entry: %u) has invalid visibilityDistanceType (%u) defined in `creature_template`.", cInfo->Entry, AsUnderlyingType(cInfo->visibilityDistanceType));
 			const_cast<CreatureInfo*>(cInfo)->visibilityDistanceType = VisibilityDistanceType::Normal;
 		}
-
-		// lfm creature_templates 
-		if (cInfo->Entry == 706 || cInfo->Entry == 808 || cInfo->Entry == 946)
-		{
-			const_cast<CreatureInfo*>(cInfo)->Faction = 107;
-		}
-		else if (cInfo->Entry == 20899)
-		{
-			const_cast<CreatureInfo*>(cInfo)->RegenerateStats = 0;
-			const_cast<CreatureInfo*>(cInfo)->UnitFlags = 0;
-		}
-		else if (cInfo->Entry == 20071)
-		{
-			const_cast<CreatureInfo*>(cInfo)->UnitFlags = 0;
-		}
-		else if (cInfo->Entry == 21409)
-		{
-			if (cInfo->UnitFlags & UnitFlags::UNIT_FLAG_IMMUNE_TO_PLAYER)
-			{
-				const_cast<CreatureInfo*>(cInfo)->UnitFlags = cInfo->UnitFlags ^ UNIT_FLAG_IMMUNE_TO_PLAYER;
-			}
-		}
-		else if (cInfo->Entry == 20854)
-		{
-			if (cInfo->UnitFlags & UnitFlags::UNIT_FLAG_IMMUNE_TO_PLAYER)
-			{
-				const_cast<CreatureInfo*>(cInfo)->UnitFlags = cInfo->UnitFlags ^ UNIT_FLAG_IMMUNE_TO_PLAYER;
-			}
-		}
-		else if (cInfo->Entry == 22912)
-		{
-			const_cast<CreatureInfo*>(cInfo)->MinLevel = 70;
-			const_cast<CreatureInfo*>(cInfo)->MaxLevel = 70;
-		}
-		else if (cInfo->Entry == 32666)
-		{
-			const_cast<CreatureInfo*>(cInfo)->ExtraFlags = cInfo->ExtraFlags | CreatureFlagsExtra::CREATURE_EXTRA_FLAG_NO_MELEE;
-			const_cast<CreatureInfo*>(cInfo)->ExtraFlags = cInfo->ExtraFlags | CreatureFlagsExtra::CREATURE_EXTRA_FLAG_NO_PARRY;
-			const_cast<CreatureInfo*>(cInfo)->ExtraFlags = cInfo->ExtraFlags | CreatureFlagsExtra::CREATURE_EXTRA_FLAG_NO_BLOCK;
-			const_cast<CreatureInfo*>(cInfo)->ExtraFlags = cInfo->ExtraFlags | CreatureFlagsExtra::CREATURE_EXTRA_FLAG_NO_SKILL_GAINS;
-
-			const_cast<CreatureInfo*>(cInfo)->MechanicImmuneMask = 0;
-
-			QueryResult* qr = WorldDatabase.Query("SELECT entry FROM creature_template_addon where entry = 32666");
-			if (!qr)
-			{
-				if (WorldDatabase.Execute("INSERT INTO creature_template_addon (`entry`, `mount`, `bytes1`, `b2_0_sheath`, `b2_1_pvp_state`, `emote`, `moveflags`) VALUES ('32666', '0', '0', '0', '0', '0', '2048')"))
-				{
-					sLog.outBasic("lfm - creature_template_addon added : 32666");
-				}
-			}
-			delete qr;
-		}
-		else if (cInfo->Entry == 23353 || cInfo->Entry == 23354 || cInfo->Entry == 23355)
-		{
-			const_cast<CreatureInfo*>(cInfo)->Faction = 90;
-		}
 	}
 
 	sLog.outString(">> Loaded %u creature definitions", sCreatureStorage.GetRecordCount());
@@ -899,15 +842,6 @@ void ObjectMgr::LoadCreatureAddons(SQLStorage& creatureaddons, char const* entry
 		CreatureDataAddon const* addon = creatureaddons.LookupEntry<CreatureDataAddon>(i);
 		if (!addon)
 			continue;
-
-		// lfm creature_addon 
-		if (addon->guidOrEntry == 21337)
-		{
-			if (addon->bytes1 & 33554432)
-			{
-				const_cast<CreatureDataAddon*>(addon)->bytes1 = addon->bytes1 ^ 33554432;
-			}
-		}
 
 		if (addon->mount)
 		{
@@ -2022,20 +1956,6 @@ void ObjectMgr::LoadCreatures()
 {
 	uint32 count = 0;
 
-	// lfm creatures
-	if (!WorldDatabase.Query("SELECT * FROM creature where id = 23040;"))
-	{
-		WorldDatabase.Execute("INSERT INTO `creature` (`id`, `map`, `spawnMask`, `phaseMask`, `modelid`, `equipment_id`, `position_x`, `position_y`, `position_z`, `orientation`, `spawntimesecsmin`, `spawntimesecsmax`, `spawndist`, `currentwaypoint`, `curhealth`, `curmana`, `DeathState`, `MovementType`) VALUES ('23040', '530', '1', '1', '0', '0', '3257.15', '4653.61', '214.627', '0.221839', '25', '25', '0', '0', '0', '0', '0', '0');");
-		WorldDatabase.Execute("INSERT INTO `creature` (`id`, `map`, `spawnMask`, `phaseMask`, `modelid`, `equipment_id`, `position_x`, `position_y`, `position_z`, `orientation`, `spawntimesecsmin`, `spawntimesecsmax`, `spawndist`, `currentwaypoint`, `curhealth`, `curmana`, `DeathState`, `MovementType`) VALUES ('23040', '530', '1', '1', '0', '0', '3279.22', '4664.14', '214.147', '0.410334', '25', '25', '0', '0', '0', '0', '0', '0');");
-		WorldDatabase.Execute("INSERT INTO `creature` (`id`, `map`, `spawnMask`, `phaseMask`, `modelid`, `equipment_id`, `position_x`, `position_y`, `position_z`, `orientation`, `spawntimesecsmin`, `spawntimesecsmax`, `spawndist`, `currentwaypoint`, `curhealth`, `curmana`, `DeathState`, `MovementType`) VALUES ('23040', '530', '1', '1', '0', '0', '3304.2', '4644.04', '214.601', '5.51856', '25', '25', '0', '0', '0', '0', '0', '0');");
-		WorldDatabase.Execute("INSERT INTO `creature` (`id`, `map`, `spawnMask`, `phaseMask`, `modelid`, `equipment_id`, `position_x`, `position_y`, `position_z`, `orientation`, `spawntimesecsmin`, `spawntimesecsmax`, `spawndist`, `currentwaypoint`, `curhealth`, `curmana`, `DeathState`, `MovementType`) VALUES ('23040', '530', '1', '1', '0', '0', '3292.77', '4620.03', '214.64', '3.57863', '25', '25', '0', '0', '0', '0', '0', '0');");
-		WorldDatabase.Execute("INSERT INTO `creature` (`id`, `map`, `spawnMask`, `phaseMask`, `modelid`, `equipment_id`, `position_x`, `position_y`, `position_z`, `orientation`, `spawntimesecsmin`, `spawntimesecsmax`, `spawndist`, `currentwaypoint`, `curhealth`, `curmana`, `DeathState`, `MovementType`) VALUES ('23040', '530', '1', '1', '0', '0', '3262.07', '4625.63', '214.53', '2.68327', '25', '25', '0', '0', '0', '0', '0', '0');");
-	}
-	if (!WorldDatabase.Query("SELECT * FROM creature where id = 23081;"))
-	{
-		WorldDatabase.Execute("INSERT INTO `creature` (`id`, `map`, `spawnMask`, `phaseMask`, `modelid`, `equipment_id`, `position_x`, `position_y`, `position_z`, `orientation`, `spawntimesecsmin`, `spawntimesecsmax`, `spawndist`, `currentwaypoint`, `curhealth`, `curmana`, `DeathState`, `MovementType`) VALUES ('23081', '530', '1', '1', '0', '0', '3279.77', '4640.29', '216.526', '1.04179', '25', '25', '0', '0', '0', '0', '0', '0');");
-	}
-
 	//                                                0                       1   2    3
 	QueryResult* result = WorldDatabase.Query("SELECT creature.guid, creature.id, map, modelid,"
 		//   4             5           6           7           8            9             10                   11           12
@@ -2141,15 +2061,6 @@ void ObjectMgr::LoadCreatures()
 		data.EntryPoolId = fields[21].GetInt16();
 		data.spawnTemplate = GetCreatureSpawnTemplate(0);
 		uint32 spawnDataEntry = fields[22].GetUInt32();
-
-		// lfm creatures 
-		if (entry == 1134 || entry == 1135)
-		{
-			if (data.spawndist == 0)
-			{
-				continue;
-			}
-		}
 
 		MapEntry const* mapEntry = sMapStore.LookupEntry(data.mapid);
 		if (!mapEntry)
@@ -2281,18 +2192,6 @@ void ObjectMgr::LoadCreatures()
 		// reset the entry to 0; this will be processed by Creature::GetCreatureConditionalSpawnEntry
 		if (isConditional)
 			data.id = 0;
-
-		// lfm spawn time sec 
-		if (data.spawntimesecsmin > 60 && data.spawntimesecsmin < 1500)
-		{
-			data.spawntimesecsmin = 1500;
-			data.spawntimesecsmax = 1800;
-		}
-		if (entry == 21315)
-		{
-			data.spawntimesecsmin = 120;
-			data.spawntimesecsmax = 180;
-		}
 
 		++count;
 	} while (result->NextRow());
@@ -3430,19 +3329,6 @@ void ObjectMgr::LoadItemPrototypes()
 				}
 			}
 		}
-
-		// lfm item templates 
-		if (proto->Class == ItemClass::ITEM_CLASS_TRADE_GOODS && proto->SubClass == ItemSubclassTradeGoods::ITEM_SUBCLASS_METAL_STONE)
-		{
-			if (proto->Stackable > 10)
-			{
-				const_cast<ItemPrototype*>(proto)->Stackable = 10;
-			}
-		}
-		if (proto->ItemId == 5060)
-		{
-			const_cast<ItemPrototype*>(proto)->TotemCategory = 1;
-		}
 	}
 
 	// check some dbc referenced items (avoid duplicate reports)
@@ -4458,17 +4344,6 @@ void ObjectMgr::LoadPlayerInfo()
 				continue;
 			}
 			// PlayerXPperLevel
-			// 
-			// lfm xp
-			if (current_level >= 70)
-			{
-				current_xp = current_xp * 150 / 100;
-			}
-			else if (current_level >= 60)
-			{
-				current_xp = current_xp * 2;
-			}
-
 			mPlayerXPperLevel[current_level] = current_xp;
 			bar.step();
 			++count;
@@ -8642,12 +8517,6 @@ void ObjectMgr::LoadQuestRelationsHelper(QuestRelationsMap& map, char const* tab
 		uint32 id = fields[0].GetUInt32();
 		uint32 quest = fields[1].GetUInt32();
 
-		// lfm quest relations 
-		if (quest == 25229)
-		{
-			continue;
-		}
-
 		if (mQuestTemplates.find(quest) == mQuestTemplates.end())
 		{
 			sLog.outErrorDb("Table `%s: Quest %u listed for entry %u does not exist.", table, quest, id);
@@ -9590,16 +9459,6 @@ void ObjectMgr::LoadTrainers(char const* tableName, bool isTemplates)
 		uint32 entry = fields[0].GetUInt32();
 		uint32 spell = fields[1].GetUInt32();
 
-		// lfm trainer 
-		if (spell == 37836 || spell == 54257 || spell == 18261)
-		{
-			continue;
-		}
-		if (spell == 54083 || spell == 18249)
-		{
-			continue;
-		}
-
 		SpellEntry const* spellinfo = sSpellTemplate.LookupEntry<SpellEntry>(spell);
 		if (!spellinfo)
 		{
@@ -10097,24 +9956,6 @@ void ObjectMgr::LoadGossipMenuItems(std::set<uint32>& gossipScriptSet)
 		gMenuItem.box_text = fields[12].GetCppString();
 		gMenuItem.box_broadcast_text = fields[13].GetUInt32();
 		gMenuItem.conditionId = fields[14].GetUInt16();
-
-		// lfm gossip menu item 
-		if (gMenuItem.menu_id == 8703)
-		{
-			gMenuItem.conditionId = 882;
-		}
-		else if (gMenuItem.menu_id == 8704)
-		{
-			gMenuItem.conditionId = 883;
-		}
-		else if (gMenuItem.menu_id == 8672 && gMenuItem.action_script_id == 867201)
-		{
-			gMenuItem.conditionId = 433;
-		}
-		else if (gMenuItem.menu_id == 8677 && gMenuItem.action_script_id == 867701)
-		{
-			gMenuItem.conditionId = 433;
-		}
 
 		if (gMenuItem.menu_id)                              // == 0 id is special and not have menu_id data
 		{

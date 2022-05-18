@@ -319,9 +319,11 @@ bool CreatureEventAI::CheckEvent(CreatureEventAIHolder& holder, Unit* actionInvo
                 return false;
             break;
         case EVENT_T_TIMER_OOC:
+        {
             if (m_creature->IsInCombat() || m_creature->GetCombatManager().IsInEvadeMode())
                 return false;
             break;
+        }
         case EVENT_T_TIMER_GENERIC:
             break;
         case EVENT_T_HP:

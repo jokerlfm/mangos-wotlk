@@ -405,7 +405,7 @@ void PoolGroup<T>::SpawnObject(MapPersistentState& mapState, uint32 limit, uint3
         else
             triggerFrom = 0;
     }
-
+    
     // This will try to spawn the rest of pool, not guaranteed
     for (int i = 0; i < count; ++i)
     {
@@ -424,8 +424,13 @@ void PoolGroup<T>::SpawnObject(MapPersistentState& mapState, uint32 limit, uint3
             continue;
         }
 
-        spawns.AddSpawn<T>(obj->guid, poolId);
-        Spawn1Object(mapState, obj, instantly);
+        // lfm spawn checking
+        //spawns.AddSpawn<T>(obj->guid, poolId);
+        //Spawn1Object(mapState, obj, instantly);        
+        if (TrySpawn1Object(mapState, obj, instantly))
+        {
+            spawns.AddSpawn<T>(obj->guid, poolId);
+        }
 
         if (triggerFrom)
         {
@@ -523,6 +528,75 @@ template <>
 void PoolGroup<Pool>::Spawn1Object(MapPersistentState& mapState, PoolObject* obj, bool instantly)
 {
     sPoolMgr.SpawnPool(mapState, obj->guid, instantly);
+}
+
+// lfm spawn checking
+template <>
+bool PoolGroup<Creature>::TrySpawn1Object(MapPersistentState& mapState, PoolObject* obj, bool instantly)
+{
+    Spawn1Object(mapState, obj, instantly);
+    return true;
+}
+
+template <>
+bool PoolGroup<GameObject>::TrySpawn1Object(MapPersistentState& mapState, PoolObject* obj, bool instantly)
+{
+    if (Map* dataMap = mapState.GetMap())
+    {
+        if (GameObjectData const* data = sObjectMgr.GetGOData(obj->guid))
+        {
+            mapState.AddGameobjectToGrid(obj->guid, data);
+            // We use spawn coords to spawn
+            if (dataMap && dataMap->IsLoaded(data->posX, data->posY))
+            {
+                if (GameObject* pGameobject = GameObject::CreateGameObject(data->id))
+                {
+                    if (pGameobject->LoadFromDB(obj->guid, dataMap, obj->guid, 0))
+                    {
+                        // if new spawn replaces a just despawned object, not instantly spawn but set respawn timer
+                        if (!instantly)
+                        {
+                            pGameobject->SetRespawnTime(data->GetRandomRespawnTime());
+                            if (sWorld.getConfig(CONFIG_BOOL_SAVE_RESPAWN_TIME_IMMEDIATELY))
+                            {
+                                pGameobject->SaveRespawnTime();
+                            }
+                        }
+                        return true;
+                    }
+                    else
+                    {
+                        delete pGameobject;
+                    }
+                }
+            }
+            // for not loaded grid just update respawn time (avoid work for instances until implemented support)
+            else if (!instantly)
+            {
+                // for spawned by default object only
+                if (data->spawntimesecsmin >= 0)
+                {
+                    uint32 respawnTime = data->GetRandomRespawnTime();
+                    mapState.SaveGORespawnTime(obj->guid, time(nullptr) + respawnTime);
+                    GameObjectInfo const* goinfo = ObjectMgr::GetGameObjectInfo(data->id);
+                    if (!goinfo || goinfo->ExtraFlags & GAMEOBJECT_EXTRA_FLAG_DYNGUID)
+                    {
+                        dataMap->GetSpawnManager().RespawnGameObject(obj->guid, respawnTime);
+                    }
+                }
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+template <>
+bool PoolGroup<Pool>::TrySpawn1Object(MapPersistentState& mapState, PoolObject* obj, bool instantly)
+{
+    Spawn1Object(mapState, obj, instantly);
+    return true;
 }
 
 // Method that does the respawn job on the specified creature

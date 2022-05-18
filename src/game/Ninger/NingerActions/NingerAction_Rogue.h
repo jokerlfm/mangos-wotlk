@@ -6,13 +6,14 @@
 class NingerAction_Rogue :public NingerAction_Base
 {
 public:    
-    NingerAction_Rogue();
+    NingerAction_Rogue(Player* pmMe);
     void InitializeCharacter(uint32 pmTargetLevel, uint32 pmSpecialtyTabIndex);
     void ResetTalent();
     bool InitializeEquipments(bool pmReset);
     void Prepare();
-    bool DPS(Unit* pmTarget, bool pmAOE, bool pmRush = false);
+    bool DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmForceBack);
     bool Buff(Unit* pmTarget);
+    uint32 Caution();
 
 public:
     uint32 spell_Dismantle;
@@ -35,6 +36,7 @@ public:
     uint32 spell_BladeFlurry;
     uint32 spell_AdrenalineRush;
     uint32 spell_KillingSpree;
+    uint32 spell_Cloak_Of_Shadows;
 
     uint32 item_InstantPoison;
 };

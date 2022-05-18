@@ -115,7 +115,9 @@ struct boss_thespiaAI : public ScriptedAI
                 {
                     if (urand(0, 1))
                         DoScriptText(SAY_CLOUD, m_creature);
-                    m_uiLightningCloudTimer = m_bIsRegularMode ? 30000 : 10000;
+                    // lfm scripts lightning cloud should be 14 seconds
+                    //m_uiLightningCloudTimer = m_bIsRegularMode ? 30000 : 10000;
+                    m_uiLightningCloudTimer = m_bIsRegularMode ? 30000 : 14000;
                 }
             }
         }

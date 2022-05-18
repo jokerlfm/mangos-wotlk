@@ -84,6 +84,9 @@
 #include <algorithm>
 #include <mutex>
 
+// lfm minger 
+#include "MingerManager.h"
+
 // lfm ninger
 #include "NingerConfig.h"
 #include "NingerManager.h"
@@ -958,6 +961,9 @@ void World::SetInitialWorldSettings()
 
     // load SQL dbcs first, other DBCs need them
     sObjectMgr.LoadSQLDBCs();
+
+    // lfm minger 
+    sMingerManager->InitializeManager();
 
     // Load before npc_text, gossip_menu_option, script_texts
     sLog.outString("Loading broadcast_text...");

@@ -417,7 +417,7 @@ void PlayerMenu::SendQuestGiverQuestDetails(Quest const* pQuest, ObjectGuid guid
                 data << uint32(0);
         }
 
-        // lfm max level quest        
+        // lfm max level quest 
         //if (GetMenuSession()->GetPlayer()->GetLevel() >= sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
         //{
         //    data << uint32(pQuest->GetRewMoneyMaxLevel());

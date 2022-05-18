@@ -10,13 +10,13 @@
 class NingerAction_Warrior :public NingerAction_Base
 {
 public:
-	NingerAction_Warrior();
+	NingerAction_Warrior(Player* pmMe);
     void Update(uint32 pmDiff);
     void InitializeCharacter(uint32 pmTargetLevel, uint32 pmSpecialtyTabIndex);
     void ResetTalent();
     bool InitializeEquipments(bool pmReset);
     void Prepare();
-    bool Tank(Unit* pmTarget, bool pmAOE);
+    bool Tank(Unit* pmTarget, bool pmAOE, float pmDistanceMax, float pmDistanceMin, bool pmHolding);
     bool Buff(Unit* pmTarget);
 
     ObjectGuid ogVigilanceTarget;

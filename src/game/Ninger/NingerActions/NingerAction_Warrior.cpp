@@ -1,7 +1,7 @@
 #include "NingerAction_Warrior.h"
 #include "World/World.h"
 
-NingerAction_Warrior::NingerAction_Warrior() :NingerAction_Base()
+NingerAction_Warrior::NingerAction_Warrior(Player* pmMe) :NingerAction_Base(pmMe)
 {
 	ogVigilanceTarget = ObjectGuid();
 
@@ -239,6 +239,7 @@ void NingerAction_Warrior::InitializeCharacter(uint32 pmTargetLevel, uint32 pmSp
 		spell_Rend = 11574;
 		spell_HeroicStrike = 25286;
 		spell_BattleShout = 25289;
+		spell_Shockwave = 46968;
 	}
 	if (myLevel >= 62)
 	{
@@ -268,7 +269,7 @@ void NingerAction_Warrior::InitializeCharacter(uint32 pmTargetLevel, uint32 pmSp
 	}
 	if (myLevel >= 70)
 	{
-		spell_DemoralizingShout = 20203;
+		spell_DemoralizingShout = 25203;
 		spell_ShieldSlam = 30356;
 		spell_Revenge = 30357;
 		spell_Devastate = 30022;
@@ -562,7 +563,7 @@ void NingerAction_Warrior::Prepare()
 	me->Say("Prepared", Language::LANG_UNIVERSAL);
 }
 
-bool NingerAction_Warrior::Tank(Unit* pmTarget, bool pmAOE)
+bool NingerAction_Warrior::Tank(Unit* pmTarget, bool pmAOE, float pmDistanceMax, float pmDistanceMin, bool pmHolding)
 {
 	if (!me)
 	{
@@ -571,6 +572,10 @@ bool NingerAction_Warrior::Tank(Unit* pmTarget, bool pmAOE)
 	else if (!me->IsAlive())
 	{
 		return false;
+	}
+	if (me->IsNonMeleeSpellCasted(false, false, true))
+	{
+		return true;
 	}
 	if (!pmTarget)
 	{
@@ -592,17 +597,17 @@ bool NingerAction_Warrior::Tank(Unit* pmTarget, bool pmAOE)
 		}
 		return false;
 	}
-	float targetDistance = me->GetDistance(pmTarget);
-	if (targetDistance > VISIBILITY_DISTANCE_NORMAL)
+	if (!nm->Tank(pmTarget, pmDistanceMax, pmDistanceMin, pmHolding))
 	{
+		if (me->GetSelectionGuid() == pmTarget->GetObjectGuid())
+		{
+			ClearTarget();
+		}
 		return false;
 	}
-	if (me->GetHealthPercent() < 30.0f)
-	{
-		HealthPotion();
-	}
-	me->ningerMovement->Tank(pmTarget);
+	ChooseTarget(pmTarget);
 	me->Attack(pmTarget, true);
+	float targetDistance = me->GetDistance(pmTarget);
 	bool canMelee = me->CanReachWithMeleeAttack(pmTarget);
 	float myHealthPCT = me->GetHealthPercent();
 	if (targetDistance < RANGE_NORMAL_DISTANCE)
@@ -650,25 +655,32 @@ bool NingerAction_Warrior::Tank(Unit* pmTarget, bool pmAOE)
 				{
 					if (spell_Warbringer > 0)
 					{
-						if (CastSpell(pmTarget, spell_Charge))
+						if (!pmHolding)
 						{
-							return true;
-						}
-						if (CastSpell(pmTarget, spell_intercept))
-						{
-							return true;
-						}
-						if (spell_Intervene > 0)
-						{
-							if (CastSpell(pmTarget, spell_Intervene))
+							if (CastSpell(pmTarget, spell_Charge))
 							{
 								return true;
+							}
+							if (CastSpell(pmTarget, spell_intercept))
+							{
+								return true;
+							}
+							if (spell_Intervene > 0)
+							{
+								if (CastSpell(pmTarget, spell_Intervene))
+								{
+									return true;
+								}
 							}
 						}
 					}
 				}
 				if (canMelee)
 				{
+					if (me->GetHealthPercent() < 30.0f)
+					{
+						HealthPotion();
+					}
 					if (spell_Taunt > 0)
 					{
 						if (CastSpell(pmTarget, spell_Taunt))
@@ -693,29 +705,15 @@ bool NingerAction_Warrior::Tank(Unit* pmTarget, bool pmAOE)
 				}
 			}
 		}
-		if (myRage > 100)
+		if (spell_DemoralizingShout > 0)
 		{
-			if (spell_DemoralizingShout > 0)
+			if (spellDelay_DemoralizingShout < 0)
 			{
-				if (spellDelay_DemoralizingShout < 0)
+				if (targetDistance < FOLLOW_NEAR_DISTANCE)
 				{
-					if (targetDistance < FOLLOW_NEAR_DISTANCE)
+					if (CastSpell(pmTarget, spell_DemoralizingShout, true))
 					{
-						if (CastSpell(pmTarget, spell_DemoralizingShout, true))
-						{
-							spellDelay_DemoralizingShout = DEFAULT_WARRIOR_SPELL_DELAY;
-							return true;
-						}
-					}
-				}
-			}
-			if (spell_BattleShout > 0)
-			{
-				if (spellDelay_BattleShout < 0)
-				{
-					if (CastSpell(me, spell_BattleShout, true))
-					{
-						spellDelay_BattleShout = DEFAULT_WARRIOR_SPELL_DELAY;
+						spellDelay_DemoralizingShout = DEFAULT_WARRIOR_SPELL_DELAY;
 						return true;
 					}
 				}
@@ -724,6 +722,16 @@ bool NingerAction_Warrior::Tank(Unit* pmTarget, bool pmAOE)
 	}
 	if (canMelee)
 	{
+		if (pmAOE)
+		{
+			if (spell_ThunderClap > 0)
+			{
+				if (CastSpell(pmTarget, spell_ThunderClap))
+				{
+					return true;
+				}
+			}
+		}
 		if (pmTarget->IsNonMeleeSpellCasted(false, false, true))
 		{
 			if (spell_ShieldBash > 0)
@@ -748,6 +756,17 @@ bool NingerAction_Warrior::Tank(Unit* pmTarget, bool pmAOE)
 				return true;
 			}
 		}
+		if (spell_BattleShout > 0)
+		{
+			if (spellDelay_BattleShout < 0)
+			{
+				if (CastSpell(nullptr, spell_BattleShout, true))
+				{
+					spellDelay_BattleShout = DEFAULT_WARRIOR_SPELL_DELAY;
+					return true;
+				}
+			}
+		}
 		if (spell_BerserkerRage > 0)
 		{
 			if (CastSpell(pmTarget, spell_BerserkerRage))
@@ -762,18 +781,14 @@ bool NingerAction_Warrior::Tank(Unit* pmTarget, bool pmAOE)
 				return true;
 			}
 		}
-		if (spell_ThunderClap > 0)
+		if (pmAOE)
 		{
-			if (CastSpell(pmTarget, spell_ThunderClap))
+			if (spell_Shockwave > 0)
 			{
-				return true;
-			}
-		}
-		if (spell_Shockwave > 0)
-		{
-			if (CastSpell(pmTarget, spell_Shockwave))
-			{
-				return true;
+				if (CastSpell(me, spell_Shockwave))
+				{
+					return true;
+				}
 			}
 		}
 		if (spell_ShieldSlam > 0)
@@ -878,6 +893,7 @@ bool NingerAction_Warrior::Buff(Unit* pmTarget)
 								if (member->groupRole == GroupRole::GroupRole_Healer)
 								{
 									ogVigilanceTarget = member->GetObjectGuid();
+									break;
 								}
 							}
 						}
@@ -886,10 +902,28 @@ bool NingerAction_Warrior::Buff(Unit* pmTarget)
 			}
 			if (Player* healer = ObjectAccessor::FindPlayer(ogVigilanceTarget))
 			{
-				if (CastSpell(healer, spell_Vigilance, true))
+				if (healer->IsInWorld())
 				{
-					return true;
+					if (healer->IsInGroup(me))
+					{
+						if (CastSpell(healer, spell_Vigilance, true))
+						{
+							return true;
+						}
+					}
+					else
+					{
+						ogVigilanceTarget = ObjectGuid();
+					}
 				}
+				else
+				{
+					ogVigilanceTarget = ObjectGuid();
+				}
+			}
+			else
+			{
+				ogVigilanceTarget = ObjectGuid();
 			}
 		}
 	}

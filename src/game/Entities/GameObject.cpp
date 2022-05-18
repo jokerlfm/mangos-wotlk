@@ -45,6 +45,9 @@
 #include <G3D/Quat.h>
 #include "Entities/Transports.h"
 
+// lfm minger 
+#include "MingerManager.h"
+
 bool QuaternionData::isUnit() const
 {
     return fabs(x * x + y * y + z * z + w * w - 1.0f) < 1e-5f;
@@ -895,6 +898,19 @@ bool GameObject::LoadFromDB(uint32 dbGuid, Map* map, uint32 newGuid, uint32 forc
     float y = data->posY;
     float z = data->posZ;
     float ang = data->orientation;
+
+    // lfm spawn checking 
+    if (sMingerManager->IsHerb(entry))
+    {
+        Position pos;
+        pos.x = x;
+        pos.y = y;
+        pos.z = z;
+        if (!sMingerManager->AddHerb(dbGuid, map->GetId(), pos, VISIBILITY_DISTANCE_NORMAL))
+        {
+            return false;
+        }
+    }
 
     if (transport)
         transport->CalculatePassengerPosition(x, y, z, &ang);
@@ -1793,14 +1809,14 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                     {
                         zone_skill = 25;
                     }
-                    else if (zone_skill < 100)
+                    else if (zone_skill < 50)
                     {
-                        zone_skill = 100;
+                        zone_skill = 50;
                     }
-                    else
-                    {
-                        zone_skill = zone_skill + 50;
-                    }
+                    //else
+                    //{
+                    //    zone_skill = zone_skill + 50;
+                    //}
 
                     int32 skill = player->GetSkillValue(SKILL_FISHING);
                     int32 chance = skill - zone_skill + 5;
@@ -1813,13 +1829,22 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                     }
                     else
                     {
-                        chance = skill - zone_skill + 10;
+                        float maxRootRate = zone_skill * 2;
+                        if (maxRootRate > 100.0f)
+                        {
+                            maxRootRate = 100.0f;
+                        }
+                        chance = (skill + 10 - zone_skill) * 100 / maxRootRate;
                     }
 
                     DEBUG_LOG("Fishing check (skill: %i zone min skill: %i chance %i roll: %i", skill, zone_skill, chance, roll);
 
                     // normal chance
                     bool success = skill >= zone_skill && chance >= roll;
+
+                    // lfm fishing chance 
+                    success = chance >= roll;
+
                     GameObject* fishingHole = nullptr;
 
                     // overwrite fail in case fishhole if allowed (after 3.3.0)
@@ -1858,6 +1883,12 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                             delete m_loot;
                             m_loot = new Loot(player, this, success ? LOOT_FISHING : LOOT_FISHING_FAIL);
                             m_loot->ShowContentTo(player);
+
+                            // lfm auto fishing 
+                            m_loot->AutoStore(player);
+                            m_loot->Release(player);
+                            player->FinishSpell(CURRENT_CHANNELED_SPELL);
+                            player->fishingDelay = urand(500, 1000);                            
                         }
                     }
                     else
@@ -1881,12 +1912,6 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                     break;
                 }
             }
-
-            m_loot->AutoStore(player);
-            m_loot->Release(player);
-            player->FinishSpell(CURRENT_CHANNELED_SPELL);
-            player->fishingDelay = urand(500, 1000);
-            return;
         }
         case GAMEOBJECT_TYPE_SUMMONING_RITUAL:              // 18
         {
@@ -2043,6 +2068,13 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
             delete m_loot;
             m_loot = new Loot(player, this, LOOT_FISHINGHOLE);
             m_loot->ShowContentTo(player);
+
+            // lfm fishing hole 
+            // lfm auto fishing 
+            m_loot->AutoStore(player);
+            m_loot->Release(player);
+            player->FinishSpell(CURRENT_CHANNELED_SPELL);
+            player->fishingDelay = urand(500, 1000);
 
             player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_FISH_IN_GAMEOBJECT, GetGOInfo()->id);
 

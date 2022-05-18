@@ -14,7 +14,7 @@ enum WarlockCurseType :uint32
 class NingerAction_Warlock :public NingerAction_Base
 {
 public:
-    NingerAction_Warlock();
+    NingerAction_Warlock(Player* pmMe);
 
     uint32 curseType;
     int curseDelay;

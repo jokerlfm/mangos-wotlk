@@ -14,12 +14,13 @@ enum HunterAspectType :uint32
 class NingerAction_Hunter :public NingerAction_Base
 {
 public:
-    NingerAction_Hunter();
+    NingerAction_Hunter(Player* me);
     void InitializeCharacter(uint32 pmTargetLevel, uint32 pmSpecialtyTabIndex);
     void ResetTalent();
     bool InitializeEquipments(bool pmReset);
     void Prepare();
-    bool DPS(Unit* pmTarget, bool pmAOE, bool pmRush = false);
+    bool DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmForceBack);
+    bool AOE(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly);
     bool Buff(Unit* pmTarget);
     bool Petting(bool pmSummon = true, bool pmReset = false);
     void PetStop();

@@ -701,8 +701,7 @@ Player::Player(WorldSession* session): Unit(), m_taxiTracker(*this), m_mover(thi
     groupRole = GroupRole::GroupRole_DPS;
     activeStrategyIndex = 0;
     strategyMap.clear();
-    ningerAction = nullptr;
-    ningerMovement = nullptr;
+    ningerAction = nullptr;    
     teleportTargetGuid = 0;
     teleportDelay = 0;
     reviveDelay = 0;
@@ -5853,6 +5852,9 @@ bool Player::UpdateFishingSkill()
 
     uint32 gathering_skill_gain = sWorld.getConfig(CONFIG_UINT32_SKILL_GAIN_GATHERING);
 
+    // lfm fishing skill increase rate will always be 20%
+    chance = 20;
+
     return UpdateSkillPro(SKILL_FISHING, chance * 10, gathering_skill_gain);
 }
 
@@ -7154,7 +7156,9 @@ void Player::RewardReputation(Quest const* pQuest)
         // No diplomacy mod are applied to the final value (flat). Note the formula (finalValue = DBvalue/100)
         if (pQuest->RewRepValue[i])
         {
-            int32 rep = CalculateReputationGain(REPUTATION_SOURCE_QUEST, pQuest->RewRepValue[i] / 100, pQuest->RewMaxRepValue[i], pQuest->RewRepFaction[i], GetQuestLevelForPlayer(pQuest), true);
+            // lfm rep should not be divided by 100 
+            //int32 rep = CalculateReputationGain(REPUTATION_SOURCE_QUEST, pQuest->RewRepValue[i] / 100, pQuest->RewMaxRepValue[i], pQuest->RewRepFaction[i], GetQuestLevelForPlayer(pQuest), true);
+            int32 rep = CalculateReputationGain(REPUTATION_SOURCE_QUEST, pQuest->RewRepValue[i], pQuest->RewMaxRepValue[i], pQuest->RewRepFaction[i], GetQuestLevelForPlayer(pQuest), true);
 
             if (FactionEntry const* factionEntry = sFactionStore.LookupEntry(pQuest->RewRepFaction[i]))
                 GetReputationMgr().ModifyReputation(factionEntry, rep);
@@ -24835,6 +24839,17 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, Difficult
         return AREA_LOCKSTATUS_MISSING_ITEM;
     }
     // Heroic item requirements
+    // lfm ninger enter dungeon
+    if (at->heroicKey > 0)
+    {
+        if (GetSession()->isNinger)
+        {
+            if (!HasItemCount(at->heroicKey, 1))
+            {
+                StoreNewItemInBestSlots(at->heroicKey, 1);
+            }
+        }
+    }
     if (!isRegularTargetMap && at->heroicKey)
     {
         if (!HasItemCount(at->heroicKey, 1) && (!at->heroicKey2 || !HasItemCount(at->heroicKey2, 1)))
@@ -24850,6 +24865,33 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, Difficult
     }
 
     // Quest Requirements
+    // lfm ninger enter dungeon
+    if (at->requiredQuest > 0)
+    {
+        if (GetSession()->isNinger)
+        {
+            if (GetQuestRewardStatus(at->requiredQuest)!= QuestStatus::QUEST_STATUS_COMPLETE)
+            {
+                if (Quest const* qInfo = sObjectMgr.GetQuestTemplate(at->requiredQuest))
+                {
+                    RewardQuest(qInfo, 0, this, false);
+                }
+            }
+        }
+    }
+    if (at->requiredQuestHeroic > 0)
+    {
+        if (GetSession()->isNinger)
+        {
+            if (GetQuestRewardStatus(at->requiredQuestHeroic) != QuestStatus::QUEST_STATUS_COMPLETE)
+            {
+                if (Quest const* qInfo = sObjectMgr.GetQuestTemplate(at->requiredQuestHeroic))
+                {
+                    RewardQuest(qInfo, 0, this, false);
+                }
+            }
+        }
+    }
     if (isRegularTargetMap && at->requiredQuest && !GetQuestRewardStatus(at->requiredQuest))
     {
         miscRequirement = at->requiredQuest;

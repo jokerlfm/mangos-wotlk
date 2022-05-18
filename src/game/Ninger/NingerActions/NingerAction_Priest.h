@@ -6,21 +6,21 @@
 class NingerAction_Priest :public NingerAction_Base
 {
 public:
-	NingerAction_Priest();
+	NingerAction_Priest(Player* pmMe);
 	void InitializeCharacter(uint32 pmTargetLevel, uint32 pmSpecialtyTabIndex);
 	void ResetTalent();
 	bool InitializeEquipments(bool pmReset);
 	void Prepare();
-	bool Heal(Unit* pmTarget);
-	bool GroupHeal(Unit* pmTarget);
-	bool SimpleHeal(Unit* pmTarget);
+	bool Heal(Unit* pmTarget, bool pmInstantOnly);
+	bool GroupHeal(Unit* pmTarget, bool pmInstantOnly);
+	bool SimpleHeal(Unit* pmTarget, bool pmInstantOnly);
 	bool Cure(Unit* pmTarget);
 	bool Buff(Unit* pmTarget);
 	bool Assist(Unit* pmTarget);
 	bool Revive(Player* pmTarget);
 
-	bool Heal_Discipline(Unit* pmTarget);
-	bool Heal_Holy(Unit* pmTarget);
+	bool Heal_Discipline(Unit* pmTarget, bool pmInstantOnly);
+	bool Heal_Holy(Unit* pmTarget, bool pmInstantOnly);
 private:
 	uint32 spell_Renew;
 	uint32 spell_LesserHeal;
@@ -39,6 +39,11 @@ private:
 	uint32 spell_Prayer_of_Spirit;
 	uint32 spell_Prayer_of_Fortitude;
 	uint32 spell_InnerFocus;
+	uint32 spell_PowerInfusion;
+	uint32 spell_PainSuppression;
+	uint32 spell_DesperatePrayer;
+	uint32 spell_HolyNova;
+	uint32 spell_Prayer_Of_Mending;
 	uint32 spell_GuardianSpirit;
 	uint32 aura_Surge_of_Light;
 };

@@ -23,6 +23,9 @@
 #include "Globals/SharedDefines.h"
 #include "Spells/SpellAuras.h"
 
+ // lfm minger 
+#include "MingerManager.h"
+
 /*#######################################
 ########                         ########
 ########   PLAYERS STAT SYSTEM   ########
@@ -935,7 +938,8 @@ void Creature::UpdateDamagePhysical(WeaponAttackType attType)
 
     // lfm creature damage
     float lfmMultiplier = 1.0f;
-    if (const CreatureInfo* ci = GetCreatureInfo())
+    
+    if (CreatureInfo const* ci = GetCreatureInfo())
     {
         switch (ci->Rank)
         {
@@ -945,8 +949,21 @@ void Creature::UpdateDamagePhysical(WeaponAttackType attType)
             break;
         }
         case CreatureEliteType::CREATURE_ELITE_ELITE:
-        {            
-            if (!sNingerManager->IsInstanceEncounter(GetEntry()))
+        {
+            uint32 diffEntry = ci->Entry;
+            const CreatureInfo* ciDiff = ci;
+            for (Difficulty diff = GetMap()->GetDifficulty(); diff > REGULAR_DIFFICULTY; diff = GetPrevDifficulty(diff, GetMap()->IsRaid()))
+            {
+                if (ciDiff->DifficultyEntry[diff - 1])
+                {
+                    if (ciDiff = ObjectMgr::GetCreatureTemplate(ci->DifficultyEntry[diff - 1]))
+                    {
+                        diffEntry = ci->DifficultyEntry[diff - 1];
+                        break;
+                    }
+                }
+            }
+            if (!sMingerManager->IsMingerExceptionEntry(diffEntry))
             {
                 lfmMultiplier = 1.5f;
             }
@@ -966,7 +983,7 @@ void Creature::UpdateDamagePhysical(WeaponAttackType attType)
         {
             break;
         }
-        }        
+        }
     }
     weapon_mindamage = weapon_mindamage * lfmMultiplier;
     weapon_maxdamage = weapon_maxdamage * lfmMultiplier;

@@ -47,7 +47,7 @@
 #include <vector>
 
 // lfm ninger 
-#include "Ninger/NingerStreategies/NingerStrategy_Base.h"
+#include "Ninger/NingerStrategies/NingerStrategy_Base.h"
 #include "Ninger/NingerActions/NingerAction_Base.h"
 class NingerStrategy_Base;
 class NingerAction_Base;
@@ -1083,8 +1083,7 @@ class Player : public Unit
         uint32 groupRole;
         uint32 activeStrategyIndex;
         std::unordered_map<uint32, NingerStrategy_Base*> strategyMap;
-        NingerAction_Base* ningerAction;
-        NingerMovement* ningerMovement;
+        NingerAction_Base* ningerAction;        
         uint32 teleportTargetGuid;
         int teleportDelay;
         int reviveDelay;

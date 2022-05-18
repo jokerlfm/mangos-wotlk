@@ -1,6 +1,6 @@
 #include "NingerAction_Warlock.h"
 
-NingerAction_Warlock::NingerAction_Warlock() :NingerAction_Base()
+NingerAction_Warlock::NingerAction_Warlock(Player* pmMe) :NingerAction_Base(pmMe)
 {
     curseType = WarlockCurseType::WarlockCurseType_Weakness;
     curseDelay = 0;

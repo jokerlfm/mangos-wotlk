@@ -84,7 +84,11 @@ struct boss_shirrakAI : public CombatAI
         {
             case SHIRRAK_CARNIVOROUS_BITE:
                 if (DoCastSpellIfCan(m_creature, m_bIsRegularMode ? SPELL_CARNIVOROUS_BITE : SPELL_CARNIVOROUS_BITE_H) == CAST_OK)
-                    ResetCombatAction(action, urand(4000, 10000));
+                {
+                    // lfm carnivorous bite 10 seconds again.
+                    //ResetCombatAction(action, urand(4000, 10000));
+                    ResetCombatAction(action, 10000);
+                }                    
                 break;
             case SHIRRAK_FOCUS_FIRE:
             {

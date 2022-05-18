@@ -1736,7 +1736,7 @@ ObjectGuid Group::GetGuidByTargetIcon(uint32 pmIcon)
     return ObjectGuid();
 }
 
-uint32 Group::GetTargetIconByGuid(ObjectGuid pmOG)
+int Group::GetTargetIconByGuid(ObjectGuid pmOG)
 {
     for (uint32 i = 0; i < TARGET_ICON_COUNT; ++i)
     {

@@ -120,12 +120,6 @@ void PointMovementGenerator::MovementInform(Unit& unit)
     {
         if (unit.GetSpawnerGuid().IsAnyTypeCreature())
         {
-            // lfm spawner 
-            //if (Creature* pSummoner = unit.GetMap()->GetCreature(unit.GetSpawnerGuid()))
-            //{
-            //    if (UnitAI* ai = pSummoner->AI())
-            //        ai->SummonedMovementInform(static_cast<Creature*>(&unit), type, m_id);
-            //}
             CreatureList cList;
             MaNGOS::AnyUnitInObjectRangeCheck u_check(&unit, VISIBILITY_DISTANCE_GIGANTIC);
             MaNGOS::CreatureListSearcher<MaNGOS::AnyUnitInObjectRangeCheck> searcher(cList, u_check);

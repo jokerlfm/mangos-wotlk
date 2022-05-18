@@ -31,7 +31,7 @@ enum PaladinSealType :uint32
 class NingerAction_Paladin :public NingerAction_Base
 {
 public:
-    NingerAction_Paladin();
+    NingerAction_Paladin(Player* pmMe);
 
     uint32 auraType;
     uint32 blessingType;

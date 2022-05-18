@@ -28,15 +28,15 @@
 #endif
 
 #ifndef FOLLOW_MIN_DISTANCE
-# define FOLLOW_MIN_DISTANCE 2.0f
+# define FOLLOW_MIN_DISTANCE 0.5f
 #endif
 
 #ifndef FOLLOW_NEAR_DISTANCE
-# define FOLLOW_NEAR_DISTANCE 10.0f
+# define FOLLOW_NEAR_DISTANCE 8.0f
 #endif
 
 #ifndef FOLLOW_NORMAL_DISTANCE
-# define FOLLOW_NORMAL_DISTANCE 25.0f
+# define FOLLOW_NORMAL_DISTANCE 20.0f
 #endif
 
 #ifndef FOLLOW_FAR_DISTANCE
@@ -48,7 +48,7 @@
 #endif
 
 #ifndef MELEE_MIN_DISTANCE
-# define MELEE_MIN_DISTANCE 1.0f
+# define MELEE_MIN_DISTANCE 0.5f
 #endif
 
 #ifndef MELEE_MAX_DISTANCE
@@ -57,6 +57,10 @@
 
 #ifndef RANGE_MIN_DISTANCE
 # define RANGE_MIN_DISTANCE 8.0f
+#endif
+
+#ifndef RANGE_NEAR_DISTANCE
+# define RANGE_NEAR_DISTANCE 10.0f
 #endif
 
 #ifndef RANGE_NORMAL_DISTANCE
@@ -68,7 +72,11 @@
 #endif
 
 #ifndef RANGE_MAX_DISTANCE
-# define RANGE_MAX_DISTANCE 35.0f
+# define RANGE_MAX_DISTANCE 38.0f
+#endif
+
+#ifndef CAUTION_DISTANCE
+# define CAUTION_DISTANCE 15.0f
 #endif
 
 #include "Common.h"
@@ -116,7 +124,7 @@ public:
 	uint32 Enable;
 	uint32 Reset;
 	uint32 ReviveDelay;
-	uint32 DPSDelay;
+	uint32 DPSDelay;	
 	uint32 TeleportDelay;
 	uint32 CorpseRunDelay;
 	uint32 ManagerCheckDelay;

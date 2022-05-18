@@ -14,7 +14,7 @@ enum ShamanEarthTotemType :uint32
 class NingerAction_Shaman :public NingerAction_Base
 {
 public:
-    NingerAction_Shaman();
+    NingerAction_Shaman(Player* pmMe);
     void Prepare();
 
     uint32 earthTotemType;

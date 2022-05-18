@@ -1,17 +1,17 @@
 #include "NingerEntity.h"
 #include "NingerManager.h"
 #include "NingerConfig.h"
-#include "NingerStrategy_Base.h"
-#include "NingerAction_Base.h"
-#include "NingerAction_Druid.h"
-#include "NingerAction_Hunter.h"
-#include "NingerAction_Mage.h"
-#include "NingerAction_Paladin.h"
-#include "NingerAction_Priest.h"
-#include "NingerAction_Rogue.h"
-#include "NingerAction_Shaman.h"
-#include "NingerAction_Warlock.h"
-#include "NingerAction_Warrior.h"
+#include "NingerStrategies/NingerStrategy_Base.h"
+#include "NingerActions/NingerAction_Base.h"
+#include "NingerActions/NingerAction_Druid.h"
+#include "NingerActions/NingerAction_Hunter.h"
+#include "NingerActions/NingerAction_Mage.h"
+#include "NingerActions/NingerAction_Paladin.h"
+#include "NingerActions/NingerAction_Priest.h"
+#include "NingerActions/NingerAction_Rogue.h"
+#include "NingerActions/NingerAction_Shaman.h"
+#include "NingerActions/NingerAction_Warlock.h"
+#include "NingerActions/NingerAction_Warrior.h"
 
 #include "Accounts/AccountMgr.h"
 #include "Groups/Group.h"
@@ -311,69 +311,70 @@ void NingerEntity::Update(uint32 pmDiff)
 					me->strategyMap[me->activeStrategyIndex] = new NingerStrategy_Base();
 					me->strategyMap[me->activeStrategyIndex]->me = me;
 					me->strategyMap[me->activeStrategyIndex]->Reset();
-					me->strategyMap[STRATEGY_THE_UNDERBOG] = new NingerStrategy_The_Underbog();
-					me->strategyMap[STRATEGY_THE_UNDERBOG]->me = me;
-					me->strategyMap[STRATEGY_THE_UNDERBOG]->Reset();
+					me->strategyMap[StrategyIndex::StrategyIndex_The_Underbog] = new NingerStrategy_The_Underbog();
+					me->strategyMap[StrategyIndex::StrategyIndex_The_Underbog]->me = me;
+					me->strategyMap[StrategyIndex::StrategyIndex_The_Underbog]->Reset();
+					me->strategyMap[StrategyIndex::StrategyIndex_The_Black_Morass] = new NingerStrategy_The_Black_Morass();
+					me->strategyMap[StrategyIndex::StrategyIndex_The_Black_Morass]->me = me;
+					me->strategyMap[StrategyIndex::StrategyIndex_The_Black_Morass]->Reset();
 					switch (target_class)
 					{
 					case Classes::CLASS_DEATH_KNIGHT:
 					{
-						me->ningerAction = new NingerAction_Base();
+						me->ningerAction = new NingerAction_Base(me);
 						break;
 					}
 					case Classes::CLASS_DRUID:
 					{
-						me->ningerAction = new NingerAction_Druid();
+						me->ningerAction = new NingerAction_Druid(me);
 						break;
 					}
 					case Classes::CLASS_HUNTER:
 					{
-						me->ningerAction = new NingerAction_Hunter();
+						me->ningerAction = new NingerAction_Hunter(me);
 						break;
 					}
 					case Classes::CLASS_MAGE:
 					{
-						me->ningerAction = new NingerAction_Mage();
+						me->ningerAction = new NingerAction_Mage(me);
 						break;
 					}
 					case Classes::CLASS_PALADIN:
 					{
-						me->ningerAction = new NingerAction_Paladin();
+						me->ningerAction = new NingerAction_Paladin(me);
 						break;
 					}
 					case Classes::CLASS_PRIEST:
 					{
-						me->ningerAction = new NingerAction_Priest();
+						me->ningerAction = new NingerAction_Priest(me);
 						break;
 					}
 					case Classes::CLASS_ROGUE:
 					{
-						me->ningerAction = new NingerAction_Rogue();
+						me->ningerAction = new NingerAction_Rogue(me);
 						break;
 					}
 					case Classes::CLASS_SHAMAN:
 					{
-						me->ningerAction = new NingerAction_Shaman();
+						me->ningerAction = new NingerAction_Shaman(me);
 						break;
 					}
 					case Classes::CLASS_WARLOCK:
 					{
-						me->ningerAction = new NingerAction_Warlock();
+						me->ningerAction = new NingerAction_Warlock(me);
 						break;
 					}
 					case Classes::CLASS_WARRIOR:
 					{
-						me->ningerAction = new NingerAction_Warrior();
+						me->ningerAction = new NingerAction_Warrior(me);
 						break;
 					}
 					default:
 					{
-						me->ningerAction = new NingerAction_Base();
+						me->ningerAction = new NingerAction_Base(me);
 						break;
 					}
 					}
-					me->ningerAction->me = me;
-					me->ningerMovement = new NingerMovement(me);
 					me->ningerAction->InitializeCharacter(target_level, target_specialty);
 					offlineDelay = urand(2 * HOUR * IN_MILLISECONDS, 4 * HOUR * IN_MILLISECONDS);
 					std::ostringstream replyStream;

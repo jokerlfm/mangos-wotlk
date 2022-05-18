@@ -4015,7 +4015,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
         {
             // Penance
             if (m_spellInfo->SpellFamilyFlags & uint64(0x0080000000000000))
-            {
+            {                
                 if (!unitTarget)
                     return;
 
@@ -4035,6 +4035,11 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                 // prevent interrupted message for main spell
                 finish(true);
 
+                // lfm force select self when casting penance without a target.
+                if (m_caster->GetSelectionGuid().IsEmpty())
+                {
+                    m_caster->SetSelectionGuid(m_caster->GetObjectGuid());
+                }
                 // replace cast by selected spell, this also make it interruptible including target death case
                 if (m_caster->CanAssistSpell(unitTarget, m_spellInfo))
                     m_caster->CastSpell(unitTarget, heal, TRIGGERED_NONE);

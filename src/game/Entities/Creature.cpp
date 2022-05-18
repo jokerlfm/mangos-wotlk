@@ -49,6 +49,9 @@
 #include "Entities/Transports.h"
 #include "Maps/SpawnManager.h"
 
+// lfm minger 
+#include "MingerManager.h"
+
 // apply implementation of the singletons
 #include "Policies/Singleton.h"
 
@@ -1431,6 +1434,59 @@ void Creature::SelectLevel(uint32 forcedLevel /*= USE_DEFAULT_DATABASE_LEVEL*/)
     health *= _GetHealthMod(rank); // Apply custom config settting
     if (health < 1)
         health = 1;
+
+    //lfm creature health mod 
+
+    // lfm creature damage
+    float lfmMultiplier = 1.0f;
+    switch (cinfo->Rank)
+    {
+    case CreatureEliteType::CREATURE_ELITE_NORMAL:
+    {
+        lfmMultiplier = 1.5f;
+        break;
+    }
+    case CreatureEliteType::CREATURE_ELITE_ELITE:
+    {
+        uint32 diffEntry = cinfo->Entry;
+        const CreatureInfo* ciDiff = cinfo;
+        for (Difficulty diff = GetMap()->GetDifficulty(); diff > REGULAR_DIFFICULTY; diff = GetPrevDifficulty(diff, GetMap()->IsRaid()))
+        {
+            if (ciDiff->DifficultyEntry[diff - 1])
+            {
+                if (ciDiff = ObjectMgr::GetCreatureTemplate(cinfo->DifficultyEntry[diff - 1]))
+                {
+                    diffEntry = cinfo->DifficultyEntry[diff - 1];
+                    break;
+                }
+            }
+        }
+        if (sMingerManager->IsMingerExceptionEntry(diffEntry))
+        {
+            lfmMultiplier = 1.25f;
+        }
+        else
+        {
+            lfmMultiplier = 1.5f;
+        }
+        break;
+    }
+    case CreatureEliteType::CREATURE_ELITE_RARE:
+    {
+        lfmMultiplier = 2.0f;
+        break;
+    }
+    case CreatureEliteType::CREATURE_ELITE_RAREELITE:
+    {
+        lfmMultiplier = 2.5f;
+        break;
+    }
+    default:
+    {
+        break;
+    }
+    }
+    health = health * lfmMultiplier;
 
     //////////////////////////////////////////////////////////////////////////
     // Set values

@@ -536,6 +536,29 @@ Unit* SingleEnemyTargetAura::GetTriggerTarget() const
     return ObjectAccessor::GetUnit(*(m_spellAuraHolder->GetTarget()), m_castersTargetGuid);
 }
 
+// lfm since channel spell can use on allies, so create SingleUnitTargetAura 
+SingleUnitTargetAura::SingleUnitTargetAura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* currentDamage, int32 const* currentBasePoints, SpellAuraHolder* holder, Unit* target,
+    Unit* caster, Item* castItem) : Aura(spellproto, eff, currentDamage, currentBasePoints, holder, target, caster, castItem)
+{
+    if (caster)
+    {
+        m_castersTargetGuid = caster->GetSelectionGuid();
+        if (m_castersTargetGuid.IsEmpty())
+        {
+            m_castersTargetGuid = caster->GetObjectGuid();
+        }
+    }
+}
+
+SingleUnitTargetAura::~SingleUnitTargetAura()
+{
+}
+
+Unit* SingleUnitTargetAura::GetTriggerTarget() const
+{
+    return ObjectAccessor::GetUnit(*(m_spellAuraHolder->GetTarget()), m_castersTargetGuid);
+}
+
 Aura* CreateAura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* currentDamage, int32 const* currentBasePoints, SpellAuraHolder* holder, Unit* target, Unit* caster, Item* castItem)
 {
     Aura* aura = nullptr;
@@ -546,9 +569,17 @@ Aura* CreateAura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const
     {
         uint32 triggeredSpellId = spellproto->EffectTriggerSpell[eff];
         if (SpellEntry const* triggeredSpellInfo = sSpellTemplate.LookupEntry<SpellEntry>(triggeredSpellId))
+        {
             for (unsigned int i : triggeredSpellInfo->EffectImplicitTargetA)
+            {
                 if (i == TARGET_UNIT_CHANNEL_TARGET)
-                    aura = new SingleEnemyTargetAura(spellproto, eff, currentDamage, currentBasePoints, holder, target, caster, castItem);
+                {
+                    // lfm since channel spell can use on allies, so create SingleUnitTargetAura 
+                    //aura = new SingleEnemyTargetAura(spellproto, eff, currentDamage, currentBasePoints, holder, target, caster, castItem);
+                    aura = new SingleUnitTargetAura(spellproto, eff, currentDamage, currentBasePoints, holder, target, caster, castItem);
+                }
+            }
+        }
     }
 
     if (!aura)
@@ -1160,6 +1191,7 @@ void Aura::CastTriggeredSpell(PeriodicTriggerData& data)
         spell->m_currentBasePoints[EFFECT_INDEX_1] = data.basePoints[1];
     if (data.basePoints[2])
         spell->m_currentBasePoints[EFFECT_INDEX_2] = data.basePoints[2];
+
     spell->SpellStart(&targets, this);
 }
 
@@ -8890,529 +8922,530 @@ void Aura::PeriodicTick()
 void Aura::PeriodicDummyTick()
 {
     SpellEntry const* spell = GetSpellProto();
+
     Unit* target = GetTarget();
     switch (spell->SpellFamilyName)
     {
-        case SPELLFAMILY_GENERIC:
+    case SPELLFAMILY_GENERIC:
+    {
+        switch (spell->Id)
         {
-            switch (spell->Id)
+        case 6946:                                  // Curse of the Bleakheart
+        case 41170:
+        {
+            if (roll_chance_i(5))
             {
-                case 6946:                                  // Curse of the Bleakheart
-                case 41170:
-                {
-                    if (roll_chance_i(5))
-                    {
-                        int32 damageValue = target->CalculateSpellEffectValue(target, spell, EFFECT_INDEX_1);
-                        target->CastCustomSpell(nullptr, spell->Id == 6946 ? 6945 : 41356, nullptr, &damageValue, nullptr, TRIGGERED_OLD_TRIGGERED);
-                    }
-                    return;
-                }
-                case 7057:                                  // Haunting Spirits
-                    if (roll_chance_i(33))
-                        target->CastSpell(target, m_modifier.m_amount, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-                    return;
-//              // Panda
-//              case 19230: break;
-                case 21094:                                 // Separation Anxiety (Majordomo Executus)
-                case 23487:                                 // Separation Anxiety (Garr)
-                    if (Unit* caster = GetCaster())
-                    {
-                        float m_radius = GetSpellRadius(sSpellRadiusStore.LookupEntry(spell->EffectRadiusIndex[m_effIndex]));
-                        if (caster->IsAlive() && !caster->IsWithinDistInMap(target, m_radius))
-                            target->CastSpell(target, (spell->Id == 21094 ? 21095 : 23492), TRIGGERED_OLD_TRIGGERED, nullptr);      // Spell 21095: Separation Anxiety for Majordomo Executus' adds, 23492: Separation Anxiety for Garr's adds
-                    }
-                    return;
-                case 27769:                                 // Whisper Gulch: Yogg-Saron Whisper
-                {
-                    if (roll_chance_i(20))
-                        target->CastSpell(nullptr, 29072, TRIGGERED_OLD_TRIGGERED);
-                    return;
-                }
-//              // Gossip NPC Periodic - Talk
-                case 32441:                                 // Brittle Bones
-                    if (roll_chance_i(33))
-                        target->CastSpell(target, 32437, true, nullptr, this);  // Rattled
-                    return;
-//              case 33208: break;
-//              // Gossip NPC Periodic - Despawn
-//              case 33209: break;
-//              // Steal Weapon
-//              case 36207: break;
-                case 37025: // Coilfang Water
-                    if (target->IsInSwimmableWater())
-                        target->CastSpell(target, 37026, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-                    return;
-                case 39993: // Simon Game START timer, (DND)
-                    target->AI()->SendAIEvent(AI_EVENT_CUSTOM_A, target, target);
-                    return;
-//              case 40084: break;
-//              // Knockdown Fel Cannon: break; The Aggro Burst
-//              case 40119: break;
-//              // Old Mount Spell
-//              case 40154: break;
-//              // Magnetic Pull
-//              case 40581: break;
-//              // Ethereal Ring: break; The Bolt Burst
-                case 40801:
-                {
-                    target->CastSpell(GetCaster(), 40758, TRIGGERED_OLD_TRIGGERED);
-                    break;
-                }
-//              // Crystal Prison
-//              case 40846: break;
-//              // Copy Weapon
-//              case 41054: break;
-//              // Dementia
-//              case 41404: break;
-//              // Ethereal Ring Visual, Lightning Aura
-//              case 41477: break;
-//              // Ethereal Ring Visual, Lightning Aura (Fork)
-//              case 41525: break;
-//              // Ethereal Ring Visual, Lightning Jumper Aura
-//              case 41567: break;
-//              // No Man's Land
-//              case 41955: break;
-//              // Headless Horseman - Fire
-//              case 42074: break;
-//              // Headless Horseman - Visual - Large Fire
-//              case 42075: break;
-//              // Headless Horseman - Start Fire, Periodic Aura
-//              case 42140: break;
-//              // Ram Speed Boost
-//              case 42152: break;
-//              // Headless Horseman - Fires Out Victory Aura
-//              case 42235: break;
-//              // Pumpkin Life Cycle
-//              case 42280: break;
-//              // Brewfest Request Chick Chuck Mug Aura
-//              case 42537: break;
-//              // Squashling
-//              case 42596: break;
-//              // Headless Horseman Climax, Head: Periodic
-//              case 42603: break;
-                case 42621:                                 // Fire Bomb
-                {
-                    // Cast the summon spells (42622 to 42627) with increasing chance
-                    uint32 rand = urand(0, 99);
-                    for (uint32 i = 1; i <= 6; ++i)
-                    {
-                        if (rand < i * (i + 1) / 2 * 5)
-                        {
-                            target->CastSpell(target, spell->Id + i, TRIGGERED_OLD_TRIGGERED);
-                            break;
-                        }
-                    }
-                    if (GetAuraTicks() == 50)
-                        target->AI()->SendAIEvent(AI_EVENT_CUSTOM_A, target, target);
-                    break;
-                }
-//              // Headless Horseman - Conflagrate, Periodic Aura
-//              case 42637: break;
-//              // Headless Horseman - Create Pumpkin Treats Aura
-//              case 42774: break;
-//              // Headless Horseman Climax - Summoning Rhyme Aura
-//              case 42879: break;
-//              // Giddyup!
-//              case 42924: break;
-//              // Ram - Trot
-//              case 42992: break;
-//              // Ram - Canter
-//              case 42993: break;
-//              // Ram - Gallop
-//              case 42994: break;
-//              // Ram Level - Neutral
-//              case 43310: break;
-//              // Headless Horseman - Maniacal Laugh, Maniacal, Delayed 17
-//              case 43884: break;
-//              // Wretched!
-//              case 43963: break;
-//              // Headless Horseman - Maniacal Laugh, Maniacal, other, Delayed 17
-//              case 44000: break;
-                case 44328:                             // Energy Feedback
-                {
-                    if (Unit* caster = GetCaster())
-                        caster->CastSpell(nullptr, 44339, TRIGGERED_NONE);
-                    break;
-                }
-//              // Romantic Picnic
-//              case 45102: break;
-//              // Romantic Picnic
-//              case 45123: break;
-//              // Looking for Love
-//              case 45124: break;
-//              // Kite - Lightning Strike Kite Aura
-//              case 45197: break;
-//              // Rocket Chicken
-//              case 45202: break;
-//              // Copy Offhand Weapon
-//              case 45205: break;
-//              // Upper Deck - Kite - Lightning Periodic Aura
-//              case 45207: break;
-//              // Kite -Sky  Lightning Strike Kite Aura
-//              case 45251: break;
-//              // Ribbon Pole Dancer Check Aura
-//              case 45390: break;
-//              // Holiday - Midsummer, Ribbon Pole Periodic Visual
-//              case 45406: break;
-//              // Parachute
-//              case 45472: break;
-//              // Alliance Flag, Extra Damage Debuff
-//              case 45898: break;
-//              // Horde Flag, Extra Damage Debuff
-//              case 45899: break;
-//              // Ahune - Summoning Rhyme Aura
-//              case 45926: break;
-//              // Ahune - Slippery Floor
-//              case 45945: break;
-//              // Ahune's Shield
-//              case 45954: break;
-//              // Nether Vapor Lightning
-//              case 45960: break;
-//              // Darkness
-//              case 45996: break;
-//              // Transform Visual Missile Periodic
-//              case 46205: break;
-//              // Find Opening Beam End
-//              case 46333: break;
-                case 46371:                                 // Ice Spear Control Aura
-                    target->CastSpell(target, 46372, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-                    return;
-//              // Hailstone Chill
-//              case 46458: break;
-//              // Hailstone Chill, Internal
-//              case 46465: break;
-//              // Chill, Internal Shifter
-//              case 46549: break;
-//              // Summon Ice Spear Knockback Delayer
-//              case 46878: break;
-//              // Burninate Effect
-//              case 47214: break;
-//              // Fizzcrank Practice Parachute
-//              case 47228: break;
-//              // Send Mug Control Aura
-//              case 47369: break;
-//              // Direbrew's Disarm (precast)
-//              case 47407: break;
-//              // Mole Machine Port Schedule
-//              case 47489: break;
-//              case 47941: break; // Crystal Spike
-//              case 48200: break; // Healer Aura
-//              case 49313: break; // Proximity Mine Area Aura
-//              // Mole Machine Portal Schedule
-//              case 49466: break;
-                case 49555:                                 // Corpse Explode (Drak'tharon Keep - Trollgore)
-                case 59807:                                 // Corpse Explode (heroic)
-                {
-                    if (GetAuraTicks() == 3 && target->GetTypeId() == TYPEID_UNIT)
-                        ((Creature*)target)->ForcedDespawn();
-                    if (GetAuraTicks() != 2)
-                        return;
-
-                    if (Unit* pCaster = GetCaster())
-                        pCaster->CastSpell(target, spell->Id == 49555 ? 49618 : 59809, TRIGGERED_OLD_TRIGGERED);
-
-                    return;
-                }
-//              case 49592: break; // Temporal Rift
-//              case 49957: break; // Cutting Laser
-//              case 50085: break; // Slow Fall
-//              // Listening to Music
-//              case 50493: break; // TODO: Implement
-//              // Love Rocket Barrage
-//              case 50530: break;
-                case 52441:                                 // Cool Down
-                    target->CastSpell(target, 52443, TRIGGERED_OLD_TRIGGERED);
-                    return;
-                case 53520:                                 // Carrion Beetles
-                    target->CastSpell(target, 53521, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-                    target->CastSpell(target, 53521, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-                    return;
-                case 55592:                                 // Clean
-                    switch (urand(0, 2))
-                    {
-                        case 0: target->CastSpell(target, 55731, TRIGGERED_OLD_TRIGGERED); break;
-                        case 1: target->CastSpell(target, 55738, TRIGGERED_OLD_TRIGGERED); break;
-                        case 2: target->CastSpell(target, 55739, TRIGGERED_OLD_TRIGGERED); break;
-                    }
-                    return;
-                case 61968:                                 // Flash Freeze
-                {
-                    if (GetAuraTicks() == 1 && !target->HasAura(62464))
-                        target->CastSpell(target, 61970, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-                    return;
-                }
-                case 62018:                                 // Collapse
-                {
-                    // lose 1% of health every second
-                    Unit::DealDamage(target, target, target->GetMaxHealth() * .01, nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NONE, nullptr, false);
-                    return;
-                }
-                case 62019:                                 // Rune of Summoning
-                {
-                    target->CastSpell(target, 62020, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-                    return;
-                }
-                case 62038:                                 // Biting Cold
-                {
-                    if (target->GetTypeId() != TYPEID_PLAYER)
-                        return;
-
-                    // if player is moving remove one aura stack
-                    if (target->IsMoving())
-                        target->RemoveAuraHolderFromStack(62039);
-                    // otherwise add one aura stack each 3 seconds
-                    else if (GetAuraTicks() % 3 && !target->HasAura(62821))
-                        target->CastSpell(target, 62039, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-                    return;
-                }
-                case 62039:                                 // Biting Cold
-                {
-                    target->CastSpell(target, 62188, TRIGGERED_OLD_TRIGGERED);
-                    return;
-                }
-                case 62566:                                 // Healthy Spore Summon Periodic
-                {
-                    target->CastSpell(target, 62582, TRIGGERED_OLD_TRIGGERED);
-                    target->CastSpell(target, 62591, TRIGGERED_OLD_TRIGGERED);
-                    target->CastSpell(target, 62592, TRIGGERED_OLD_TRIGGERED);
-                    target->CastSpell(target, 62593, TRIGGERED_OLD_TRIGGERED);
-                    return;
-                }
-                case 62717:                                 // Slag Pot
-                {
-                    target->CastSpell(target, target->GetMap()->IsRegularDifficulty() ? 65722 : 65723, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-
-                    // cast Slag Imbued if the target survives up to the last tick
-                    if (GetAuraTicks() == 10)
-                        target->CastSpell(target, 63536, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-                    return;
-                }
-                case 63050:                                 // Sanity
-                {
-                    if (GetHolder()->GetStackAmount() <= 25 && !target->HasAura(63752))
-                        target->CastSpell(target, 63752, TRIGGERED_OLD_TRIGGERED);
-                    else if (GetHolder()->GetStackAmount() > 25 && target->HasAura(63752))
-                        target->RemoveAurasDueToSpell(63752);
-                    return;
-                }
-                case 63382:                                 // Rapid Burst
-                {
-                    if (GetAuraTicks() % 2)
-                        target->CastSpell(target, target->GetMap()->IsRegularDifficulty() ? 64019 : 64532, TRIGGERED_OLD_TRIGGERED);
-                    else
-                        target->CastSpell(target, target->GetMap()->IsRegularDifficulty() ? 63387 : 64531, TRIGGERED_OLD_TRIGGERED);
-                    return;
-                }
-                case 64101:                                 // Defend
-                {
-                    target->CastSpell(target, 62719, TRIGGERED_OLD_TRIGGERED);
-                    target->CastSpell(target, 64192, TRIGGERED_OLD_TRIGGERED);
-                    return;
-                }
-                case 64217:                                 // Overcharged
-                {
-                    if (GetHolder()->GetStackAmount() >= 10)
-                    {
-                        target->CastSpell(target, 64219, TRIGGERED_OLD_TRIGGERED);
-                        target->Suicide();
-                    }
-                    return;
-                }
-                case 64412:                                 // Phase Punch
-                {
-                    if (SpellAuraHolder* phaseAura = target->GetSpellAuraHolder(64412))
-                    {
-                        uint32 uiAuraId = 0;
-                        switch (phaseAura->GetStackAmount())
-                        {
-                            case 1: uiAuraId = 64435; break;
-                            case 2: uiAuraId = 64434; break;
-                            case 3: uiAuraId = 64428; break;
-                            case 4: uiAuraId = 64421; break;
-                            case 5: uiAuraId = 64417; break;
-                        }
-
-                        if (uiAuraId && !target->HasAura(uiAuraId))
-                        {
-                            target->CastSpell(target, uiAuraId, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-
-                            // remove original aura if phased
-                            if (uiAuraId == 64417)
-                            {
-                                target->RemoveAurasDueToSpell(64412);
-                                target->CastSpell(target, 62169, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-                            }
-                        }
-                    }
-                    return;
-                }
-                case 65272:                                 // Shatter Chest
-                {
-                    target->CastSpell(target, 62501, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-                    return;
-                }
-                case 66798:                                 // Death's Respite
-                {
-                    Unit* caster = GetCaster();
-                    if (!caster)
-                        return;
-
-                    caster->CastSpell(target, 66797, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-                    target->RemoveAurasDueToSpell(GetId());
-                    return;
-                }
-                case 70069:                                 // Ooze Flood Periodic Trigger
-                {
-                    target->CastSpell(target, GetSpellProto()->CalculateSimpleValue(m_effIndex), TRIGGERED_OLD_TRIGGERED);
-                    return;
-                }
-// Exist more after, need add later
-                default:
-                    break;
+                int32 damageValue = target->CalculateSpellEffectValue(target, spell, EFFECT_INDEX_1);
+                target->CastCustomSpell(nullptr, spell->Id == 6946 ? 6945 : 41356, nullptr, &damageValue, nullptr, TRIGGERED_OLD_TRIGGERED);
             }
-
+            return;
+        }
+        case 7057:                                  // Haunting Spirits
+            if (roll_chance_i(33))
+                target->CastSpell(target, m_modifier.m_amount, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+            return;
+            //              // Panda
+            //              case 19230: break;
+        case 21094:                                 // Separation Anxiety (Majordomo Executus)
+        case 23487:                                 // Separation Anxiety (Garr)
+            if (Unit* caster = GetCaster())
+            {
+                float m_radius = GetSpellRadius(sSpellRadiusStore.LookupEntry(spell->EffectRadiusIndex[m_effIndex]));
+                if (caster->IsAlive() && !caster->IsWithinDistInMap(target, m_radius))
+                    target->CastSpell(target, (spell->Id == 21094 ? 21095 : 23492), TRIGGERED_OLD_TRIGGERED, nullptr);      // Spell 21095: Separation Anxiety for Majordomo Executus' adds, 23492: Separation Anxiety for Garr's adds
+            }
+            return;
+        case 27769:                                 // Whisper Gulch: Yogg-Saron Whisper
+        {
+            if (roll_chance_i(20))
+                target->CastSpell(nullptr, 29072, TRIGGERED_OLD_TRIGGERED);
+            return;
+        }
+        //              // Gossip NPC Periodic - Talk
+        case 32441:                                 // Brittle Bones
+            if (roll_chance_i(33))
+                target->CastSpell(target, 32437, true, nullptr, this);  // Rattled
+            return;
+            //              case 33208: break;
+            //              // Gossip NPC Periodic - Despawn
+            //              case 33209: break;
+            //              // Steal Weapon
+            //              case 36207: break;
+        case 37025: // Coilfang Water
+            if (target->IsInSwimmableWater())
+                target->CastSpell(target, 37026, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+            return;
+        case 39993: // Simon Game START timer, (DND)
+            target->AI()->SendAIEvent(AI_EVENT_CUSTOM_A, target, target);
+            return;
+            //              case 40084: break;
+            //              // Knockdown Fel Cannon: break; The Aggro Burst
+            //              case 40119: break;
+            //              // Old Mount Spell
+            //              case 40154: break;
+            //              // Magnetic Pull
+            //              case 40581: break;
+            //              // Ethereal Ring: break; The Bolt Burst
+        case 40801:
+        {
+            target->CastSpell(GetCaster(), 40758, TRIGGERED_OLD_TRIGGERED);
             break;
         }
-        case SPELLFAMILY_MAGE:
+        //              // Crystal Prison
+        //              case 40846: break;
+        //              // Copy Weapon
+        //              case 41054: break;
+        //              // Dementia
+        //              case 41404: break;
+        //              // Ethereal Ring Visual, Lightning Aura
+        //              case 41477: break;
+        //              // Ethereal Ring Visual, Lightning Aura (Fork)
+        //              case 41525: break;
+        //              // Ethereal Ring Visual, Lightning Jumper Aura
+        //              case 41567: break;
+        //              // No Man's Land
+        //              case 41955: break;
+        //              // Headless Horseman - Fire
+        //              case 42074: break;
+        //              // Headless Horseman - Visual - Large Fire
+        //              case 42075: break;
+        //              // Headless Horseman - Start Fire, Periodic Aura
+        //              case 42140: break;
+        //              // Ram Speed Boost
+        //              case 42152: break;
+        //              // Headless Horseman - Fires Out Victory Aura
+        //              case 42235: break;
+        //              // Pumpkin Life Cycle
+        //              case 42280: break;
+        //              // Brewfest Request Chick Chuck Mug Aura
+        //              case 42537: break;
+        //              // Squashling
+        //              case 42596: break;
+        //              // Headless Horseman Climax, Head: Periodic
+        //              case 42603: break;
+        case 42621:                                 // Fire Bomb
         {
-            switch (spell->Id)
+            // Cast the summon spells (42622 to 42627) with increasing chance
+            uint32 rand = urand(0, 99);
+            for (uint32 i = 1; i <= 6; ++i)
             {
-                case 55342:                                 // Mirror Image
+                if (rand < i * (i + 1) / 2 * 5)
                 {
-                    if (GetAuraTicks() != 1)
-                        return;
-                    if (Unit* pCaster = GetCaster())
-                        pCaster->CastSpell(pCaster, spell->EffectTriggerSpell[GetEffIndex()], TRIGGERED_OLD_TRIGGERED, nullptr, this);
-                    return;
-                }
-                default:
+                    target->CastSpell(target, spell->Id + i, TRIGGERED_OLD_TRIGGERED);
                     break;
+                }
             }
+            if (GetAuraTicks() == 50)
+                target->AI()->SendAIEvent(AI_EVENT_CUSTOM_A, target, target);
             break;
         }
-        case SPELLFAMILY_DRUID:
+        //              // Headless Horseman - Conflagrate, Periodic Aura
+        //              case 42637: break;
+        //              // Headless Horseman - Create Pumpkin Treats Aura
+        //              case 42774: break;
+        //              // Headless Horseman Climax - Summoning Rhyme Aura
+        //              case 42879: break;
+        //              // Giddyup!
+        //              case 42924: break;
+        //              // Ram - Trot
+        //              case 42992: break;
+        //              // Ram - Canter
+        //              case 42993: break;
+        //              // Ram - Gallop
+        //              case 42994: break;
+        //              // Ram Level - Neutral
+        //              case 43310: break;
+        //              // Headless Horseman - Maniacal Laugh, Maniacal, Delayed 17
+        //              case 43884: break;
+        //              // Wretched!
+        //              case 43963: break;
+        //              // Headless Horseman - Maniacal Laugh, Maniacal, other, Delayed 17
+        //              case 44000: break;
+        case 44328:                             // Energy Feedback
         {
-            switch (spell->Id)
-            {
-                // Frenzied Regeneration
-                case 22842:
-                {
-                    // Converts up to 10 rage per second into health for $d.  Each point of rage is converted into ${$m2/10}.1% of max health.
-                    // Should be manauser
-                    if (target->GetPowerType() != POWER_RAGE)
-                        return;
-                    uint32 rage = target->GetPower(POWER_RAGE);
-                    // Nothing todo
-                    if (rage == 0)
-                        return;
-                    int32 mod = (rage < 100) ? rage : 100;
-                    int32 points = target->CalculateSpellEffectValue(target, spell, EFFECT_INDEX_1);
-                    int32 regen = target->GetMaxHealth() * (mod * points / 10) / 1000;
-                    target->CastCustomSpell(target, 22845, &regen, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-                    target->SetPower(POWER_RAGE, rage - mod);
-                    return;
-                }
-                // Force of Nature
-                case 33831:
-                    return;
-                default:
-                    break;
-            }
+            if (Unit* caster = GetCaster())
+                caster->CastSpell(nullptr, 44339, TRIGGERED_NONE);
             break;
         }
-        case SPELLFAMILY_HUNTER:
+        //              // Romantic Picnic
+        //              case 45102: break;
+        //              // Romantic Picnic
+        //              case 45123: break;
+        //              // Looking for Love
+        //              case 45124: break;
+        //              // Kite - Lightning Strike Kite Aura
+        //              case 45197: break;
+        //              // Rocket Chicken
+        //              case 45202: break;
+        //              // Copy Offhand Weapon
+        //              case 45205: break;
+        //              // Upper Deck - Kite - Lightning Periodic Aura
+        //              case 45207: break;
+        //              // Kite -Sky  Lightning Strike Kite Aura
+        //              case 45251: break;
+        //              // Ribbon Pole Dancer Check Aura
+        //              case 45390: break;
+        //              // Holiday - Midsummer, Ribbon Pole Periodic Visual
+        //              case 45406: break;
+        //              // Parachute
+        //              case 45472: break;
+        //              // Alliance Flag, Extra Damage Debuff
+        //              case 45898: break;
+        //              // Horde Flag, Extra Damage Debuff
+        //              case 45899: break;
+        //              // Ahune - Summoning Rhyme Aura
+        //              case 45926: break;
+        //              // Ahune - Slippery Floor
+        //              case 45945: break;
+        //              // Ahune's Shield
+        //              case 45954: break;
+        //              // Nether Vapor Lightning
+        //              case 45960: break;
+        //              // Darkness
+        //              case 45996: break;
+        //              // Transform Visual Missile Periodic
+        //              case 46205: break;
+        //              // Find Opening Beam End
+        //              case 46333: break;
+        case 46371:                                 // Ice Spear Control Aura
+            target->CastSpell(target, 46372, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+            return;
+            //              // Hailstone Chill
+            //              case 46458: break;
+            //              // Hailstone Chill, Internal
+            //              case 46465: break;
+            //              // Chill, Internal Shifter
+            //              case 46549: break;
+            //              // Summon Ice Spear Knockback Delayer
+            //              case 46878: break;
+            //              // Burninate Effect
+            //              case 47214: break;
+            //              // Fizzcrank Practice Parachute
+            //              case 47228: break;
+            //              // Send Mug Control Aura
+            //              case 47369: break;
+            //              // Direbrew's Disarm (precast)
+            //              case 47407: break;
+            //              // Mole Machine Port Schedule
+            //              case 47489: break;
+            //              case 47941: break; // Crystal Spike
+            //              case 48200: break; // Healer Aura
+            //              case 49313: break; // Proximity Mine Area Aura
+            //              // Mole Machine Portal Schedule
+            //              case 49466: break;
+        case 49555:                                 // Corpse Explode (Drak'tharon Keep - Trollgore)
+        case 59807:                                 // Corpse Explode (heroic)
         {
-            switch (spell->Id)
-            {
-                // Harpooner's Mark
-                // case 40084:
-                //    return;
-                // Feeding Frenzy Rank 1 & 2
-                case 53511:
-                case 53512:
-                {
-                    Unit* victim = target->GetVictim();
-                    if (victim && victim->GetHealth() * 100 < victim->GetMaxHealth() * 35)
-                        target->CastSpell(target, spell->Id == 53511 ? 60096 : 60097, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-                    return;
-                }
-                default:
-                    break;
-            }
-            break;
-        }
-        case SPELLFAMILY_SHAMAN:
-        {
-            // Astral Shift
-            if (spell->Id == 52179)
-            {
-                // Periodic need for remove visual on stun/fear/silence lost
-                if (!target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_STUNNED | UNIT_FLAG_FLEEING | UNIT_FLAG_SILENCED))
-                    target->RemoveAurasDueToSpell(52179);
+            if (GetAuraTicks() == 3 && target->GetTypeId() == TYPEID_UNIT)
+                ((Creature*)target)->ForcedDespawn();
+            if (GetAuraTicks() != 2)
                 return;
+
+            if (Unit* pCaster = GetCaster())
+                pCaster->CastSpell(target, spell->Id == 49555 ? 49618 : 59809, TRIGGERED_OLD_TRIGGERED);
+
+            return;
+        }
+        //              case 49592: break; // Temporal Rift
+        //              case 49957: break; // Cutting Laser
+        //              case 50085: break; // Slow Fall
+        //              // Listening to Music
+        //              case 50493: break; // TODO: Implement
+        //              // Love Rocket Barrage
+        //              case 50530: break;
+        case 52441:                                 // Cool Down
+            target->CastSpell(target, 52443, TRIGGERED_OLD_TRIGGERED);
+            return;
+        case 53520:                                 // Carrion Beetles
+            target->CastSpell(target, 53521, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+            target->CastSpell(target, 53521, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+            return;
+        case 55592:                                 // Clean
+            switch (urand(0, 2))
+            {
+            case 0: target->CastSpell(target, 55731, TRIGGERED_OLD_TRIGGERED); break;
+            case 1: target->CastSpell(target, 55738, TRIGGERED_OLD_TRIGGERED); break;
+            case 2: target->CastSpell(target, 55739, TRIGGERED_OLD_TRIGGERED); break;
             }
+            return;
+        case 61968:                                 // Flash Freeze
+        {
+            if (GetAuraTicks() == 1 && !target->HasAura(62464))
+                target->CastSpell(target, 61970, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+            return;
+        }
+        case 62018:                                 // Collapse
+        {
+            // lose 1% of health every second
+            Unit::DealDamage(target, target, target->GetMaxHealth() * .01, nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NONE, nullptr, false);
+            return;
+        }
+        case 62019:                                 // Rune of Summoning
+        {
+            target->CastSpell(target, 62020, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+            return;
+        }
+        case 62038:                                 // Biting Cold
+        {
+            if (target->GetTypeId() != TYPEID_PLAYER)
+                return;
+
+            // if player is moving remove one aura stack
+            if (target->IsMoving())
+                target->RemoveAuraHolderFromStack(62039);
+            // otherwise add one aura stack each 3 seconds
+            else if (GetAuraTicks() % 3 && !target->HasAura(62821))
+                target->CastSpell(target, 62039, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+            return;
+        }
+        case 62039:                                 // Biting Cold
+        {
+            target->CastSpell(target, 62188, TRIGGERED_OLD_TRIGGERED);
+            return;
+        }
+        case 62566:                                 // Healthy Spore Summon Periodic
+        {
+            target->CastSpell(target, 62582, TRIGGERED_OLD_TRIGGERED);
+            target->CastSpell(target, 62591, TRIGGERED_OLD_TRIGGERED);
+            target->CastSpell(target, 62592, TRIGGERED_OLD_TRIGGERED);
+            target->CastSpell(target, 62593, TRIGGERED_OLD_TRIGGERED);
+            return;
+        }
+        case 62717:                                 // Slag Pot
+        {
+            target->CastSpell(target, target->GetMap()->IsRegularDifficulty() ? 65722 : 65723, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+
+            // cast Slag Imbued if the target survives up to the last tick
+            if (GetAuraTicks() == 10)
+                target->CastSpell(target, 63536, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+            return;
+        }
+        case 63050:                                 // Sanity
+        {
+            if (GetHolder()->GetStackAmount() <= 25 && !target->HasAura(63752))
+                target->CastSpell(target, 63752, TRIGGERED_OLD_TRIGGERED);
+            else if (GetHolder()->GetStackAmount() > 25 && target->HasAura(63752))
+                target->RemoveAurasDueToSpell(63752);
+            return;
+        }
+        case 63382:                                 // Rapid Burst
+        {
+            if (GetAuraTicks() % 2)
+                target->CastSpell(target, target->GetMap()->IsRegularDifficulty() ? 64019 : 64532, TRIGGERED_OLD_TRIGGERED);
+            else
+                target->CastSpell(target, target->GetMap()->IsRegularDifficulty() ? 63387 : 64531, TRIGGERED_OLD_TRIGGERED);
+            return;
+        }
+        case 64101:                                 // Defend
+        {
+            target->CastSpell(target, 62719, TRIGGERED_OLD_TRIGGERED);
+            target->CastSpell(target, 64192, TRIGGERED_OLD_TRIGGERED);
+            return;
+        }
+        case 64217:                                 // Overcharged
+        {
+            if (GetHolder()->GetStackAmount() >= 10)
+            {
+                target->CastSpell(target, 64219, TRIGGERED_OLD_TRIGGERED);
+                target->Suicide();
+            }
+            return;
+        }
+        case 64412:                                 // Phase Punch
+        {
+            if (SpellAuraHolder* phaseAura = target->GetSpellAuraHolder(64412))
+            {
+                uint32 uiAuraId = 0;
+                switch (phaseAura->GetStackAmount())
+                {
+                case 1: uiAuraId = 64435; break;
+                case 2: uiAuraId = 64434; break;
+                case 3: uiAuraId = 64428; break;
+                case 4: uiAuraId = 64421; break;
+                case 5: uiAuraId = 64417; break;
+                }
+
+                if (uiAuraId && !target->HasAura(uiAuraId))
+                {
+                    target->CastSpell(target, uiAuraId, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+
+                    // remove original aura if phased
+                    if (uiAuraId == 64417)
+                    {
+                        target->RemoveAurasDueToSpell(64412);
+                        target->CastSpell(target, 62169, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+                    }
+                }
+            }
+            return;
+        }
+        case 65272:                                 // Shatter Chest
+        {
+            target->CastSpell(target, 62501, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+            return;
+        }
+        case 66798:                                 // Death's Respite
+        {
+            Unit* caster = GetCaster();
+            if (!caster)
+                return;
+
+            caster->CastSpell(target, 66797, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+            target->RemoveAurasDueToSpell(GetId());
+            return;
+        }
+        case 70069:                                 // Ooze Flood Periodic Trigger
+        {
+            target->CastSpell(target, GetSpellProto()->CalculateSimpleValue(m_effIndex), TRIGGERED_OLD_TRIGGERED);
+            return;
+        }
+        // Exist more after, need add later
+        default:
             break;
         }
-        case SPELLFAMILY_DEATHKNIGHT:
+
+        break;
+    }
+    case SPELLFAMILY_MAGE:
+    {
+        switch (spell->Id)
         {
-            // Death and Decay
-            if (spell->SpellFamilyFlags & uint64(0x0000000000000020))
-            {
-                if (Unit* caster = GetCaster())
-                    caster->CastCustomSpell(target, 52212, &m_modifier.m_amount, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+        case 55342:                                 // Mirror Image
+        {
+            if (GetAuraTicks() != 1)
                 return;
-            }
-            // Raise Dead
+            if (Unit* pCaster = GetCaster())
+                pCaster->CastSpell(pCaster, spell->EffectTriggerSpell[GetEffIndex()], TRIGGERED_OLD_TRIGGERED, nullptr, this);
+            return;
+        }
+        default:
+            break;
+        }
+        break;
+    }
+    case SPELLFAMILY_DRUID:
+    {
+        switch (spell->Id)
+        {
+            // Frenzied Regeneration
+        case 22842:
+        {
+            // Converts up to 10 rage per second into health for $d.  Each point of rage is converted into ${$m2/10}.1% of max health.
+            // Should be manauser
+            if (target->GetPowerType() != POWER_RAGE)
+                return;
+            uint32 rage = target->GetPower(POWER_RAGE);
+            // Nothing todo
+            if (rage == 0)
+                return;
+            int32 mod = (rage < 100) ? rage : 100;
+            int32 points = target->CalculateSpellEffectValue(target, spell, EFFECT_INDEX_1);
+            int32 regen = target->GetMaxHealth() * (mod * points / 10) / 1000;
+            target->CastCustomSpell(target, 22845, &regen, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+            target->SetPower(POWER_RAGE, rage - mod);
+            return;
+        }
+        // Force of Nature
+        case 33831:
+            return;
+        default:
+            break;
+        }
+        break;
+    }
+    case SPELLFAMILY_HUNTER:
+    {
+        switch (spell->Id)
+        {
+            // Harpooner's Mark
+            // case 40084:
+            //    return;
+            // Feeding Frenzy Rank 1 & 2
+        case 53511:
+        case 53512:
+        {
+            Unit* victim = target->GetVictim();
+            if (victim && victim->GetHealth() * 100 < victim->GetMaxHealth() * 35)
+                target->CastSpell(target, spell->Id == 53511 ? 60096 : 60097, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+            return;
+        }
+        default:
+            break;
+        }
+        break;
+    }
+    case SPELLFAMILY_SHAMAN:
+    {
+        // Astral Shift
+        if (spell->Id == 52179)
+        {
+            // Periodic need for remove visual on stun/fear/silence lost
+            if (!target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_STUNNED | UNIT_FLAG_FLEEING | UNIT_FLAG_SILENCED))
+                target->RemoveAurasDueToSpell(52179);
+            return;
+        }
+        break;
+    }
+    case SPELLFAMILY_DEATHKNIGHT:
+    {
+        // Death and Decay
+        if (spell->SpellFamilyFlags & uint64(0x0000000000000020))
+        {
+            if (Unit* caster = GetCaster())
+                caster->CastCustomSpell(target, 52212, &m_modifier.m_amount, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+            return;
+        }
+        // Raise Dead
 //            if (spell->SpellFamilyFlags & uint64(0x0000000000001000))
 //                return;
             // Chains of Ice
-            if (spell->SpellFamilyFlags & uint64(0x0000400000000000))
+        if (spell->SpellFamilyFlags & uint64(0x0000400000000000))
+        {
+            // Get 0 effect aura
+            Aura* slow = target->GetAura(GetId(), EFFECT_INDEX_0);
+            if (slow)
             {
-                // Get 0 effect aura
-                Aura* slow = target->GetAura(GetId(), EFFECT_INDEX_0);
-                if (slow)
-                {
-                    slow->ApplyModifier(false, true);
-                    Modifier* mod = slow->GetModifier();
-                    mod->m_amount += m_modifier.m_amount;
-                    if (mod->m_amount > 0) mod->m_amount = 0;
-                    slow->ApplyModifier(true, true);
-                }
-                return;
+                slow->ApplyModifier(false, true);
+                Modifier* mod = slow->GetModifier();
+                mod->m_amount += m_modifier.m_amount;
+                if (mod->m_amount > 0) mod->m_amount = 0;
+                slow->ApplyModifier(true, true);
             }
-            // Summon Gargoyle
+            return;
+        }
+        // Summon Gargoyle
 //            if (spell->SpellFamilyFlags & uint64(0x0000008000000000))
 //                return;
             // Death Rune Mastery
 //            if (spell->SpellFamilyFlags & uint64(0x0000000000004000))
 //                return;
             // Bladed Armor
-            if (spell->SpellIconID == 2653)
-            {
-                // Increases your attack power by $s1 for every $s2 armor value you have.
-                // Calculate AP bonus (from 1 efect of this spell)
-                int32 apBonus = m_modifier.m_amount * target->GetArmor() / target->CalculateSpellEffectValue(target, spell, EFFECT_INDEX_1);
-                target->CastCustomSpell(target, 61217, &apBonus, &apBonus, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-                return;
-            }
-            // Reaping
+        if (spell->SpellIconID == 2653)
+        {
+            // Increases your attack power by $s1 for every $s2 armor value you have.
+            // Calculate AP bonus (from 1 efect of this spell)
+            int32 apBonus = m_modifier.m_amount * target->GetArmor() / target->CalculateSpellEffectValue(target, spell, EFFECT_INDEX_1);
+            target->CastCustomSpell(target, 61217, &apBonus, &apBonus, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+            return;
+        }
+        // Reaping
 //            if (spell->SpellIconID == 22)
 //                return;
             // Blood of the North
 //            if (spell->SpellIconID == 30412)
 //                return;
             // Hysteria
-            if (spell->SpellFamilyFlags & uint64(0x0000000020000000))
-            {
-                // damage not expected to be show in logs, not any damage spell related to damage apply
-                uint32 deal = m_modifier.m_amount * target->GetMaxHealth() / 100;
-                Unit::DealDamage(target, target, deal, nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
-                return;
-            }
-            break;
+        if (spell->SpellFamilyFlags & uint64(0x0000000020000000))
+        {
+            // damage not expected to be show in logs, not any damage spell related to damage apply
+            uint32 deal = m_modifier.m_amount * target->GetMaxHealth() / 100;
+            Unit::DealDamage(target, target, deal, nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
+            return;
         }
-        default:
-            break;
+        break;
+    }
+    default:
+        break;
     }
 
     OnPeriodicDummy();
@@ -9420,7 +9453,9 @@ void Aura::PeriodicDummyTick()
     if (Unit* caster = GetCaster())
     {
         if (target && target->GetTypeId() == TYPEID_UNIT)
+        {
             sScriptDevAIMgr.OnEffectDummy(caster, GetId(), GetEffIndex(), (Creature*)target, ObjectGuid());
+        }
     }
 }
 

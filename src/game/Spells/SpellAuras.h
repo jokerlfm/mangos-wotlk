@@ -640,6 +640,20 @@ class SingleEnemyTargetAura : public Aura
         ObjectGuid m_castersTargetGuid;
 };
 
+// lfm since channel spell can use on allies, so create SingleUnitTargetAura 
+class SingleUnitTargetAura : public Aura
+{
+    friend Aura* CreateAura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* currentDamage, int32 const* currentBasePoints, SpellAuraHolder* holder, Unit* target, Unit* caster, Item* castItem);
+
+public:
+    virtual ~SingleUnitTargetAura();
+    Unit* GetTriggerTarget() const override;
+
+protected:
+    SingleUnitTargetAura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* currentDamage, int32 const* currentBasePoints, SpellAuraHolder* holder, Unit* target, Unit* caster = nullptr, Item* castItem = nullptr);
+    ObjectGuid m_castersTargetGuid;
+};
+
 // Used for GO Area Auras
 class GameObjectAura : public Aura
 {

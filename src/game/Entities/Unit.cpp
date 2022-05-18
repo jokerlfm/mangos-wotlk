@@ -52,6 +52,9 @@
 #include "Entities/Transports.h"
 #include "Anticheat/Anticheat.hpp"
 
+ // lfm minger 
+#include "MingerManager.h"
+
 #ifdef BUILD_METRICS
  #include "Metric/Metric.h"
 #endif
@@ -1506,16 +1509,6 @@ SpellCastResult Unit::CastSpell(Unit* Victim, SpellEntry const* spellInfo, uint3
             triggeredFlags &= TRIGGERED_OLD_TRIGGERED;
             triggeredBy = triggeredByAura->GetSpellProto();
         }
-    }
-
-    // lfm debug 
-    if (spellInfo->Id == 41036)
-    {
-        bool breakPoint = true;
-    }
-    if (spellInfo->Id == 41035)
-    {
-        bool breakPoint = true;
     }
 
     Spell* spell = new Spell(this, spellInfo, triggeredFlags, originalCaster, triggeredBy);
@@ -8195,35 +8188,51 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellEntry const* spellProto, ui
         DoneTotalMod *= Creature::_GetSpellDamageMod(((Creature*)this)->GetCreatureInfo()->Rank);
 
         // lfm creature spell damage mod
-        switch (((Creature*)this)->GetCreatureInfo()->Rank)
+        if (CreatureInfo const* ci = sObjectMgr.GetCreatureTemplate(GetEntry()))
         {
-        case CreatureEliteType::CREATURE_ELITE_NORMAL:
-        {
-            DoneTotalMod = DoneTotalMod * 1.5f;
-            break;
-        }
-        case CreatureEliteType::CREATURE_ELITE_ELITE:
-        {            
-            if (!sNingerManager->IsInstanceEncounter(GetEntry()))
+            switch (ci->Rank)
+            {
+            case CreatureEliteType::CREATURE_ELITE_NORMAL:
             {
                 DoneTotalMod = DoneTotalMod * 1.5f;
+                break;
             }
-            break;
-        }
-        case CreatureEliteType::CREATURE_ELITE_RARE:
-        {
-            DoneTotalMod = DoneTotalMod * 2.0f;
-            break;
-        }
-        case CreatureEliteType::CREATURE_ELITE_RAREELITE:
-        {
-            DoneTotalMod = DoneTotalMod * 2.5f;
-            break;
-        }
-        default:
-        {
-            break;
-        }
+            case CreatureEliteType::CREATURE_ELITE_ELITE:
+            {
+                uint32 diffEntry = ci->Entry;
+                const CreatureInfo* ciDiff = ci;
+                for (Difficulty diff = GetMap()->GetDifficulty(); diff > REGULAR_DIFFICULTY; diff = GetPrevDifficulty(diff, GetMap()->IsRaid()))
+                {
+                    if (ciDiff->DifficultyEntry[diff - 1])
+                    {
+                        if (ciDiff = ObjectMgr::GetCreatureTemplate(ci->DifficultyEntry[diff - 1]))
+                        {
+                            diffEntry = ci->DifficultyEntry[diff - 1];
+                            break;
+                        }
+                    }
+                }
+                if (!sMingerManager->IsMingerExceptionEntry(diffEntry))
+                {
+                    DoneTotalMod = DoneTotalMod * 1.5f;
+                }
+                break;
+            }
+            case CreatureEliteType::CREATURE_ELITE_RARE:
+            {
+                DoneTotalMod = DoneTotalMod * 2.0f;
+                break;
+            }
+            case CreatureEliteType::CREATURE_ELITE_RAREELITE:
+            {
+                DoneTotalMod = DoneTotalMod * 2.5f;
+                break;
+            }
+            default:
+            {
+                break;
+            }
+            }
         }
     }
 

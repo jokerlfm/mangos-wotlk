@@ -113,6 +113,9 @@ class PoolGroup
         void SetExcludeObject(uint32 guid, bool state);
 
         void Spawn1Object(MapPersistentState& mapState, PoolObject* obj, bool instantly);
+        // lfm spawn checking
+        bool TrySpawn1Object(MapPersistentState& mapState, PoolObject* obj, bool instantly);
+
         void ReSpawn1Object(MapPersistentState& mapState, PoolObject* obj);
         void RemoveOneRelation(uint16 child_pool_id);
 
