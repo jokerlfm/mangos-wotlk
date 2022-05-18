@@ -1097,6 +1097,9 @@ void World::SetInitialWorldSettings()
     sLog.outString("Loading Vehicle Accessory...");         // must be after LoadCreatureTemplates
     sObjectMgr.LoadVehicleAccessory();
 
+    sLog.outString("Loading Vehicle Seat Parameters...");         // must be after dbc load
+    sObjectMgr.LoadVehicleSeatParameters();
+
     sLog.outString("Loading ItemRequiredTarget...");
     sObjectMgr.LoadItemRequiredTarget();
 
