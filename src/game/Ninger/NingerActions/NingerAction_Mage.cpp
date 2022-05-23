@@ -573,7 +573,7 @@ void NingerAction_Mage::Prepare()
 	me->Say("Prepared", Language::LANG_UNIVERSAL);
 }
 
-bool NingerAction_Mage::DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmForceBack)
+bool NingerAction_Mage::DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmChasing, bool pmForceBack)
 {
 	if (!me)
 	{
@@ -623,13 +623,16 @@ bool NingerAction_Mage::DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax,
 		}
 		return false;
 	}
-	if (!nm->Chase(pmTarget, pmDistanceMax, pmDistanceMin, pmHolding, pmForceBack))
+	if (pmChasing)
 	{
-		if (me->GetSelectionGuid() == pmTarget->GetObjectGuid())
+		if (!nm->Chase(pmTarget, pmDistanceMax, pmDistanceMin, pmHolding, pmForceBack))
 		{
-			ClearTarget();
+			if (me->GetSelectionGuid() == pmTarget->GetObjectGuid())
+			{
+				ClearTarget();
+			}
+			return false;
 		}
-		return false;
 	}
 	ChooseTarget(pmTarget);
 	float targetDistance = me->GetDistance(pmTarget);
@@ -810,7 +813,7 @@ bool NingerAction_Mage::DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax,
 	return true;
 }
 
-bool NingerAction_Mage::AOE(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly)
+bool NingerAction_Mage::AOE(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmChasing)
 {
 	if (!me)
 	{
@@ -860,13 +863,16 @@ bool NingerAction_Mage::AOE(Unit* pmTarget, bool pmRushing, float pmDistanceMax,
 		}
 		return false;
 	}
-	if (!nm->Chase(pmTarget, pmDistanceMax, pmDistanceMin, pmHolding, false))
+	if (pmChasing)
 	{
-		if (me->GetSelectionGuid() == pmTarget->GetObjectGuid())
+		if (!nm->Chase(pmTarget, pmDistanceMax, pmDistanceMin, pmHolding, false))
 		{
-			ClearTarget();
+			if (me->GetSelectionGuid() == pmTarget->GetObjectGuid())
+			{
+				ClearTarget();
+			}
+			return false;
 		}
-		return false;
 	}
 	ChooseTarget(pmTarget);
 	float targetDistance = me->GetDistance(pmTarget);

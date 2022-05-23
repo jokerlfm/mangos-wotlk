@@ -193,9 +193,18 @@ struct boss_priestess_delrissaAI : public priestess_commonAI
 
     void JustPreventedDeath(Unit* attacker) override
     {
-        DoFakeDeath(SPELL_PERMANENT_FEIGN_DEATH);
+        // lfm delrissa death
         if (m_summonsKilled >= 4)
+        {
+            m_creature->RemoveAurasDueToSpell(SPELL_PERMANENT_FEIGN_DEATH);
+            m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
             m_creature->CastSpell(nullptr, SPELL_SUICIDE, TRIGGERED_OLD_TRIGGERED);
+        }
+        else
+        {
+            DoFakeDeath(SPELL_PERMANENT_FEIGN_DEATH);
+        }
+        SetDeathPrevention(false);
     }
 
     // Summon four random adds to help during the fight
@@ -256,9 +265,16 @@ struct boss_priestess_delrissaAI : public priestess_commonAI
     {
         ++m_summonsKilled;
         if (!m_creature->HasAura(SPELL_PERMANENT_FEIGN_DEATH))
+        {
             DoScriptText(aDelrissaAddDeath[m_summonsKilled - 1], m_creature);
+        }            
         if (m_summonsKilled >= 4 && m_creature->HasAura(SPELL_PERMANENT_FEIGN_DEATH))
-            m_creature->CastSpell(nullptr, SPELL_SUICIDE, TRIGGERED_OLD_TRIGGERED);
+        {
+            // lfm delrissa death
+            m_creature->RemoveAurasDueToSpell(SPELL_PERMANENT_FEIGN_DEATH);
+            m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            //m_creature->CastSpell(nullptr, SPELL_SUICIDE, TRIGGERED_OLD_TRIGGERED);
+        }
     }
 
     void JustDied(Unit* /*killer*/) override

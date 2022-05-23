@@ -19,8 +19,8 @@ public:
     void ResetTalent();
     bool InitializeEquipments(bool pmReset);
     void Prepare();
-    bool DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmForceBack);
-    bool AOE(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly);
+    bool DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmChasing, bool pmForceBack);
+    bool AOE(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmChasing);
     bool Buff(Unit* pmTarget);
     bool Petting(bool pmSummon = true, bool pmReset = false);
     void PetStop();

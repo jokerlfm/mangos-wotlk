@@ -1830,11 +1830,15 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                     else
                     {
                         float maxRootRate = zone_skill * 2;
-                        if (maxRootRate > 100.0f)
+                        if (maxRootRate > 150.0f)
                         {
-                            maxRootRate = 100.0f;
+                            maxRootRate = 150.0f;
                         }
                         chance = (skill + 10 - zone_skill) * 100 / maxRootRate;
+                    }
+                    if (chance > 95)
+                    {
+                        chance = 95;
                     }
 
                     DEBUG_LOG("Fishing check (skill: %i zone min skill: %i chance %i roll: %i", skill, zone_skill, chance, roll);

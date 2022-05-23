@@ -511,7 +511,7 @@ void NingerAction_Rogue::Prepare()
 	me->Say("Prepared", Language::LANG_UNIVERSAL);
 }
 
-bool NingerAction_Rogue::DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmForceBack)
+bool NingerAction_Rogue::DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmChasing, bool pmForceBack)
 {
 	if (!me)
 	{
@@ -561,13 +561,16 @@ bool NingerAction_Rogue::DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax
 		}
 		return false;
 	}
-	if (!nm->Chase(pmTarget, pmDistanceMax, pmDistanceMin, pmHolding, pmForceBack))
+	if (pmChasing)
 	{
-		if (me->GetSelectionGuid() == pmTarget->GetObjectGuid())
+		if (!nm->Chase(pmTarget, pmDistanceMax, pmDistanceMin, pmHolding, pmForceBack))
 		{
-			ClearTarget();
+			if (me->GetSelectionGuid() == pmTarget->GetObjectGuid())
+			{
+				ClearTarget();
+			}
+			return false;
 		}
-		return false;
 	}
 	ChooseTarget(pmTarget);
 	me->Attack(pmTarget, true);

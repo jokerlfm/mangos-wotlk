@@ -1741,9 +1741,12 @@ void Player::Update(const uint32 diff)
     {
         if (strategyMap.size() > 0)
         {
-            if (strategyMap[activeStrategyIndex]->initialized)
+            if (strategyMap[activeStrategyIndex])
             {
-                strategyMap[activeStrategyIndex]->Update(diff);
+                if (strategyMap[activeStrategyIndex]->initialized)
+                {
+                    strategyMap[activeStrategyIndex]->Update(diff);
+                }
             }
         }
     }
@@ -2140,18 +2143,22 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
     if (at)
     {
         uint32 miscRequirement = 0;
-        AreaLockStatus lockStatus = GetAreaTriggerLockStatus(at, GetDifficulty(mEntry->IsRaid()), miscRequirement);
-        if (lockStatus != AREA_LOCKSTATUS_OK)
+        // lfm heroic dungeon teleport 
+        if (mEntry->Instanceable())
         {
-            // Teleport not requested by area-trigger
-            // TODO - Assume a player with expansion 0 travels from BootyBay to Ratched, and he is attempted to be teleported to outlands
-            //        then he will repop near BootyBay instead of normally continuing his journey
-            // This code is probably added to catch passengers on ships to northrend who shouldn't go there
-            if (lockStatus == AREA_LOCKSTATUS_INSUFFICIENT_EXPANSION && !assignedAreaTrigger && GetTransport())
-                RepopAtGraveyard();                         // Teleport to near graveyard if on transport, looks blizz like :)
+            AreaLockStatus lockStatus = GetAreaTriggerLockStatus(at, GetDifficulty(mEntry->IsRaid()), miscRequirement);
+            if (lockStatus != AREA_LOCKSTATUS_OK)
+            {
+                // Teleport not requested by area-trigger
+                // TODO - Assume a player with expansion 0 travels from BootyBay to Ratched, and he is attempted to be teleported to outlands
+                //        then he will repop near BootyBay instead of normally continuing his journey
+                // This code is probably added to catch passengers on ships to northrend who shouldn't go there
+                if (lockStatus == AREA_LOCKSTATUS_INSUFFICIENT_EXPANSION && !assignedAreaTrigger && GetTransport())
+                    RepopAtGraveyard();                         // Teleport to near graveyard if on transport, looks blizz like :)
 
-            SendTransferAbortedByLockStatus(mEntry, lockStatus, miscRequirement);
-            return false;
+                SendTransferAbortedByLockStatus(mEntry, lockStatus, miscRequirement);
+                return false;
+            }
         }
     }
 
@@ -17800,7 +17807,10 @@ void Player::_LoadTalents(QueryResult* result)
             }
 
             if (m_activeSpec == spec)
-                addSpell(talentInfo->RankID[currentRank], true, false, false, false);
+            {
+                // lfm load talents should add lower rank spells
+                addSpell(talentInfo->RankID[currentRank], true, false, true, false);
+            }
             else
             {
                 PlayerTalent talent;
@@ -24350,10 +24360,25 @@ void Player::ActivateSpec(uint8 specNum)
         if (PlayerTalent const* cur_talent = GetKnownTalentById(tempIter->first))
         {
             if (cur_talent->currentRank != talent.currentRank)
-                learnSpell(talentSpellId, false);
+                learnSpell(talentSpellId, true);
         }
         else
-            learnSpell(talentSpellId, false);
+            learnSpell(talentSpellId, true);
+
+        // lfm learn disabled spells due to talents
+        for (PlayerSpellMap::const_iterator iter = GetSpellMap().begin(); iter != GetSpellMap().end(); ++iter)
+        {
+            if (iter->second.disabled)
+            {
+                if (SpellChainNode const* chain_node = sSpellMgr.GetSpellChainNode(iter->first))
+                {
+                    if(HasSpell(chain_node->first))
+                    {
+                        learnSpell(iter->first, true);
+                    }
+                }
+            }
+        }
 
         // sync states - original state is changed in addSpell that learnSpell calls
         PlayerTalentMap::iterator specIter = m_talents[m_activeSpec].find(tempIter->first);
@@ -24807,15 +24832,19 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, Difficult
         return AREA_LOCKSTATUS_OK;
 
     // Level Requirements
-    if (GetLevel() < at->requiredLevel && !sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_LEVEL))
+    // lfm no map diff will not check level 
+    if (mapDiff)
     {
-        miscRequirement = mapDiff->Id;
-        return AREA_LOCKSTATUS_TOO_LOW_LEVEL;
-    }
-    if (!isRegularTargetMap && !sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_LEVEL) && GetLevel() < uint32(maxLevelForExpansion[mapEntry->Expansion()]))
-    {
-        miscRequirement = mapDiff->Id;
-        return AREA_LOCKSTATUS_TOO_LOW_LEVEL;
+        if (GetLevel() < at->requiredLevel && !sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_LEVEL))
+        {
+            miscRequirement = mapDiff->Id;
+            return AREA_LOCKSTATUS_TOO_LOW_LEVEL;
+        }
+        if (!isRegularTargetMap && !sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_LEVEL) && GetLevel() < uint32(maxLevelForExpansion[mapEntry->Expansion()]))
+        {
+            miscRequirement = mapDiff->Id;
+            return AREA_LOCKSTATUS_TOO_LOW_LEVEL;
+        }
     }
 
     // Raid Requirements

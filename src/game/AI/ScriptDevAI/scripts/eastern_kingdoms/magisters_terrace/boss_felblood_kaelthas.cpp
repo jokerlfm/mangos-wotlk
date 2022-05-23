@@ -306,8 +306,16 @@ struct boss_felblood_kaelthasAI : public CombatAI
             case 5:
                 SetCombatScriptStatus(false);
                 m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
-                m_creature->CastSpell(nullptr, SPELL_SUICIDE, TRIGGERED_NONE);
+                m_creature->CastSpell(m_creature, SPELL_SUICIDE, TRIGGERED_NONE);
+                timer = 500;
+                break;                
+            case 6:
+            {
+                // lfm scripts kaelthas prevent death cancel 
+                m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+                SetDeathPrevention(false);
                 break;
+            }
         }
         ++m_outroStage;
         if (timer)
@@ -336,17 +344,21 @@ struct boss_felblood_kaelthasAI : public CombatAI
         uint32 timer = 0;
         switch (m_gravityLapseStage)
         {
-            case 0:
-                m_creature->SetFacingTo(m_creature->GetRespawnPosition().o);
-                for (uint8 i = 0; i < MAX_ARCANE_SPHERES; ++i)
-                    DoCastSpellIfCan(nullptr, SPELL_ARCANE_SPHERE_SUMMON);
-                timer = 1500;
-                break;
-            case 1:
-                DoCastSpellIfCan(nullptr, SPELL_GRAVITY_LAPSE_VISUAL);
-                SetCombatScriptStatus(false);
-                SetMeleeEnabled(true);
-                break;
+        case 0:
+        {
+            m_creature->SetFacingTo(m_creature->GetRespawnPosition().o);
+            for (uint8 i = 0; i < MAX_ARCANE_SPHERES; ++i)
+                DoCastSpellIfCan(nullptr, SPELL_ARCANE_SPHERE_SUMMON);
+            timer = 1500;
+            break;
+        }
+        case 1:
+        {
+            DoCastSpellIfCan(nullptr, SPELL_GRAVITY_LAPSE_VISUAL);
+            SetCombatScriptStatus(false);
+            SetMeleeEnabled(true);
+            break;
+        }
         }
         ++m_gravityLapseStage;
         if (timer)

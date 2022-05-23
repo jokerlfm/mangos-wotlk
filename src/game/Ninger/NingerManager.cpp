@@ -634,6 +634,10 @@ void NingerManager::HandleChatCommand(Player* pmCommander, std::string pmContent
 						{
 							member->activeStrategyIndex = StrategyIndex::StrategyIndex_The_Black_Morass;
 						}
+						else if (mapId == 585)
+						{
+							member->activeStrategyIndex = 585;
+						}
 						if (NingerStrategy_Base* ns = member->strategyMap[member->activeStrategyIndex])
 						{
 							ns->Reset();
@@ -694,7 +698,7 @@ void NingerManager::HandleChatCommand(Player* pmCommander, std::string pmContent
 						{
 							ns->ogTank = ogTank;
 							ns->ogHealer = ogHealer;
-							ns->Report();							
+							ns->Report();
 						}
 					}
 				}
@@ -1230,14 +1234,39 @@ void NingerManager::HandleChatCommand(Player* pmCommander, std::string pmContent
 		{
 			if (NingerStrategy_Base* ns = pmTargetPlayer->strategyMap[pmTargetPlayer->activeStrategyIndex])
 			{
-				if (ns->basicStrategyType == BasicStrategyType::BasicStrategyType_Freeze || ns->basicStrategyType == BasicStrategyType::BasicStrategyType_Glue)
-				{
-					ns->basicStrategyType = BasicStrategyType::BasicStrategyType_Normal;
-				}
 				if (Unit* target = pmCommander->GetTarget())
 				{
-					if (ns->Tank(target))
+					if (ns->basicStrategyType == BasicStrategyType::BasicStrategyType_Freeze || ns->basicStrategyType == BasicStrategyType::BasicStrategyType_Glue)
 					{
+						ns->basicStrategyType = BasicStrategyType::BasicStrategyType_Normal;
+					}
+					if (ns->DoTank(target))
+					{
+						if (Group* tankGroup = pmTargetPlayer->GetGroup())
+						{
+							for (GroupReference* groupRef = tankGroup->GetFirstMember(); groupRef != nullptr; groupRef = groupRef->next())
+							{
+								if (Player* member = groupRef->getSource())
+								{
+									if (member->GetObjectGuid() != pmCommander->GetObjectGuid())
+									{
+										if (member->GetSession()->isNinger)
+										{
+											if (member->ningerAction->ReadyTank(pmTargetPlayer))
+											{
+												if (NingerStrategy_Base* nsAction = member->strategyMap[pmTargetPlayer->activeStrategyIndex])
+												{
+													nsAction->ogActionTarget = pmTargetPlayer->GetObjectGuid();
+													nsAction->actionType = ActionType::ActionType_ReadyTank;
+													nsAction->actionLimit = 2000;
+												}
+												break;
+											}
+										}
+									}
+								}
+							}
+						}
 						int engageLimit = DEFAULT_ACTION_LIMIT_DELAY;
 						if (commandVector.size() > 1)
 						{
@@ -1654,13 +1683,13 @@ void NingerManager::HandleChatCommand(Player* pmCommander, std::string pmContent
 				std::ostringstream replyStream;
 				if (pmTargetPlayer->IsAlive())
 				{
-					if (pmCommander->GetDistance(pmTargetPlayer) < FOLLOW_MAX_DISTANCE)
+					if (pmCommander->GetDistance(pmTargetPlayer) < VISIBILITY_DISTANCE_LARGE)
 					{
 						ns->restLimit = 0;
 						ns->actionType = ActionType::ActionType_Move;
 						ns->actionLimit = 3 * IN_MILLISECONDS;
 						pmTargetPlayer->ningerAction->nm->Point(pmCommander->GetPosition(), ns->actionLimit);
-						replyStream << "I will move to you";
+						replyStream << "Moving to you";
 					}
 					else
 					{
@@ -2361,7 +2390,7 @@ void NingerManager::HandleChatCommand(Player* pmCommander, std::string pmContent
 			}
 		}
 	}
-	else if (commandName == "Innervate")
+	else if (commandName == "innervate")
 	{
 		if (pmTargetPlayer)
 		{
@@ -2373,24 +2402,50 @@ void NingerManager::HandleChatCommand(Player* pmCommander, std::string pmContent
 					{
 						if (nad->spell_Innervate > 0)
 						{
-							if (Group* targetGroup = pmTargetPlayer->GetGroup())
+							if (commandVector.size() > 1)
 							{
-								for (GroupReference* groupRef = targetGroup->GetFirstMember(); groupRef != nullptr; groupRef = groupRef->next())
+								std::string roleName = commandVector.at(1);
+								if (roleName == "self")
 								{
-									if (Player* member = groupRef->getSource())
+									if (nad->spell_MoonkinForm > 0)
 									{
-										if (member->groupRole == GroupRole::GroupRole_Healer)
+										nad->CancelAura(nad->spell_MoonkinForm);
+									}
+									if (nad->CastSpell(pmTargetPlayer, nad->spell_Innervate, true, false, true))
+									{
+										std::ostringstream replyStream;
+										replyStream << "Innervate - " << pmTargetPlayer->GetName();
+										pmTargetPlayer->Yell(replyStream.str(), Language::LANG_UNIVERSAL);
+									}
+								}
+								else if (roleName == "healer")
+								{
+									if (Group* targetGroup = pmTargetPlayer->GetGroup())
+									{
+										for (GroupReference* groupRef = targetGroup->GetFirstMember(); groupRef != nullptr; groupRef = groupRef->next())
 										{
-											if (nad->spell_MoonkinForm > 0)
+											if (Player* member = groupRef->getSource())
 											{
-												nad->CancelAura(nad->spell_MoonkinForm);
-											}
-											if (nad->CastSpell(member, nad->spell_Innervate, true, false, true))
-											{
-												std::ostringstream replyStream;
-												replyStream << "Innervate - " << member->GetName();
-												pmTargetPlayer->Yell(replyStream.str(), Language::LANG_UNIVERSAL);
-												break;
+												if (member->groupRole == GroupRole::GroupRole_Healer)
+												{
+													if (member->IsAlive())
+													{
+														if (pmTargetPlayer->GetDistance(member) < RANGE_NORMAL_DISTANCE)
+														{
+															if (nad->spell_MoonkinForm > 0)
+															{
+																nad->CancelAura(nad->spell_MoonkinForm);
+															}
+															if (nad->CastSpell(member, nad->spell_Innervate, true, false, true))
+															{
+																std::ostringstream replyStream;
+																replyStream << "Innervate - " << member->GetName();
+																pmTargetPlayer->Yell(replyStream.str(), Language::LANG_UNIVERSAL);
+																break;
+															}
+														}
+													}
+												}
 											}
 										}
 									}

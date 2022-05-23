@@ -1377,6 +1377,7 @@ void Unit::JustKilledCreature(Unit* killer, Creature* victim, Player* responsibl
 
     // Inform Owner
     Unit* pOwner = victim->GetMaster();
+
     if (victim->IsTemporarySummon())
     {
         if (victim->GetSpawnerGuid().IsCreatureOrVehicle())

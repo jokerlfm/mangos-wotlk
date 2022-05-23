@@ -32,7 +32,7 @@ enum StrategyIndex :uint32
 {
 	StrategyIndex_Base = 0,
 	StrategyIndex_The_Underbog = 546,
-	StrategyIndex_The_Black_Morass = 269,
+	StrategyIndex_The_Black_Morass = 269,	
 };
 
 enum BasicStrategyType :uint32
@@ -49,6 +49,7 @@ enum ActionType :uint32
 	ActionType_Engage = 1,
 	ActionType_Revive = 2,
 	ActionType_Move = 3,
+	ActionType_ReadyTank = 4,
 };
 
 class NingerStrategy_Base
@@ -60,12 +61,13 @@ public:
 	virtual void Reset();
 	virtual void Update(uint32 pmDiff);
 	virtual bool Engage(Unit* pmTarget);
-	virtual bool Tank(Unit* pmTarget);
-	virtual bool Tank();
-	virtual bool DPS(bool pmDelay = true);
-	virtual bool DPS(Unit* pmTarget);
+	virtual bool TryTank();
+	virtual bool DoTank(Unit* pmTarget);
+	virtual bool TryDPS(bool pmDelay, bool pmForceInstantOnly, bool pmChasing);
+	virtual bool DoDPS(Unit* pmTarget, bool pmForceInstantOnly, bool pmChasing);
 	virtual bool Follow();
-	virtual bool Heal();
+	virtual bool TryHeal(bool pmForceInstantOnly);
+	virtual bool DoHeal(Unit* pmTarget, bool pmForceInstantOnly);
 	virtual bool Cure();
 	virtual bool Buff();
 	virtual bool Assist();
@@ -135,6 +137,21 @@ class NingerStrategy_The_Black_Morass :public NingerStrategy_Base
 public:
 	NingerStrategy_The_Black_Morass();
 
-	bool DPS(Unit* pmTarget);
+	bool DoDPS(Unit* pmTarget, bool pmForceInstantOnly, bool pmChasing);
+};
+
+class NingerStrategy_Magisters_Terrace :public NingerStrategy_Base
+{
+public:
+	NingerStrategy_Magisters_Terrace();
+
+	void Update(uint32 pmDiff);
+	bool TryTank();
+	bool DoTank(Unit* pmTarget);
+	bool TryDPS(bool pmDelay, bool pmForceInstantOnly, bool pmChasing);
+	bool DoDPS(Unit* pmTarget, bool pmForceInstantOnly, bool pmChasing);
+	bool DoHeal(Unit* pmTarget, bool pmForceInstantOnly);
+
+	bool kael;
 };
 #endif

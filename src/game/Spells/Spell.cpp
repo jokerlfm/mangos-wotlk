@@ -6801,6 +6801,18 @@ SpellCastResult Spell::CheckCast(bool strict)
                             return SPELL_FAILED_TARGET_NO_WEAPONS;
                     }
                 }
+                // lfm not expected also should check has weapon 
+                else if (target)
+                {
+                    if (!target->hasMainhandWeapon())
+                    {
+                        SpellCastResult result = partialApplication(i);
+                        if (result != SPELL_CAST_OK)
+                        {
+                            return SPELL_FAILED_TARGET_NO_WEAPONS;
+                        }
+                    }
+                }
                 break;
             }
             default:

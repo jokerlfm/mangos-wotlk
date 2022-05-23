@@ -317,6 +317,9 @@ void NingerEntity::Update(uint32 pmDiff)
 					me->strategyMap[StrategyIndex::StrategyIndex_The_Black_Morass] = new NingerStrategy_The_Black_Morass();
 					me->strategyMap[StrategyIndex::StrategyIndex_The_Black_Morass]->me = me;
 					me->strategyMap[StrategyIndex::StrategyIndex_The_Black_Morass]->Reset();
+					me->strategyMap[585] = new NingerStrategy_Magisters_Terrace();
+					me->strategyMap[585]->me = me;
+					me->strategyMap[585]->Reset();
 					switch (target_class)
 					{
 					case Classes::CLASS_DEATH_KNIGHT:

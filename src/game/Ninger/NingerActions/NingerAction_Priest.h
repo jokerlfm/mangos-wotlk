@@ -12,6 +12,7 @@ public:
 	bool InitializeEquipments(bool pmReset);
 	void Prepare();
 	bool Heal(Unit* pmTarget, bool pmInstantOnly);
+	bool ReadyTank(Unit* pmTarget);
 	bool GroupHeal(Unit* pmTarget, bool pmInstantOnly);
 	bool SimpleHeal(Unit* pmTarget, bool pmInstantOnly);
 	bool Cure(Unit* pmTarget);

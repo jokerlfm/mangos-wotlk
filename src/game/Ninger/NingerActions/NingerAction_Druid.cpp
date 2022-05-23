@@ -437,7 +437,7 @@ bool NingerAction_Druid::InitializeEquipments(bool pmReset)
 		if (checkEquipSlot == EquipmentSlots::EQUIPMENT_SLOT_HEAD)
 		{
 			equipItemClass = 4;
-			equipItemSubClass = 2;			
+			equipItemSubClass = 2;
 		}
 		else if (checkEquipSlot == EquipmentSlots::EQUIPMENT_SLOT_SHOULDERS)
 		{
@@ -542,7 +542,7 @@ void NingerAction_Druid::Prepare()
 	me->Say("Prepared", Language::LANG_UNIVERSAL);
 }
 
-bool NingerAction_Druid::DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmForceBack)
+bool NingerAction_Druid::DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmChasing, bool pmForceBack)
 {
 	if (!me)
 	{
@@ -592,13 +592,16 @@ bool NingerAction_Druid::DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax
 		}
 		return false;
 	}
-	if (!nm->Chase(pmTarget, pmDistanceMax, pmDistanceMin, pmHolding, pmForceBack))
+	if (pmChasing)
 	{
-		if (me->GetSelectionGuid() == pmTarget->GetObjectGuid())
+		if (!nm->Chase(pmTarget, pmDistanceMax, pmDistanceMin, pmHolding, pmForceBack))
 		{
-			ClearTarget();
+			if (me->GetSelectionGuid() == pmTarget->GetObjectGuid())
+			{
+				ClearTarget();
+			}
+			return false;
 		}
-		return false;
 	}
 	ChooseTarget(pmTarget);
 	float targetDistance = me->GetDistance(pmTarget);
@@ -707,7 +710,7 @@ bool NingerAction_Druid::DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax
 	return true;
 }
 
-bool NingerAction_Druid::AOE(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly)
+bool NingerAction_Druid::AOE(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmChasing)
 {
 	if (!me)
 	{
@@ -757,13 +760,16 @@ bool NingerAction_Druid::AOE(Unit* pmTarget, bool pmRushing, float pmDistanceMax
 		}
 		return false;
 	}
-	if (!nm->Chase(pmTarget, pmDistanceMax, pmDistanceMin, pmHolding, false))
+	if (pmChasing)
 	{
-		if (me->GetSelectionGuid() == pmTarget->GetObjectGuid())
+		if (!nm->Chase(pmTarget, pmDistanceMax, pmDistanceMin, pmHolding, false))
 		{
-			ClearTarget();
+			if (me->GetSelectionGuid() == pmTarget->GetObjectGuid())
+			{
+				ClearTarget();
+			}
+			return false;
 		}
-		return false;
 	}
 	ChooseTarget(pmTarget);
 	float targetDistance = me->GetDistance(pmTarget);
@@ -980,7 +986,7 @@ bool NingerAction_Druid::Revive(Player* pmTarget)
 	{
 		if (spell_Rebirth > 0)
 		{
-			if (CastSpell(pmTarget, spell_Rebirth))
+			if (CastSpell(pmTarget, spell_Rebirth, false, false, true))
 			{
 				return true;
 			}
@@ -990,7 +996,7 @@ bool NingerAction_Druid::Revive(Player* pmTarget)
 	{
 		if (spell_Revive > 0)
 		{
-			if (CastSpell(pmTarget, spell_Revive))
+			if (CastSpell(pmTarget, spell_Revive, false, false, true))
 			{
 				return true;
 			}

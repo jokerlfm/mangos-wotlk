@@ -40,7 +40,7 @@
 #endif
 
 #ifndef FOLLOW_FAR_DISTANCE
-# define FOLLOW_FAR_DISTANCE 30.0f
+# define FOLLOW_FAR_DISTANCE 25.0f
 #endif
 
 #ifndef FOLLOW_MAX_DISTANCE

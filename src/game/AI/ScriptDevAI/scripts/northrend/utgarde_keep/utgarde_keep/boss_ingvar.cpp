@@ -151,8 +151,10 @@ struct boss_ingvarAI : public CombatAI
             DoScriptText(SAY_DEATH_FIRST, m_creature);
 
             DoCastSpellIfCan(m_creature, SPELL_SUMMON_BANSHEE, CAST_TRIGGERED);
-            DoCastSpellIfCan(m_creature, SPELL_FEIGN_DEATH, CAST_TRIGGERED);
-            m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
+            m_creature->addUnitState(UnitState::UNIT_STAT_FEIGN_DEATH);
+            DoCastSpellIfCan(m_creature, SPELL_FEIGN_DEATH);
+            //m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
+            m_creature->SetFlag(UNIT_FIELD_FLAGS, UnitFlags::UNIT_FLAG_IMMUNE_TO_PLAYER);
             m_creature->RemoveAurasDueToSpell(m_isRegularMode ? SPELL_ENRAGE : SPELL_ENRAGE_H);
 
             SetCombatScriptStatus(true);
@@ -239,8 +241,10 @@ struct boss_ingvarAI : public CombatAI
             ResetCombatAction(INGVAR_ACTION_ENRAGE, 20000);
 
             m_creature->SetVirtualItem(VIRTUAL_ITEM_SLOT_0, EQUIP_ID_AXE_UNDEAD);
-            m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
+            //m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
+            m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UnitFlags::UNIT_FLAG_IMMUNE_TO_PLAYER);
             m_creature->RemoveAurasDueToSpell(SPELL_FEIGN_DEATH);
+            m_creature->clearUnitState(UnitState::UNIT_STAT_FEIGN_DEATH);
             SetCombatScriptStatus(false);
             DoResetThreat();
 
@@ -316,6 +320,15 @@ struct boss_ingvarAI : public CombatAI
                 break;
         }
     }
+
+    //void UpdateAI(const uint32 uiDiff) override
+    //{
+    //    if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
+    //    {
+    //        return;
+    //    }
+    //    DoMeleeAttackIfReady();
+    //}
 };
 
 /*######
@@ -485,6 +498,11 @@ struct spell_ingvar_transform_aura : public AuraScript
             // update entry to creature 23980
             uint32 creatureEntry = aura->GetSpellProto()->EffectMiscValue[EFFECT_INDEX_0];
             Creature* ingvar = static_cast<Creature*>(target);
+
+            // lfm scripts ingvar, clear before udpate entry 
+            ingvar->RemoveFlag(UNIT_FIELD_FLAGS, UnitFlags::UNIT_FLAG_IMMUNE_TO_PLAYER);
+            ingvar->RemoveAurasDueToSpell(SPELL_FEIGN_DEATH);
+            ingvar->clearUnitState(UnitState::UNIT_STAT_FEIGN_DEATH);
 
             ingvar->UpdateEntry(creatureEntry);
         }

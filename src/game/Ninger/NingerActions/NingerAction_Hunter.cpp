@@ -561,7 +561,7 @@ void NingerAction_Hunter::Prepare()
 	me->Say("Prepared", Language::LANG_UNIVERSAL);
 }
 
-bool NingerAction_Hunter::DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmForceBack)
+bool NingerAction_Hunter::DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmChasing, bool pmForceBack)
 {
 	if (!me)
 	{
@@ -595,13 +595,16 @@ bool NingerAction_Hunter::DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMa
 		}
 		return false;
 	}
-	if (!nm->Chase(pmTarget, pmDistanceMax, pmDistanceMin, pmHolding, pmForceBack))
+	if (pmChasing)
 	{
-		if (me->GetSelectionGuid() == pmTarget->GetObjectGuid())
+		if (!nm->Chase(pmTarget, pmDistanceMax, pmDistanceMin, pmHolding, pmForceBack))
 		{
-			ClearTarget();
+			if (me->GetSelectionGuid() == pmTarget->GetObjectGuid())
+			{
+				ClearTarget();
+			}
+			return false;
 		}
-		return false;
 	}
 	ChooseTarget(pmTarget);
 	me->Attack(pmTarget, true);	
@@ -721,7 +724,7 @@ bool NingerAction_Hunter::DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMa
 	return true;
 }
 
-bool NingerAction_Hunter::AOE(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly)
+bool NingerAction_Hunter::AOE(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmChasing)
 {
 	if (!me)
 	{
@@ -771,13 +774,16 @@ bool NingerAction_Hunter::AOE(Unit* pmTarget, bool pmRushing, float pmDistanceMa
 		}
 		return false;
 	}
-	if (!nm->Chase(pmTarget, pmDistanceMax, pmDistanceMin, pmHolding, false))
+	if (pmChasing)
 	{
-		if (me->GetSelectionGuid() == pmTarget->GetObjectGuid())
+		if (!nm->Chase(pmTarget, pmDistanceMax, pmDistanceMin, pmHolding, false))
 		{
-			ClearTarget();
+			if (me->GetSelectionGuid() == pmTarget->GetObjectGuid())
+			{
+				ClearTarget();
+			}
+			return false;
 		}
-		return false;
 	}
 	ChooseTarget(pmTarget);
 	float targetDistance = me->GetDistance(pmTarget);

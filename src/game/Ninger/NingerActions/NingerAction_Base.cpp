@@ -412,6 +412,15 @@ void NingerMovement::Update_Motion(uint32 pmDiff)
 			}
 			else
 			{
+				float chaseDistance = chaseTarget->GetObjectBoundingRadius() + me->GetObjectBoundingRadius() + distanceMax;
+				if (me->IsWithinLOSInMap(chaseTarget) && me->IsWithinDistInMap(chaseTarget, chaseDistance + MIN_DISTANCE_GAP))
+				{
+					if (!me->isInFront(chaseTarget, RANGE_MAX_DISTANCE, M_PI / 8))
+					{
+						me->SetFacingToObject(chaseTarget);
+					}
+					return;
+				}
 				if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == MovementGeneratorType::CHASE_MOTION_TYPE)
 				{
 					if (ChaseMovementGenerator* mg = (ChaseMovementGenerator*)me->GetMotionMaster()->GetCurrent())
@@ -427,7 +436,6 @@ void NingerMovement::Update_Motion(uint32 pmDiff)
 						mg->Reset(*me);
 					}
 				}
-				float chaseDistance = chaseTarget->GetObjectBoundingRadius() + me->GetObjectBoundingRadius() + distanceMax;
 				Run();
 				me->StopMoving(true);
 				me->GetMotionMaster()->Clear();
@@ -459,7 +467,15 @@ void NingerMovement::Update_Motion(uint32 pmDiff)
 			}
 			else
 			{
-				float chaseDistance = chaseTarget->GetObjectBoundingRadius() + me->GetObjectBoundingRadius() + distanceMax;				
+				float chaseDistance = chaseTarget->GetObjectBoundingRadius() + me->GetObjectBoundingRadius() + distanceMax;
+				if (me->IsWithinLOSInMap(chaseTarget) && me->IsWithinDistInMap(chaseTarget, chaseDistance + MIN_DISTANCE_GAP))
+				{
+					if (!me->isInFront(chaseTarget, RANGE_MAX_DISTANCE, M_PI / 8))
+					{
+						me->SetFacingToObject(chaseTarget);
+					}
+					return;
+				}
 				if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == MovementGeneratorType::CHASE_MOTION_TYPE)
 				{
 					if (ChaseMovementGenerator* mg = (ChaseMovementGenerator*)me->GetMotionMaster()->GetCurrent())
@@ -471,7 +487,7 @@ void NingerMovement::Update_Motion(uint32 pmDiff)
 								if (distanceMin > 0.0f)
 								{
 									if (me->GetDistance(chaseTarget, true, DistanceCalculation::DIST_CALC_BOUNDING_RADIUS) > chaseTarget->GetObjectBoundingRadius() + me->GetObjectBoundingRadius() + distanceMin - MAX_DISTANCE_GAP)
-									{										
+									{
 										return;
 									}
 									else
@@ -511,7 +527,7 @@ void NingerMovement::Update_Motion(uint32 pmDiff)
 				Run();
 				me->StopMoving(true);
 				me->GetMotionMaster()->Clear();
-				me->GetMotionMaster()->MoveChase(chaseTarget, chaseDistance, chaseAngle, false, false, false, false);
+				me->GetMotionMaster()->MoveChase(chaseTarget, chaseDistance, chaseAngle, true, false, false, false);
 			}
 			moveCheckDelay = DEFAULT_MOVEMENT_UPDATE_DELAY;
 		}
@@ -539,6 +555,15 @@ void NingerMovement::Update_Motion(uint32 pmDiff)
 			}
 			else
 			{
+				float followDistance = followTarget->GetObjectBoundingRadius() + me->GetObjectBoundingRadius() + distanceMax;
+				if (me->IsWithinLOSInMap(followTarget) && me->IsWithinDistInMap(followTarget, followDistance + MIN_DISTANCE_GAP))
+				{
+					if (!me->isInFront(followTarget, RANGE_MAX_DISTANCE, M_PI / 8))
+					{
+						me->SetFacingToObject(followTarget);
+					}
+					return;
+				}
 				if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == MovementGeneratorType::CHASE_MOTION_TYPE)
 				{
 					if (ChaseMovementGenerator* mg = (ChaseMovementGenerator*)me->GetMotionMaster()->GetCurrent())
@@ -830,12 +855,12 @@ void NingerAction_Base::Update(uint32 pmDiff)
 	nm->Update_Motion(pmDiff);
 }
 
-bool NingerAction_Base::DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmForceBack)
+bool NingerAction_Base::DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmChasing, bool pmForceBack)
 {
 	return false;
 }
 
-bool NingerAction_Base::AOE(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly)
+bool NingerAction_Base::AOE(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmChasing)
 {
 	return false;
 }
@@ -846,6 +871,11 @@ bool NingerAction_Base::Tank(Unit* pmTarget, bool pmAOE, float pmDistanceMax, fl
 }
 
 bool NingerAction_Base::Heal(Unit* pmTarget, bool pmInstantOnly)
+{
+	return false;
+}
+
+bool NingerAction_Base::ReadyTank(Unit* pmTarget)
 {
 	return false;
 }
@@ -1307,7 +1337,7 @@ bool NingerAction_Base::CastSpell(Unit* pmTarget, uint32 pmSpellId, bool pmCheck
 	}
 	if (pmClearShapeShift)
 	{
-		
+		me->RemoveSpellsCausingAura(SPELL_AURA_MOD_SHAPESHIFT);
 	}
 	const SpellEntry* pS = sSpellTemplate.LookupEntry<SpellEntry>(pmSpellId);
 	if (!pS)
@@ -1356,7 +1386,7 @@ bool NingerAction_Base::CastSpell(Unit* pmTarget, uint32 pmSpellId, bool pmCheck
 										}
 									}
 								}
-							}								
+							}
 						}
 					}
 				}
@@ -1405,15 +1435,15 @@ bool NingerAction_Base::CastSpell(Unit* pmTarget, uint32 pmSpellId, bool pmCheck
 	{
 		me->SetStandState(UNIT_STAND_STATE_STAND);
 	}
-	me->CastSpell(pmTarget, pS, TriggerCastFlags::TRIGGERED_NONE);
-	return true;
+	//me->CastSpell(pmTarget, pS, TriggerCastFlags::TRIGGERED_NONE);
+	//return true;
 
-	//SpellCastResult scr = me->CastSpell(pmTarget, pS);
-	//if (scr == SpellCastResult::SPELL_CAST_OK)
-	//{
-	//    return true;
-	//}
-	//return false;
+	SpellCastResult scr = me->CastSpell(pmTarget, pS, TriggerCastFlags::TRIGGERED_NONE);
+	if (scr == SpellCastResult::SPELL_CAST_OK)
+	{
+		return true;
+	}
+	return false;
 }
 
 void NingerAction_Base::CancelAura(uint32 pmSpellID)

@@ -54,6 +54,17 @@ void MingerManager::InitializeManager()
 	heroicCreatureEntrySet.insert(22171); // Rift Keeper
 	heroicCreatureEntrySet.insert(22165); // Infinite Chronomancer
 	heroicCreatureEntrySet.insert(22169); // Infinite Whelp
+	heroicCreatureEntrySet.insert(24674); // Phoenix
+	heroicCreatureEntrySet.insert(24675); // Phoenix Egg
+	heroicCreatureEntrySet.insert(25564); // Magister
+	heroicCreatureEntrySet.insert(25541); // Magister
+	heroicCreatureEntrySet.insert(25550); // Magister
+	heroicCreatureEntrySet.insert(25555); // Magister
+	heroicCreatureEntrySet.insert(25579); // Magister
+	heroicCreatureEntrySet.insert(25556); // Magister
+	heroicCreatureEntrySet.insert(25549); // Magister
+	heroicCreatureEntrySet.insert(25574); // Magister
+	heroicCreatureEntrySet.insert(25578); // Magister
 
 	worldCreatureEntrySet.clear();
 	worldCreatureEntrySet.insert(21838); // terrok 

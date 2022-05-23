@@ -472,6 +472,10 @@ void UnitAI::OnChannelStateChange(Spell const* spell, bool state, WorldObject* t
         }
         else
         {
+            // lfm debug 
+            uint32 spawnId = m_unit->GetGUIDLow();
+            uint32 entry = m_unit->GetEntry();
+
             m_unit->SetFacingTo(m_unit->GetOrientation());
             m_unit->SetTarget(nullptr);
         }

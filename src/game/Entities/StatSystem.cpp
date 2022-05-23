@@ -988,15 +988,22 @@ void Creature::UpdateDamagePhysical(WeaponAttackType attType)
     weapon_mindamage = weapon_mindamage * lfmMultiplier;
     weapon_maxdamage = weapon_maxdamage * lfmMultiplier;
 
+    // Disarm for creatures
+    // lfm disarm will has not weapon damage for creature 
+    if (hasWeapon(attType) && !hasWeaponForAttack(attType))
+    {
+        weapon_mindamage = 0;
+        weapon_maxdamage = 0;
+    }
+
     float mindamage = ((base_value + weapon_mindamage) * base_pct + total_value) * total_pct;
     float maxdamage = ((base_value + weapon_maxdamage) * base_pct + total_value) * total_pct;
 
-    // Disarm for creatures
-    if (hasWeapon(attType) && !hasWeaponForAttack(attType))
-    {
-        mindamage *= 0.5f;
-        maxdamage *= 0.5f;
-    }
+    //if (hasWeapon(attType) && !hasWeaponForAttack(attType))
+    //{
+    //    mindamage *= 0.5f;
+    //    maxdamage *= 0.5f;
+    //}
 
     uint16 fieldmin, fieldmax;
 

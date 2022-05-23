@@ -855,6 +855,56 @@ bool NingerAction_Priest::Heal_Holy(Unit* pmTarget, bool pmInstantOnly)
 	return false;
 }
 
+bool NingerAction_Priest::ReadyTank(Unit* pmTarget)
+{
+	if (!me)
+	{
+		return false;
+	}
+	else if (!me->IsAlive())
+	{
+		return false;
+	}
+	if (me->IsNonMeleeSpellCasted(false, false, true))
+	{
+		return true;
+	}
+	if (!pmTarget)
+	{
+		return false;
+	}
+	else if (!pmTarget->IsAlive())
+	{
+		return false;
+	}
+	float targetDistance = me->GetDistance(pmTarget);
+	if (targetDistance > RANGE_MAX_DISTANCE)
+	{
+		return false;
+	}
+
+	if (spell_PowerWord_Shield > 0)
+	{
+		if (!pmTarget->HasAura(spell_Weakened_Soul))
+		{
+			if (CastSpell(pmTarget, spell_PowerWord_Shield))
+			{
+				return true;
+			}
+		}
+	}
+
+	if (spell_Prayer_Of_Mending > 0)
+	{
+		if (CastSpell(pmTarget, spell_Prayer_Of_Mending, true))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 bool NingerAction_Priest::GroupHeal(Unit* pmTarget, bool pmInstantOnly)
 {
 	if (!me)

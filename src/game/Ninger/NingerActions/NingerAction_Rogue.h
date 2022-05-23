@@ -11,7 +11,7 @@ public:
     void ResetTalent();
     bool InitializeEquipments(bool pmReset);
     void Prepare();
-    bool DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmForceBack);
+    bool DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmChasing, bool pmForceBack);
     bool Buff(Unit* pmTarget);
     uint32 Caution();
 

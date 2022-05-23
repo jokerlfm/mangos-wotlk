@@ -68,14 +68,15 @@ public:
 	virtual void Reset();
 	virtual void Prepare();
 	virtual void Update(uint32 pmDiff);
-	virtual bool DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmForceBack);
-	virtual bool AOE(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly);
+	virtual bool DPS(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmChasing, bool pmForceBack);
+	virtual bool AOE(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmChasing);
 	virtual bool Tank(Unit* pmTarget, bool pmAOE, float pmDistanceMax, float pmDistanceMin, bool pmHolding);
 	virtual bool Heal(Unit* pmTarget, bool pmInstantOnly);
+	virtual bool ReadyTank(Unit* pmTarget);
 	virtual bool GroupHeal(Unit* pmTarget, bool pmInstantOnly);
 	virtual bool SimpleHeal(Unit* pmTarget, bool pmInstantOnly);
 	virtual bool Cure(Unit* pmTarget);
-	virtual bool Buff(Unit* pmTarget);
+	virtual bool Buff(Unit* pmTarget);	
 	virtual uint32 Caution();
 	virtual bool Mark(Unit* pmTarget,int pmRTI);
 	virtual bool Assist(int pmRTI);
