@@ -1139,6 +1139,29 @@ GameObjectAI* GetAI_go_containment(GameObject* go)
     return new go_containment(go);
 }
 
+// lfm quest 11670 
+struct go_warsong_banner_magmothregar : public GameObjectAI
+{
+    go_warsong_banner_magmothregar(GameObject* go) : GameObjectAI(go) {}
+
+    void JustSpawned()
+    {
+        if (Player* spawnerPlayer = (Player*)m_go->GetSpawner())
+        {
+            if (spawnerPlayer->HasAura(45759))
+            {
+                //spawnerPlayer->KilledMonsterCredit(25581);
+                spawnerPlayer->CastSpell(nullptr, 45744, TriggerCastFlags::TRIGGERED_NONE);
+            }
+        }
+    }
+};
+
+GameObjectAI* GetAI_go_warsong_banner_magmothregar(GameObject* go)
+{
+    return new go_warsong_banner_magmothregar(go);
+}
+
 void AddSC_go_scripts()
 {
     Script* pNewScript = new Script;
@@ -1249,5 +1272,11 @@ void AddSC_go_scripts()
     pNewScript = new Script;
     pNewScript->Name = "go_containment_coffer";
     pNewScript->GetGameObjectAI = &GetAI_go_containment;
+    pNewScript->RegisterSelf();
+
+    // lfm go scripts
+    pNewScript = new Script;
+    pNewScript->Name = "go_warsong_banner_magmothregar";
+    pNewScript->GetGameObjectAI = &GetAI_go_warsong_banner_magmothregar;
     pNewScript->RegisterSelf();
 }

@@ -2095,6 +2095,7 @@ bool Map::ScriptsStart(ScriptMapMapName const& scripts, uint32 id, Object* sourc
     while (scriptInfoItr != scriptMap.end())
     {
         auto const& scriptInfo = scriptInfoItr->second;
+
         if (scriptInfo.delay > 0)
             break;
 

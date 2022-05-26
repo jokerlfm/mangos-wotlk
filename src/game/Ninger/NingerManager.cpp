@@ -34,6 +34,11 @@ NingerManager::NingerManager()
 
 void NingerManager::InitializeManager()
 {
+	if (sNingerConfig.Enable == 0)
+	{
+		return;
+	}
+
 	sLog.outBasic("Initialize ninger");
 
 	checkDelay = sNingerConfig.ManagerCheckDelay;
@@ -1941,6 +1946,28 @@ void NingerManager::HandleChatCommand(Player* pmCommander, std::string pmContent
 			{
 				uint32 spellId = std::stoi(commandVector.at(1));
 				SpellCastResult scr = targetU->CastSpell(targetU, spellId, TriggerCastFlags::TRIGGERED_NONE);
+				replyStream << "Cast result : " << scr;
+			}
+			else
+			{
+				replyStream << "No spell";
+			}
+		}
+		else
+		{
+			replyStream << "No t";
+		}
+		sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, replyStream.str().c_str(), pmCommander);
+	}
+	else if (commandName == "castt")
+	{
+		std::ostringstream replyStream;
+		if (Unit* targetU = pmCommander->GetTarget())
+		{
+			if (commandVector.size() > 1)
+			{
+				uint32 spellId = std::stoi(commandVector.at(1));
+				SpellCastResult scr = pmCommander->CastSpell(targetU, spellId, TriggerCastFlags::TRIGGERED_NONE);
 				replyStream << "Cast result : " << scr;
 			}
 			else

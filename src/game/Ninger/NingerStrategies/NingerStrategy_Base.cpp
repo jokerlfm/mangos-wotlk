@@ -1246,7 +1246,7 @@ bool NingerStrategy_Base::Follow()
 		{
 			if (Player* tank = ObjectAccessor::FindPlayer(ogTank))
 			{
-				if (me->ningerAction->nm->Follow(tank, followDistance, 0.0f, basicStrategyType == BasicStrategyType::BasicStrategyType_Hold))
+				if (me->ningerAction->Follow(tank, followDistance, 0.0f, basicStrategyType == BasicStrategyType::BasicStrategyType_Hold))
 				{
 					ogActionTarget = tank->GetObjectGuid();
 					return true;
@@ -1255,7 +1255,7 @@ bool NingerStrategy_Base::Follow()
 		}
 		if (Player* leader = ObjectAccessor::FindPlayer(myGroup->GetLeaderGuid()))
 		{
-			if (me->ningerAction->nm->Follow(leader, followDistance, 0.0f, basicStrategyType == BasicStrategyType::BasicStrategyType_Hold))
+			if (me->ningerAction->Follow(leader, followDistance, 0.0f, basicStrategyType == BasicStrategyType::BasicStrategyType_Hold))
 			{
 				ogActionTarget = leader->GetObjectGuid();
 				return true;

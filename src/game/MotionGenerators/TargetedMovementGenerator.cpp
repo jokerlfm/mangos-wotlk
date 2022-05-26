@@ -979,8 +979,18 @@ bool FollowMovementGenerator::_getLocation(Unit& owner, float& x, float& y, floa
     }
 
     const float radius = owner.GetObjectBoundingRadius();
-    const float range = GetDynamicTargetDistance(owner, false);
-    const float angle = (to + GetAngle());
+    const float range = GetDynamicTargetDistance(owner, false);    
+
+    // lfm follow motion will ignore angle if 0.0f 
+    float angle = (to + GetAngle());
+    if (GetAngle() == 0.0f)
+    {
+        Position posT;
+        posT.x = tx;
+        posT.y = ty;
+        posT.z = tz;
+        angle = posT.GetAngle(owner.GetPositionX(), owner.GetPositionY());
+    }
 
     i_target->GetNearPointAt(tx, ty, tz, &owner, x, y, z, radius, range, angle);
     return true;

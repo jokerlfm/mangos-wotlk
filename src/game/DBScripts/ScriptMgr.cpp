@@ -1714,7 +1714,15 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
                                 m_script->id, m_script->removeFlag.fieldId, pSourceOrItem->GetValuesCount(), pSourceOrItem->GetGuidStr().c_str());
                 break;
             }
-            pSourceOrItem->RemoveFlag(m_script->removeFlag.fieldId, m_script->removeFlag.fieldValue);
+            // lfm command script do source if target is null 
+            if (pTarget)
+            {
+                pTarget->RemoveFlag(m_script->removeFlag.fieldId, m_script->removeFlag.fieldValue);
+            }
+            else
+            {
+                pSourceOrItem->RemoveFlag(m_script->removeFlag.fieldId, m_script->removeFlag.fieldValue);
+            }            
             break;
         case SCRIPT_COMMAND_TELEPORT_TO:                    // 6
         {
@@ -1960,6 +1968,7 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
         {
             // Select Spell
             uint32 spell = m_script->castSpell.spellId;
+
             uint32 filledCount = 0;
             while (filledCount < MAX_TEXT_ID && m_script->textId[filledCount])  // Count which dataint fields are filled
                 ++filledCount;
@@ -2314,7 +2323,7 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
             break;
         }
         case SCRIPT_COMMAND_TERMINATE_SCRIPT:               // 31
-        {
+        {            
             if (!pSource && (!pTarget && ((m_script->data_flags & SCRIPT_FLAG_BUDDY_BY_GUID) == 0)))
             {
                 sLog.outErrorDb(" DB-SCRIPTS: Process table `%s` id %u, command %u call for nullptr, skipping.", m_table, m_script->id, m_script->command);

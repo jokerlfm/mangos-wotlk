@@ -4935,6 +4935,13 @@ void Spell::EffectJump(SpellEffectIndex eff_idx)
 
 void Spell::EffectTeleportUnits(SpellEffectIndex eff_idx)   // TODO - Use target settings for this effect!
 {
+    // lfm debug 
+    uint32 spellId = m_spellInfo->Id;
+    if (spellId == 57840)
+    {
+        bool breakPoint = true;
+    }
+
     if (!unitTarget || unitTarget->IsTaxiFlying())
         return;
 
@@ -5009,7 +5016,11 @@ void Spell::EffectTeleportUnits(SpellEffectIndex eff_idx)   // TODO - Use target
         }
         else
         {
-            unitTarget->NearTeleportTo(position.x, position.y, position.z, orientation, unitTarget == m_caster,
+            float destX = position.x;
+            float destY = position.y;
+            float destZ = position.z;
+            unitTarget->UpdateGroundPositionZ(destX, destY, destZ);
+            unitTarget->NearTeleportTo(destX, destY, destZ, orientation, unitTarget == m_caster,
                 m_spellInfo->EffectImplicitTargetA[eff_idx] == TARGET_LOCATION_DATABASE ||
                 m_spellInfo->EffectImplicitTargetB[eff_idx] == TARGET_LOCATION_DATABASE); // TODO: Fill this with m_targets instead and compare against target
         }
@@ -11429,6 +11440,13 @@ void Spell::EffectSummonPlayer(SpellEffectIndex /*eff_idx*/)
 
 void Spell::EffectActivateObject(SpellEffectIndex effIdx)
 {
+    // lfm debug 
+    uint32 spellId = m_spellInfo->Id;
+    if (spellId == 46201)
+    {
+        bool breakPoint = true;
+    }
+
     if (!gameObjTarget)
         return;
 
@@ -11481,9 +11499,18 @@ void Spell::EffectActivateObject(SpellEffectIndex effIdx)
         case GameObjectActions::CLOSE:
         case GameObjectActions::REBUILD:
             if (m_spellInfo->Id == 46610)
+            {
                 gameObjTarget->Use(m_caster, m_spellInfo);
+            }
+            // lfm mammoth calf trap
+            else if (m_spellInfo->Id == 46201)
+            {
+                gameObjTarget->Use(m_caster, m_spellInfo);
+            }
             else
+            {
                 gameObjTarget->ResetDoorOrButton();
+            }
             break;
         case GameObjectActions::DESPAWN:
             gameObjTarget->ForcedDespawn();

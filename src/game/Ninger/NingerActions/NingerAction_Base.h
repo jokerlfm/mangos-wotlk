@@ -36,6 +36,7 @@ public:
 	void ResetMovement();
 	void Update_Direct(uint32 pmDiff);
 	void Update_Motion(uint32 pmDiff);
+	void Update_Follow(uint32 pmDiff);
 
 	void Run();
 	bool Tank(Unit* pmTankTarget, float pmDistanceMax, float pmDistanceMin, bool pmHolding);
@@ -44,8 +45,7 @@ public:
 	void Point(Position pmPosTarget, uint32 pmLimit = DEFAULT_ACTION_LIMIT_DELAY);
 	bool Direction(Unit* pmCommander, uint32 pmDirection, uint32 pmLimit = DEFAULT_ACTION_LIMIT_DELAY, float pmDistance = INTERACTION_DISTANCE);
 	bool Direction(float pmAngle, uint32 pmLimit = DEFAULT_ACTION_LIMIT_DELAY, float pmDistance = RANGE_MIN_DISTANCE);
-	Position GetDestPosition(Unit* pmSearcher, float pmDistance);
-	Position GetDestPositionWithAngle(Unit* pmSearcher, float pmAngle, float pmDistanceMax, float pmDistanceMin = MIN_DISTANCE_GAP);
+	Position GetDestPosition(Unit* pmTarget, float pmMoveDistance, bool pmCloser);
 
 public:
 	Player* me;
@@ -72,6 +72,7 @@ public:
 	virtual bool AOE(Unit* pmTarget, bool pmRushing, float pmDistanceMax, float pmDistanceMin, bool pmHolding, bool pmInstantOnly, bool pmChasing);
 	virtual bool Tank(Unit* pmTarget, bool pmAOE, float pmDistanceMax, float pmDistanceMin, bool pmHolding);
 	virtual bool Heal(Unit* pmTarget, bool pmInstantOnly);
+	virtual bool Follow(Unit* pmFollowTarget, float pmDistanceMax, float pmDistanceMin, bool pmHolding);
 	virtual bool ReadyTank(Unit* pmTarget);
 	virtual bool GroupHeal(Unit* pmTarget, bool pmInstantOnly);
 	virtual bool SimpleHeal(Unit* pmTarget, bool pmInstantOnly);

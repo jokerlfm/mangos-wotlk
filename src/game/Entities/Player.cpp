@@ -2578,8 +2578,7 @@ void Player::Regenerate(Powers power, uint32 diff)
         {
             // lfm new energy 
             //addvalue += 0.01f * m_regenTimer * sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_ENERGY);
-            float EnergyRate = sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_ENERGY);
-            addvalue = uint32(float(diff) / 100) * EnergyRate * m_energyRegenRate;
+            addvalue += 0.01f * diff * sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_ENERGY);
             break;
         }
         case POWER_RUNIC_POWER:

@@ -91,6 +91,10 @@
 #include "NingerConfig.h"
 #include "NingerManager.h"
 
+// lfm linger 
+#include "LingerConfig.h"
+#include "LingerManager.h"
+
 INSTANTIATE_SINGLETON_1(World);
 
 volatile bool World::m_stopEvent = false;
@@ -1535,6 +1539,12 @@ void World::SetInitialWorldSettings()
         sNingerManager->InitializeManager();
     }
 
+    // lfm linger
+    if (sLingerConfig.StartLinger())
+    {
+        sLingerManager->InitializeManager();
+    }
+
     sLog.outString("---------------------------------------");
     sLog.outString("      CMANGOS: World initialized       ");
     sLog.outString("---------------------------------------");
@@ -1774,6 +1784,9 @@ void World::Update(uint32 diff)
     // lfm ninger
     sNingerManager->UpdateNingerManager(diff);
     sNingerManager->UpdateNingerEntities(diff);
+
+    // lfm linger 
+    sLingerManager->UpdateManager(diff);
 }
 
 namespace MaNGOS
