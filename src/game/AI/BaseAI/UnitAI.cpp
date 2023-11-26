@@ -28,6 +28,7 @@
 #include "World/World.h"
 #include "Maps/TransportSystem.h"
 #include "MotionGenerators/MovementGenerator.h"
+#include "Globals/ObjectMgr.h"
 #include <limits>
 
 static_assert(MAXIMAL_AI_EVENT_EVENTAI <= 32, "Maximal 32 AI_EVENTs supported with EventAI");
@@ -47,7 +48,7 @@ UnitAI::UnitAI(Unit* unit, uint32 combatActions) :
     m_combatMovementStarted(false),
     m_dismountOnAggro(true),
     m_meleeEnabled(true),
-    m_selfRooted(false),
+    m_combatOnlyRoot(false),
     m_reactState(REACT_AGGRESSIVE),
     m_combatScriptHappening(false),
     m_currentAIOrder(ORDER_NONE),
@@ -103,12 +104,16 @@ void UnitAI::MoveInLineOfSight(Unit* who)
 
 void UnitAI::EnterCombat(Unit*)
 {
-    AddInitialCooldowns();
+    if (!GetSpellList().Disabled && !GetSpellList().Spells.empty())
+    {
+        m_spellListCooldown = false;
+        AddInitialCooldowns();
+    }
 }
 
 void UnitAI::EnterEvadeMode()
 {
-    ClearSelfRoot();
+    ClearCombatOnlyRoot();
     m_unit->RemoveAllAurasOnEvade();
     m_unit->CombatStopWithPets(true);
 
@@ -124,9 +129,9 @@ void UnitAI::EnterEvadeMode()
     m_unit->TriggerEvadeEvents();
 }
 
-void UnitAI::JustDied(Unit* killer)
+void UnitAI::JustDied(Unit* /*killer*/)
 {
-    ClearSelfRoot();
+    ClearCombatOnlyRoot();
 }
 
 void UnitAI::AttackedBy(Unit* attacker)
@@ -240,6 +245,7 @@ CanCastResult UnitAI::DoCastSpellIfCan(Unit* target, uint32 spellId, uint32 cast
                             canCastResult = CAST_FAIL_CAST_PREVENTED;
                             break;
                         }
+                        [[fallthrough]];
                     case SPELL_FAILED_STUNNED:
                     case SPELL_FAILED_CONFUSED:
                     case SPELL_FAILED_FLEEING:
@@ -252,6 +258,8 @@ CanCastResult UnitAI::DoCastSpellIfCan(Unit* target, uint32 spellId, uint32 cast
                         canCastResult = CAST_FAIL_POWER;
                         break;
                     case SPELL_FAILED_CASTER_AURASTATE: // valid - doesnt need logging
+                    case SPELL_FAILED_TARGET_AURASTATE:
+                    case SPELL_FAILED_TARGET_NO_WEAPONS:
                     case SPELL_FAILED_BAD_TARGETS:
                     case SPELL_FAILED_DONT_REPORT:
                         canCastResult = CAST_FAIL_MISCELLANEOUS;
@@ -260,7 +268,7 @@ CanCastResult UnitAI::DoCastSpellIfCan(Unit* target, uint32 spellId, uint32 cast
                 }
 
                 if (canCastResult == CAST_FAIL_OTHER)
-                    sLog.outBasic("DoCastSpellIfCan by %s attempt to cast spell %u but spell failed due to unknown result %u.", m_unit->GetObjectGuid().GetString().c_str(), spellId, result);
+                    sLog.outBasic("DoCastSpellIfCan by %s attempt to cast spell %u but spell failed due to unknown result %u : %s.", m_unit->GetObjectGuid().GetString().c_str(), spellId, result, GetSpellCastResultString(result));
                 return HandleSpellCastResult(canCastResult, spellInfo);
             }
             return HandleSpellCastResult(CAST_OK, spellInfo);
@@ -350,7 +358,7 @@ void UnitAI::OnSpellCastStateChange(Spell const* spell, bool state, WorldObject*
         return;
 
     SpellEntry const* spellInfo = spell->m_spellInfo;
-    if (spellInfo->HasAttribute(SPELL_ATTR_EX4_CAN_CAST_WHILE_CASTING) || spellInfo->HasAttribute(SPELL_ATTR_ON_NEXT_SWING_NO_DAMAGE) || spellInfo->HasAttribute(SPELL_ATTR_ON_NEXT_SWING) || spellInfo->HasAttribute(SPELL_ATTR_EX5_AI_DOESNT_FACE_TARGET))
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX4_ALLOW_CAST_WHILE_CASTING) || spellInfo->HasAttribute(SPELL_ATTR_ON_NEXT_SWING_NO_DAMAGE) || spellInfo->HasAttribute(SPELL_ATTR_ON_NEXT_SWING))
         return;
 
     // Creature should always stop before it will cast a non-instant spell
@@ -389,7 +397,7 @@ void UnitAI::OnSpellCastStateChange(Spell const* spell, bool state, WorldObject*
 
     if (state)
     {
-        if (target && (m_unit != target || forceTarget))
+        if (!spellInfo->HasAttribute(SPELL_ATTR_EX5_AI_DOESNT_FACE_TARGET) && target && (m_unit != target || forceTarget))
         {
             m_unit->SetTarget(target);
             if (m_unit != target)
@@ -435,9 +443,9 @@ void UnitAI::OnChannelStateChange(Spell const* spell, bool state, WorldObject* t
 
     SpellEntry const* spellInfo = spell->m_spellInfo;
     // TODO: Determine if CHANNEL_FLAG_MOVEMENT is worth implementing
-    if (!spellInfo->HasAttribute(SPELL_ATTR_EX_CHANNEL_TRACK_TARGET))
+    if (!spellInfo->HasAttribute(SPELL_ATTR_EX_TRACK_TARGET_IN_CHANNEL))
     {
-        if (spellInfo->HasAttribute(SPELL_ATTR_EX4_CAN_CAST_WHILE_CASTING))
+        if (spellInfo->HasAttribute(SPELL_ATTR_EX4_ALLOW_CAST_WHILE_CASTING))
             return;
     }
 
@@ -455,12 +463,12 @@ void UnitAI::OnChannelStateChange(Spell const* spell, bool state, WorldObject* t
         default: break;
     }
 
-    if (spellInfo->HasAttribute(SPELL_ATTR_EX_CHANNEL_TRACK_TARGET))
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX_TRACK_TARGET_IN_CHANNEL))
         forceTarget = true;
 
     if (state)
     {
-        if ((spellInfo->ChannelInterruptFlags & AURA_INTERRUPT_FLAG_TURNING && !spellInfo->HasAttribute(SPELL_ATTR_EX_CHANNEL_TRACK_TARGET)) || !forceTarget)
+        if ((spellInfo->ChannelInterruptFlags & AURA_INTERRUPT_FLAG_TURNING && !spellInfo->HasAttribute(SPELL_ATTR_EX_TRACK_TARGET_IN_CHANNEL)) || !forceTarget)
         {
             m_unit->SetFacingTo(m_unit->GetOrientation());
             m_unit->SetTarget(nullptr);
@@ -695,6 +703,18 @@ Unit* UnitAI::DoSelectLowestHpFriendly(float range, float minMissing, bool perce
     return unit;
 }
 
+Unit* UnitAI::DoSelectConditionalFriendly(float range, int32 unitConditionId) const
+{
+    Unit* unit = nullptr;
+
+    MaNGOS::FriendlyEligibleUnitConditionCheck u_check(m_unit, range, unitConditionId);
+    MaNGOS::UnitLastSearcher<MaNGOS::FriendlyEligibleUnitConditionCheck> searcher(unit, u_check);
+
+    Cell::VisitGridObjects(m_unit, searcher, range);
+
+    return unit;
+}
+
 float UnitAI::CalculateSpellRange(SpellEntry const* spellInfo) const
 {
     // optimized duplicate of Spell::GetMinMaxRange for just max range
@@ -725,7 +745,7 @@ CreatureList UnitAI::DoFindFriendlyEligibleDispel(SpellEntry const* spellInfo, b
     return DoFindFriendlyEligibleDispel(maxRange, dispelMask, mechanicMask, self);
 }
 
-CreatureList UnitAI::DoFindFriendlyMissingBuff(float range, uint32 spellId, bool inCombat, bool self) const
+CreatureList UnitAI::DoFindFriendlyMissingBuff(float /*range*/, uint32 spellId, bool inCombat, bool self) const
 {
     return DoFindFriendlyMissingBuff(sSpellTemplate.LookupEntry<SpellEntry>(spellId), inCombat, self);
 }
@@ -736,15 +756,14 @@ CreatureList UnitAI::DoFindFriendlyMissingBuff(SpellEntry const* spellInfo, bool
     float maxRange = CalculateSpellRange(spellInfo);
     if (inCombat == false)
     {
-        MaNGOS::FriendlyMissingBuffInRangeInCombatCheck u_check(m_unit, maxRange, spellInfo->Id);
-        MaNGOS::CreatureListSearcher<MaNGOS::FriendlyMissingBuffInRangeInCombatCheck> searcher(list, u_check);
+        MaNGOS::FriendlyMissingBuffInRangeNotInCombatCheck u_check(m_unit, maxRange, spellInfo->Id);
+        MaNGOS::CreatureListSearcher<MaNGOS::FriendlyMissingBuffInRangeNotInCombatCheck> searcher(list, u_check);
         Cell::VisitGridObjects(m_unit, searcher, maxRange);
     }
     else if (inCombat == true)
     {
-        MaNGOS::FriendlyMissingBuffInRangeNotInCombatCheck u_check(m_unit, maxRange, spellInfo->Id);
-        MaNGOS::CreatureListSearcher<MaNGOS::FriendlyMissingBuffInRangeNotInCombatCheck> searcher(list, u_check);
-
+        MaNGOS::FriendlyMissingBuffInRangeInCombatCheck u_check(m_unit, maxRange, spellInfo->Id);
+        MaNGOS::CreatureListSearcher<MaNGOS::FriendlyMissingBuffInRangeInCombatCheck> searcher(list, u_check);
         Cell::VisitGridObjects(m_unit, searcher, maxRange);
     }
 
@@ -862,10 +881,16 @@ CanCastResult UnitAI::HandleSpellCastResult(CanCastResult result, SpellEntry con
     return result;
 }
 
+void UnitAI::JumpingEnded()
+{
+    if (!m_unit->IsAlive() && !GetCombatScriptStatus())
+        return;
+    DoStartMovement(m_unit->GetVictim());
+}
+
 void UnitAI::AttackSpecificEnemy(std::function<void(Unit*, Unit*&)> check)
 {
     Unit* chosenEnemy = nullptr;
-    float distance = std::numeric_limits<float>::max();
     ThreatList const& list = m_unit->getThreatManager().getThreatList();
     for (auto& data : list)
     {
@@ -890,19 +915,25 @@ void UnitAI::AttackClosestEnemy()
     });
 }
 
-void UnitAI::SetRootSelf(bool apply, bool combatOnly)
+void UnitAI::SetAIImmobilizedState(bool apply, bool combatOnly)
 {
     if (combatOnly)
-        m_selfRooted = apply;
+        m_combatOnlyRoot = apply;
+
+    if (apply)
+        m_unit->addUnitState(UNIT_STAT_AI_ROOT);
+    else
+        m_unit->clearUnitState(UNIT_STAT_AI_ROOT);
+
     m_unit->SetImmobilizedState(apply);
 }
 
-void UnitAI::ClearSelfRoot()
+void UnitAI::ClearCombatOnlyRoot()
 {
-    if (m_selfRooted)
+    if (m_combatOnlyRoot)
     {
         m_unit->SetImmobilizedState(false);
-        m_selfRooted = false;
+        m_combatOnlyRoot = false;
     }
 }
 
@@ -1115,9 +1146,9 @@ void UnitAI::UpdateAI(const uint32 diff)
         }
     }
 
-    UpdateSpellLists();
+    ExecuteActions(); // before lists so phase transitions have higher priority
 
-    ExecuteActions();
+    UpdateSpellLists();
 
     DoMeleeAttackIfReady();
 }
@@ -1150,9 +1181,17 @@ bool UnitAI::IsEligibleForDistancing() const
 
 void UnitAI::SpellListChanged()
 {
+    m_mainSpellId = 0;
+    m_mainSpellCost = 0;
+    m_mainSpellMinRange = 0;
+    m_mainAttackMask = SPELL_SCHOOL_MASK_NONE;
+    m_mainSpellInfo = nullptr;
+    m_mainSpells.clear();
+
     CreatureSpellList const& spells = GetSpellList();
     if (spells.Disabled)
         return;
+
     for (auto& data : spells.Spells)
     {
         if (data.second.Flags & SPELL_LIST_FLAG_RANGED_ACTION)
@@ -1181,6 +1220,7 @@ void UnitAI::UpdateSpellLists()
 
     // when probability is 0 for all spells, they will use priority based on positions
     std::vector<std::tuple<uint32, uint32, uint32, Unit*>> eligibleSpells;
+    std::vector<std::tuple<uint32, uint32, uint32, Unit*>> nonBlockingSpells;
     uint32 sum = 0;
 
     // one roll due to multiple spells
@@ -1190,9 +1230,21 @@ void UnitAI::UpdateSpellLists()
     {
         CreatureSpellListSpell const& spell = data.second;
 
+        if (spell.DisabledForAI)
+            continue;
+
         if (spell.Flags & SPELL_LIST_FLAG_SUPPORT_ACTION)
             if (supportActionRoll > spells.ChanceSupportAction)
                 continue;
+
+        bool oldBehaviour = spell.CombatCondition == -1;
+        if (spell.CombatCondition != -1 && spell.CombatCondition)
+        {
+            SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spell.SpellId);
+            float maxRange = CalculateSpellRange(spellInfo);
+            if (!sObjectMgr.IsCombatConditionSatisfied(spell.CombatCondition, m_unit, maxRange))
+                continue;
+        }
 
         // chance is either base in ranged mode or chance - 50 in melee mode
         // meant to simulate chaincasting in ranged mode and mostly not chaincasting in melee mode
@@ -1208,15 +1260,40 @@ void UnitAI::UpdateSpellLists()
         if (!result)
             continue;
 
-        eligibleSpells.emplace_back(spell.SpellId, spell.Probability, spell.ScriptId, target);
-        sum += spell.Probability;
+        if (spell.Flags & SPELL_LIST_FLAG_NON_BLOCKING)
+            nonBlockingSpells.emplace_back(spell.SpellId, spell.Probability, spell.ScriptId, target);
+        else
+        {
+            eligibleSpells.emplace_back(spell.SpellId, spell.Probability, spell.ScriptId, target);
+            sum += spell.Probability;
+        }
     }
 
-    if (eligibleSpells.size() > 1)
+    if (eligibleSpells.size() > 1 && sum != 0) // sum == 0 is meant to be priority based (lower position, higher priority)
         std::shuffle(eligibleSpells.begin(), eligibleSpells.end(), *GetRandomGenerator());
 
-    // will hit first eligible spell when sum is 0 because probability 0 < roll 1
-    uint32 spellRoll = sum == 0 ? 1 : urand(0, sum - 1);
+    auto executeSpell = [&](uint32 spellId, uint32 probability, uint32 scriptId, Unit* target) -> bool
+    {
+        CanCastResult castResult = DoCastSpellIfCan(target, spellId);
+        if (castResult == CAST_OK)
+        {
+            OnSpellCast(sSpellTemplate.LookupEntry<SpellEntry>(spellId), target);
+            if (scriptId)
+                m_unit->GetMap()->ScriptsStart(SCRIPT_TYPE_RELAY, scriptId, m_unit, target);
+            return true;
+        }
+        return false;
+    };
+
+    for (auto& data : nonBlockingSpells)
+    {
+        uint32 spellId; uint32 probability; uint32 scriptId; Unit* target;
+        std::tie(spellId, probability, scriptId, target) = data;
+        executeSpell(spellId, probability, scriptId, target);
+    }
+
+    // will hit first eligible spell when sum is 0 because roll -1 < probability 0
+    int32 spellRoll = sum == 0 ? -1 : irand(0, sum - 1);
     bool success = false;
     // loop until either one spell was cast successfully or ran out of eligible spells
     do
@@ -1225,26 +1302,17 @@ void UnitAI::UpdateSpellLists()
         {
             uint32 spellId; uint32 probability; uint32 scriptId; Unit* target;
             std::tie(spellId, probability, scriptId, target) = *itr;
-            if (probability < spellRoll)
+            if (spellRoll < int32(probability))
             {
-                CanCastResult castResult = DoCastSpellIfCan(target, spellId);
-                if (castResult == CAST_OK)
-                {
-                    success = true;
-                    OnSpellCast(sSpellTemplate.LookupEntry<SpellEntry>(spellId), target);
-                    if (scriptId)
-                        m_unit->GetMap()->ScriptsStart(sRelayScripts, scriptId, m_unit, target);
-                    break;
-                }
+                success = executeSpell(spellId, probability, scriptId, target);
                 itr = eligibleSpells.erase(itr);
             }
             else
                 ++itr;
             spellRoll -= probability;
         }
-    } while (!success && !eligibleSpells.empty());
-
-
+    }
+    while (!success && !eligibleSpells.empty());
 }
 
 std::pair<bool, Unit*> UnitAI::ChooseTarget(CreatureSpellListTargeting* targetData, uint32 spellId) const
@@ -1295,15 +1363,20 @@ std::pair<bool, Unit*> UnitAI::ChooseTarget(CreatureSpellListTargeting* targetDa
             }
             break;
         case SPELL_LIST_TARGETING_ATTACK:
-            target = m_unit->SelectAttackingTarget(AttackingTarget(targetData->Param1), targetData->Param2, spellId, targetData->Param3);
+            target = m_unit->SelectAttackingTarget(AttackingTarget(targetData->Param1), targetData->Param2, spellId, targetData->Param3, SelectAttackingTargetParams(), targetData->UnitCondition != -1 ? targetData->UnitCondition : 0);
             if (!target)
                 result = false;
+            if (targetData->Param3 & (SELECT_FLAG_USE_EFFECT_RADIUS | SELECT_FLAG_USE_EFFECT_RADIUS_OF_TRIGGERED_SPELL)) // these select flags only check if target exists but doesnt pass it to cast
+                target = nullptr;
             break;
         case SPELL_LIST_TARGETING_SUPPORT:
             SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
             float maxRange = CalculateSpellRange(spellInfo);
             // Combat Range is added in the grid search
-            target = DoSelectLowestHpFriendly(maxRange, float(targetData->Param1), bool(targetData->Param2), bool(targetData->Param3));
+            if (targetData->UnitCondition != -1)
+                target = DoSelectConditionalFriendly(maxRange, targetData->UnitCondition);
+            else
+                target = DoSelectLowestHpFriendly(maxRange, float(targetData->Param1), bool(targetData->Param2), bool(targetData->Param3));
             if (!target)
                 result = false;
             break;
@@ -1320,7 +1393,7 @@ void UnitAI::AddInitialCooldowns()
         if (cooldown)
         {
             SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(data.second.SpellId);
-            m_unit->AddCooldown(*spellInfo, nullptr, false, cooldown);
+            m_unit->AddCooldown(*spellInfo, nullptr, false, cooldown, true);
         }
     }
 }

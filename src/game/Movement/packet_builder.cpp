@@ -18,7 +18,7 @@
 
 #include "packet_builder.h"
 #include "MoveSpline.h"
-#include "WorldPacket.h"
+#include "Server/WorldPacket.h"
 
 namespace Movement
 {
@@ -35,13 +35,6 @@ namespace Movement
     void PacketBuilder::WriteCommonMonsterMovePart(const MoveSpline& move_spline, WorldPacket& data)
     {
         MoveSplineFlag splineflags = move_spline.splineflags;
-
-        /*if (mov.IsBoarded())
-        {
-            data.SetOpcode(SMSG_MONSTER_MOVE_TRANSPORT);
-            data << mov.GetTransport()->Owner.GetPackGUID();
-            data << int8(mov.m_unused.transport_seat);
-        }*/
 
         data << uint8(0);
         data << move_spline.spline.getPoint(move_spline.spline.first());
@@ -71,7 +64,7 @@ namespace Movement
         if (splineflags.animation)
         {
             data << splineflags.getAnimationId();
-            data << move_spline.effect_start_time;
+            data << move_spline.parabolic_start_time;
         }
 
         data << move_spline.Duration();
@@ -79,7 +72,7 @@ namespace Movement
         if (splineflags.parabolic)
         {
             data << move_spline.vertical_acceleration;
-            data << move_spline.effect_start_time;
+            data << move_spline.animation_start_time;
         }
     }
 
@@ -164,7 +157,7 @@ namespace Movement
             data << float(1.f);                             // splineInfo.duration_mod_next; added in 3.1
 
             data << move_spline.vertical_acceleration;      // added in 3.1
-            data << move_spline.effect_start_time;          // added in 3.1
+            data << move_spline.parabolic_start_time;       // added in 3.1
 
             uint32 nodes = move_spline.getPath().size();
             data << nodes;

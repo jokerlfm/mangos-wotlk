@@ -39,6 +39,7 @@ at_huldar_miran                 171
 at_area_52                      4422, 4466, 4471, 4472
 at_twilight_grove               4017
 at_hive_tower                   3146
+at_at_underbelly                5693, 5691
 EndContentData */
 
 #include "AI/ScriptDevAI/include/sc_common.h"
@@ -176,19 +177,22 @@ enum
 {
     QUEST_MISTWHISPER_TREASURE          = 12575,
     NPC_TARTEK                          = 28105,
+    NPC_ZEPTEK                          = 28399,
 };
 
 // 5030
-bool AreaTrigger_at_spearborn_encampment(Player* pPlayer, AreaTriggerEntry const* pAt)
+bool AreaTrigger_at_spearborn_encampment(Player* pPlayer, AreaTriggerEntry const* /*pAt*/)
 {
     if (pPlayer->GetQuestStatus(QUEST_MISTWHISPER_TREASURE) == QUEST_STATUS_INCOMPLETE &&
             pPlayer->GetReqKillOrCastCurrentCount(QUEST_MISTWHISPER_TREASURE, NPC_TARTEK) == 0)
     {
-        // can only spawn one at a time, it's not a too good solution
+        // can only spawn one at a time
         if (GetClosestCreatureWithEntry(pPlayer, NPC_TARTEK, 50.0f))
             return false;
+        if (GetClosestCreatureWithEntry(pPlayer, NPC_ZEPTEK, 50.0f))
+            return false;
 
-        pPlayer->SummonCreature(NPC_TARTEK, pAt->x, pAt->y, pAt->z, 0.0f, TEMPSPAWN_TIMED_OOC_OR_DEAD_DESPAWN, MINUTE * IN_MILLISECONDS);
+        pPlayer->SummonCreature(NPC_ZEPTEK, 6710.399f, 5162.64f, -20.66248f, 4.753422f, TEMPSPAWN_TIMED_OOC_OR_DEAD_DESPAWN, MINUTE * IN_MILLISECONDS);
     }
 
     return false;
@@ -605,6 +609,22 @@ bool AreaTrigger_at_hive_tower(Player* player, AreaTriggerEntry const* /*pAt*/)
     return false;
 }
 
+/*######
+## at_quetzlun
+######*/
+
+enum
+{
+    QUEST_I_SENSE_A_DISTURBANCE = 12665,
+};
+
+bool AreaTrigger_at_quetzlun(Player* player, AreaTriggerEntry const* /*at*/)
+{
+    if (player->GetQuestStatus(QUEST_I_SENSE_A_DISTURBANCE) == QUEST_STATUS_INCOMPLETE)
+        player->RewardPlayerAndGroupAtEventExplored(QUEST_I_SENSE_A_DISTURBANCE, player);
+    return true;
+}
+
 void AddSC_areatrigger_scripts()
 {
     Script* pNewScript = new Script;
@@ -695,5 +715,10 @@ void AddSC_areatrigger_scripts()
     pNewScript = new Script;
     pNewScript->Name = "at_hive_tower";
     pNewScript->pAreaTrigger = &AreaTrigger_at_hive_tower;
+    pNewScript->RegisterSelf();
+
+    pNewScript = new Script;
+    pNewScript->Name = "at_quetzlun";
+    pNewScript->pAreaTrigger = &AreaTrigger_at_quetzlun;
     pNewScript->RegisterSelf();
 }

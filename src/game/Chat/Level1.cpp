@@ -18,7 +18,7 @@
 
 #include "Common.h"
 #include "Database/DatabaseEnv.h"
-#include "WorldPacket.h"
+#include "Server/WorldPacket.h"
 #include "Server/WorldSession.h"
 #include "World/World.h"
 #include "Globals/ObjectMgr.h"
@@ -34,7 +34,7 @@
 #include "Maps/GridDefines.h"
 #include "Maps/MapPersistentStateMgr.h"
 #include "Mails/Mail.h"
-#include "Util.h"
+#include "Util/Util.h"
 #include "AI/ScriptDevAI/ScriptDevAIMgr.h"
 #include "Anticheat/Anticheat.hpp"
 #include "Spells/SpellMgr.h"
@@ -336,10 +336,15 @@ bool ChatHandler::HandleGPSCommand(char* args)
     }
     else PSendSysMessage("no VMAP available for area info");
 
+    AreaNameInfo nameInfo = obj->GetAreaName(GetSessionDbcLocale());
+    std::string wmoAreaOverride = "";
+    if (nameInfo.wmoNameOverride)
+        wmoAreaOverride = "WMOArea Override: (" + std::string(nameInfo.wmoNameOverride) + ")";
+
     PSendSysMessage(LANG_MAP_POSITION,
                     obj->GetMapId(), (mapEntry ? mapEntry->name[GetSessionDbcLocale()] : "<unknown>"),
                     zone_id, (zoneEntry ? zoneEntry->area_name[GetSessionDbcLocale()] : "<unknown>"),
-                    area_id, (areaEntry ? areaEntry->area_name[GetSessionDbcLocale()] : "<unknown>"),
+                    area_id, nameInfo.areaName, wmoAreaOverride.c_str(),
                     obj->GetPhaseMask(),
                     obj->GetPositionX(), obj->GetPositionY(), obj->GetPositionZ(), obj->GetOrientation(),
                     cell.GridX(), cell.GridY(), cell.CellX(), cell.CellY(), obj->GetInstanceId(),
@@ -356,10 +361,14 @@ bool ChatHandler::HandleGPSCommand(char* args)
               (obj->GetTypeId() == TYPEID_PLAYER ? "player" : "creature"), obj->GetName(),
               (obj->GetTypeId() == TYPEID_PLAYER ? "GUID" : "Entry"), (obj->GetTypeId() == TYPEID_PLAYER ? obj->GetGUIDLow() : obj->GetEntry()));
 
+    nameInfo = obj->GetAreaName(sWorld.GetDefaultDbcLocale());
+    wmoAreaOverride = "";
+    if (nameInfo.wmoNameOverride)
+        wmoAreaOverride = "WMOArea Override: " + std::string(nameInfo.wmoNameOverride);
     DEBUG_LOG(GetMangosString(LANG_MAP_POSITION),
               obj->GetMapId(), (mapEntry ? mapEntry->name[sWorld.GetDefaultDbcLocale()] : "<unknown>"),
               zone_id, (zoneEntry ? zoneEntry->area_name[sWorld.GetDefaultDbcLocale()] : "<unknown>"),
-              area_id, (areaEntry ? areaEntry->area_name[sWorld.GetDefaultDbcLocale()] : "<unknown>"),
+              area_id, nameInfo.areaName, wmoAreaOverride.c_str(),
               obj->GetPhaseMask(),
               obj->GetPositionX(), obj->GetPositionY(), obj->GetPositionZ(), obj->GetOrientation(),
               cell.GridX(), cell.GridY(), cell.CellX(), cell.CellY(), obj->GetInstanceId(),
@@ -1482,7 +1491,7 @@ bool ChatHandler::HandleLookupTeleCommand(char* args)
     return true;
 }
 
-// Enable\Dissable accept whispers (for GM)
+// Enable/Disable accept whispers (for GM)
 bool ChatHandler::HandleWhispersCommand(char* args)
 {
     if (!*args)
@@ -1905,7 +1914,15 @@ bool ChatHandler::HandleGoXYZCommand(char* args)
     float z = (float)atof(pz);
     uint32 mapid;
     if (pmapid)
+    {
         mapid = (uint32)atoi(pmapid);
+        MapEntry const* mapEntry = sMapStore.LookupEntry(mapid);
+        if (!mapEntry || mapEntry->IsBattleGroundOrArena())
+        {
+            PSendSysMessage("Map %u is battleground or arena. Not allowed through XYZ command.", mapid);
+            return false;
+        }
+    }
     else
         mapid = _player->GetMapId();
 
@@ -2012,7 +2029,7 @@ bool ChatHandler::HandleGoWarpCommand(char* args)
         return false;
 
     char dir = arg1[0];
-    int32 value = (int32)atoi(arg2);
+    float value = (float)atof(arg2);
     float x = player->GetPositionX();
     float y = player->GetPositionY();
     float z = player->GetPositionZ();

@@ -45,6 +45,12 @@
 
 #include <cassert>
 
+namespace
+{
+    // Minimum falling distance required to launch a FallMovement generator.
+    constexpr float g_moveFallMinFallDistance = 0.5f;
+}
+
 inline bool isStatic(MovementGenerator* mv)
 {
     return (mv == &si_idleMovement);
@@ -80,15 +86,14 @@ void MotionMaster::Initialize()
         {
             // check if creature is part of formation and use waypoint path as path origin
             WaypointPathOrigin pathOrigin = WaypointPathOrigin::PATH_NO_PATH;
-            uint32 pathEntry = 0;
             auto creatureGroup = creature->GetCreatureGroup();
             if (creatureGroup && creatureGroup->GetFormationEntry() && creatureGroup->GetGroupEntry().GetFormationSlotId(m_owner->GetDbGuid()) == 0)
             {
-                pathEntry = creatureGroup->GetFormationEntry()->MovementID;
+                m_currentPathId = creatureGroup->GetFormationEntry()->MovementIdOrWander;
                 pathOrigin = WaypointPathOrigin::PATH_FROM_WAYPOINT_PATH;
             }
 
-            (static_cast<WaypointMovementGenerator<Creature>*>(top()))->InitializeWaypointPath(*creature, m_currentPathId, pathOrigin, 0, pathEntry);
+            (static_cast<WaypointMovementGenerator<Creature>*>(top()))->InitializeWaypointPath(*creature, m_currentPathId, pathOrigin, 0);
         }
     }
     else
@@ -577,7 +582,7 @@ void MotionMaster::MoveCharge(Unit& target, float speed, uint32 id/* = EVENT_CHA
     Mutate(new EffectMovementGenerator(init, id, false));
 }
 
-bool MotionMaster::MoveFall()
+bool MotionMaster::MoveFall(ObjectGuid guid/* = ObjectGuid()*/, uint32 relayId/* = 0*/)
 {
     const float x = m_owner->GetPositionX(), y = m_owner->GetPositionY(), z = m_owner->GetPositionZ();
 
@@ -591,14 +596,24 @@ bool MotionMaster::MoveFall()
     }
 
     // Abort too if the ground is very near
-    if (fabs(z - tz) < MOVE_FALL_MIN_FALL_DISTANCE)
+    if (fabs(z - tz) < g_moveFallMinFallDistance)
         return false;
 
     Movement::MoveSplineInit init(*m_owner);
     init.MoveTo(x, y, tz);
     init.SetFall();
-    Mutate(new EffectMovementGenerator(init, EVENT_JUMP));
+    Mutate(new FallMovementGenerator(init, EVENT_FALL, false, guid, relayId));
     return true;
+}
+
+void MotionMaster::MoveKnockback(float x, float y, float z, float horizontalSpeed, float max_height, uint32 id)
+{
+    Movement::MoveSplineInit init(*m_owner);
+    init.MoveTo(x, y, z);
+    init.SetParabolic(max_height, 0);
+    init.SetVelocity(horizontalSpeed);
+    init.SetOrientationFixed(true);
+    Mutate(new EffectMovementGenerator(init, id));
 }
 
 void MotionMaster::MoveJump(float x, float y, float z, float horizontalSpeed, float max_height, uint32 id/*= EVENT_JUMP*/)
@@ -610,18 +625,34 @@ void MotionMaster::MoveJump(float x, float y, float z, float horizontalSpeed, fl
     Mutate(new EffectMovementGenerator(init, id));
 }
 
-void MotionMaster::MoveJumpFacing(Position pos, float horizontalSpeed, float verticalSpeed, uint32 id/*= EVENT_JUMP*/, ObjectGuid guid/* = ObjectGuid()*/, uint32 relayId/* = 0*/)
+void MotionMaster::MoveJumpFacingVerticalSpeed(Position pos, float horizontalSpeed, float verticalSpeed, uint32 id/*= EVENT_JUMP*/, ObjectGuid guid/* = ObjectGuid()*/, uint32 relayId/* = 0*/)
 {
     float moveTimeHalf = verticalSpeed / Movement::gravity;
     float max_height = -Movement::computeFallElevation(moveTimeHalf, false, -verticalSpeed);
+    MoveJumpFacing(pos, horizontalSpeed, verticalSpeed, id, guid, relayId);
+}
 
+void MotionMaster::MoveJumpFacing(Position pos, float horizontalSpeed, float maxHeight, uint32 id, ObjectGuid guid, uint32 relayId)
+{
     Movement::MoveSplineInit init(*m_owner);
     init.MoveTo(pos.x, pos.y, pos.z);
-    init.SetParabolic(max_height, 0);
+    init.SetParabolic(maxHeight, 0);
     init.SetVelocity(horizontalSpeed);
     if (pos.o != 100.f)
         init.SetFacing(pos.o);
     Mutate(new EffectMovementGenerator(init, id, false, guid, relayId));
+}
+
+void MotionMaster::MovePathAndJumpVerticalSpeed(uint32 pathId, float horizontalSpeed, float verticalSpeed, ForcedMovement forcedMovement, ObjectGuid guid)
+{
+    float moveTimeHalf = verticalSpeed / Movement::gravity;
+    float maxHeight = -Movement::computeFallElevation(moveTimeHalf, false, -verticalSpeed);
+    MovePathAndJump(pathId, horizontalSpeed, maxHeight, forcedMovement, guid);
+}
+
+void MotionMaster::MovePathAndJump(uint32 pathId, float horizontalSpeed, float maxHeight, ForcedMovement forcedMovement, ObjectGuid guid)
+{
+    Mutate(new PathJumpGenerator(pathId, forcedMovement, horizontalSpeed, maxHeight, guid));
 }
 
 void MotionMaster::Mutate(MovementGenerator* m)
@@ -674,6 +705,12 @@ void MotionMaster::PauseWaypoints(uint32 time)
     {
         auto gen = (FixedPathMovementGenerator*)top();
         gen->AddToPathPauseTime(time, true);
+        return;
+    }
+    else if (GetCurrentMovementGeneratorType() == RANDOM_MOTION_TYPE)
+    {
+        auto gen = (WanderMovementGenerator*)top();
+        gen->AddToRandomPauseTime(time, true);
         return;
     }
 }

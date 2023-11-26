@@ -44,7 +44,7 @@ struct ScourgeStrike : public SpellScript
     }
 };
 
-struct RaiseDead : public SpellScript
+struct RaiseDeadDk : public SpellScript
 {
     bool OnCheckTarget(const Spell* spell, Unit* target, SpellEffectIndex eff) const override
     {
@@ -107,6 +107,8 @@ struct DeathCoilDK : public SpellScript
         }
         else
         {
+            if (Aura* sigil = caster->GetDummyAura(64962))
+                damage += sigil->GetAmount();
             int32 bp = damage;
             caster->CastCustomSpell(target, 47632, &bp, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
         }
@@ -376,11 +378,64 @@ struct SuddenDoom : public AuraScript
 
 struct WillOfTheNecropolis : public AuraScript
 {
-    void OnAbsorb(Aura* aura, int32& currentAbsorb, int32& remainingDamage, uint32& /*reflectedSpellId*/, int32& /*reflectDamage*/, bool& /*preventedDeath*/) const override
+    void OnAbsorb(Aura* aura, int32& currentAbsorb, int32& remainingDamage, uint32& /*reflectedSpellId*/, int32& /*reflectDamage*/, bool& /*preventedDeath*/, bool& /*dropCharge*/, DamageEffectType /*damageType*/) const override
     {
         currentAbsorb = 0;
         if (aura->GetTarget()->GetHealth() - remainingDamage < aura->GetTarget()->GetMaxHealth() * 35 / 100)
             currentAbsorb = aura->GetAmount() * remainingDamage / 100;
+    }
+};
+
+// 49145 - Spell Deflection
+struct SpellDeflection : public AuraScript
+{
+    void OnAbsorb(Aura* aura, int32& currentAbsorb, int32& remainingDamage, uint32& reflectedSpellId, int32& reflectDamage, bool& /*preventedDeath*/, bool& /*dropCharge*/, DamageEffectType damageType) const override
+    {
+        // You have a chance equal to your Parry chance
+        if (damageType == SPELL_DIRECT_DAMAGE && roll_chance_f(aura->GetTarget()->GetParryChance()))
+            remainingDamage -= remainingDamage * currentAbsorb / 100;
+    }
+};
+
+// 48707 Anti-Magic Shell
+struct AntiMagicShellAbsorbSelf : public AuraScript
+{
+    void OnAbsorb(Aura* aura, int32& currentAbsorb, int32& remainingDamage, uint32& /*reflectedSpellId*/, int32& /*reflectDamage*/, bool& /*preventedDeath*/, bool& /*dropCharge*/, DamageEffectType /*damageType*/) const override
+    {
+        // damage absorbed by Anti-Magic Shell energizes the DK with additional runic power.
+        // This, if I'm not mistaken, shows that we get back ~2% of the absorbed damage as runic power.
+        int32 absorbed = remainingDamage * currentAbsorb / 100;
+        int32 regen = absorbed * 2 / 10;
+        aura->GetTarget()->CastCustomSpell(nullptr, 49088, &regen, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr, aura);
+        remainingDamage -= absorbed;
+    }
+};
+
+// 50462 - Anti-Magic Zone
+struct AntiMagicShellZone : public AuraScript
+{
+    void OnAbsorb(Aura* /*aura*/, int32& currentAbsorb, int32& remainingDamage, uint32& /*reflectedSpellId*/, int32& /*reflectDamage*/, bool& /*preventedDeath*/, bool& /*dropCharge*/, DamageEffectType /*damageType*/) const override
+    {
+        remainingDamage -= remainingDamage * currentAbsorb / 100;
+    }
+};
+
+// 50461 - Anti-Magic Zone
+struct AntiMagicZoneAbsorb : public AuraScript
+{
+    void OnAbsorb(Aura* aura, int32& currentAbsorb, int32& remainingDamage, uint32& /*reflectedSpellId*/, int32& /*reflectDamage*/, bool& /*preventedDeath*/, bool& /*dropCharge*/, DamageEffectType damageType) const override
+    {
+        Unit* auraCaster = aura->GetCaster();
+        int32 absorbed = remainingDamage * currentAbsorb / 100;
+        int32 canabsorb = auraCaster->GetHealth();
+        if (canabsorb < absorbed)
+            absorbed = canabsorb;
+
+        remainingDamage -= absorbed;
+
+        uint32 ab_damage = absorbed;
+        Unit::DealDamageMods(auraCaster, auraCaster, ab_damage, nullptr, damageType);
+        Unit::DealDamage(auraCaster, auraCaster, ab_damage, nullptr, damageType, SPELL_SCHOOL_MASK_SHADOW, nullptr, false);
     }
 };
 
@@ -552,10 +607,160 @@ struct GargoyleDeathKnightAI : public CombatAI
     }
 };
 
+// 49024 - Merciless Combat
+struct MercilessCombat : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_DAMAGE_DONE, apply);
+        aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_MELEE_DAMAGE_DONE, apply);
+    }
+
+    void OnDamageCalculate(Aura* aura, Unit* /*attacker*/, Unit* victim, int32& /*advertisedBenefit*/, float& totalMod) const override
+    {
+        if (victim->HasAuraState(AURA_STATE_HEALTHLESS_35_PERCENT))
+            totalMod *= (100.0f + aura->GetModifier()->m_amount) / 100.0f;
+    }
+};
+
+// 49202 - Tundra Stalker
+struct TundraStalker : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (aura->GetEffIndex() == EFFECT_INDEX_0)
+        {
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_DAMAGE_DONE, apply);
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_MELEE_DAMAGE_DONE, apply);
+        }
+    }
+
+    void OnDamageCalculate(Aura* aura, Unit* /*attacker*/, Unit* victim, int32& /*advertisedBenefit*/, float& totalMod) const override
+    {
+        // Frost Fever (target debuff)
+        if (victim->GetAura(SPELL_AURA_MOD_MELEE_HASTE, SPELLFAMILY_DEATHKNIGHT, uint64(0x0000000000000000), 0x00000002))
+            totalMod *= (aura->GetModifier()->m_amount + 100.0f) / 100.0f;
+    }
+};
+
+// 50117 - Rage of Rivendare
+struct RageOfRivendare : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (aura->GetEffIndex() == EFFECT_INDEX_0)
+        {
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_DAMAGE_DONE, apply);
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_MELEE_DAMAGE_DONE, apply);
+        }
+    }
+
+    void OnDamageCalculate(Aura* aura, Unit* /*attacker*/, Unit* victim, int32& /*advertisedBenefit*/, float& totalMod) const override
+    {
+        // Blood Plague (target debuff)
+        if (victim->GetAura(SPELL_AURA_PERIODIC_DAMAGE, SPELLFAMILY_DEATHKNIGHT, uint64(0x0200000000000000)))
+            totalMod *= (aura->GetModifier()->m_amount + 100.0f) / 100.0f;
+    }
+};
+
+// 49471 - Glacier Rot
+struct GlacierRot : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (aura->GetEffIndex() == EFFECT_INDEX_0)
+        {
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_DAMAGE_DONE, apply);
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_MELEE_DAMAGE_DONE, apply);
+        }
+    }
+
+    void OnDamageCalculate(Aura* aura, Unit* /*attacker*/, Unit* victim, int32& /*advertisedBenefit*/, float& totalMod) const override
+    {
+        // Blood Plague (target debuff)
+        if (victim->HasAuraHolder([](SpellAuraHolder* holder) { return holder->GetSpellProto()->Dispel == DISPEL_DISEASE; }))
+            totalMod *= (aura->GetModifier()->m_amount + 100.0f) / 100.0f;
+    }
+};
+
+// 48792 - Icebound Fortitude
+struct IceboundFortitude : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        if (data.effIdx == EFFECT_INDEX_2)
+        {
+            if (data.caster)
+            {
+                if (Aura* aura = data.caster->GetAura(58625, EFFECT_INDEX_0))
+                    value = aura->GetAmount();
+
+                if (data.caster->IsPlayer())
+                {
+                    Player* player = static_cast<Player*>(data.caster);
+                    uint32 defValue = uint32(player->GetSkillValue(SKILL_DEFENSE)) + player->GetRatingBonusValue(CR_DEFENSE_SKILL);
+                    if (defValue > 400) // patch 3.0.8 - 35% reduction for 540 def
+                        value += int32((defValue - 400) * 0.11);
+                }
+            }
+        }
+        return value;
+    }
+};
+
+// 49020 - Obliterate
+struct ObliterateDK : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        // in official data, supposedly removed eff 1 is not removed, effect 0 that worked differently isnt removed, and actual functionality is stored in eff2
+        if (effIdx == EFFECT_INDEX_1)
+            if (Aura* glyphOfObliterate = spell->GetCaster()->GetAura(58671, EFFECT_INDEX_1))
+                spell->SetDamageDoneModifier(glyphOfObliterate->GetSpellProto()->CalculateSimpleValue(EFFECT_INDEX_2), EFFECT_INDEX_1);
+    }
+};
+
+// 69961 - Glyph of Scourge Strike
+struct GlyphOfScourgeStrike : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        SpellEntry const* spellInfo = spell->GetTriggeredByAuraSpellInfo();
+        Unit* target = spell->GetUnitTarget();
+        auto& auras = target->GetAurasByType(SPELL_AURA_PERIODIC_DAMAGE);
+        for (auto& aura : auras)
+        {
+            // your diseases
+            if (aura->GetSpellProto()->Dispel == DISPEL_DISEASE &&
+                aura->GetCasterGuid() == spell->GetCaster()->GetObjectGuid())
+            {
+                int32 increaseAmount = spellInfo->CalculateSimpleValue(EFFECT_INDEX_0);
+                int32 maxIncreaseAmount = spellInfo->CalculateSimpleValue(EFFECT_INDEX_1);
+                if (aura->GetScriptValue() >= maxIncreaseAmount)
+                    return;
+                SpellAuraHolder* holder = aura->GetHolder();
+                holder->SetAuraMaxDuration(holder->GetAuraMaxDuration() + increaseAmount);
+                holder->SetAuraDuration(holder->GetAuraDuration() + increaseAmount);
+                holder->SendAuraUpdate(false);
+                aura->SetScriptValue(aura->GetScriptValue() + increaseAmount);
+            }
+        }
+    }
+};
+
+// 58677 - Glyph of Death's Embrace
+struct GlyphOfDeathsEmbrace : public AuraScript
+{
+    bool OnCheckProc(Aura* /*aura*/, ProcExecutionData& data) const override
+    {
+        return data.isHeal;
+    }
+};
+
 void LoadDeathKnightScripts()
 {
     RegisterSpellScript<ScourgeStrike>("spell_scourge_strike");
-    RegisterSpellScript<RaiseDead>("spell_dk_raise_dead");
+    RegisterSpellScript<RaiseDeadDk>("spell_dk_raise_dead");
     RegisterSpellScript<DeathCoilDK>("spell_dk_death_coil");
     RegisterSpellScript<UnholyBlightDK>("spell_dk_unholy_blight");
     RegisterSpellScript<DeathRuneDK>("spell_death_rune_dk");
@@ -574,6 +779,18 @@ void LoadDeathKnightScripts()
     RegisterSpellScript<FakeAggroRadius8YD>("spell_fake_aggro_radius_8yd");
     RegisterSpellScript<AggroRadius8YD>("spell_aggro_radius_8yd");
     RegisterSpellScript<SummonGargoyle>("spell_summon_gargoyle");
+    RegisterSpellScript<SpellDeflection>("spell_spell_deflection");
+    RegisterSpellScript<AntiMagicShellAbsorbSelf>("spell_anti_magic_shell_absorb_self");
+    RegisterSpellScript<AntiMagicShellZone>("spell_anti_magic_shell_zone");
+    RegisterSpellScript<AntiMagicZoneAbsorb>("spell_anti_zone_absorb");
+    RegisterSpellScript<MercilessCombat>("spell_merciless_combat");
+    RegisterSpellScript<TundraStalker>("spell_tundra_stalker");
+    RegisterSpellScript<RageOfRivendare>("spell_rage_of_rivendare");
+    RegisterSpellScript<GlacierRot>("spell_glacier_rot");
+    RegisterSpellScript<IceboundFortitude>("spell_icebound_fortitude");
+    RegisterSpellScript<ObliterateDK>("spell_obliterate_dk");
+    RegisterSpellScript<GlyphOfScourgeStrike>("spell_glyph_of_scourge_strike");
+    RegisterSpellScript<GlyphOfDeathsEmbrace>("spell_glyph_of_deaths_embrace");
 
     Script* pNewScript = new Script;
     pNewScript->Name = "npc_gargoyle_dk";

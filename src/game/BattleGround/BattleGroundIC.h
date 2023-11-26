@@ -717,12 +717,11 @@ class BattleGroundIC : public BattleGround
 
         // General functions
         void UpdatePlayerScore(Player* source, uint32 type, uint32 value) override;
-        void FillInitialWorldStates(WorldPacket& data, uint32& count) override;
 
         // Battleground event handlers
         void HandleCreatureCreate(Creature* creature) override;
         void HandleGameObjectCreate(GameObject* go) override;
-        bool HandleEvent(uint32 eventId, GameObject* go, Unit* invoker) override;
+        bool HandleEvent(uint32 eventId, Object* source, Object* target) override;
         void HandleKillUnit(Creature* creature, Player* killer) override;
         void HandleKillPlayer(Player* player, Player* killer) override;
         void HandlePlayerClickedOnFlag(Player* player, GameObject* go) override;
@@ -740,6 +739,9 @@ class BattleGroundIC : public BattleGround
         void DoChangeBannerState(IsleObjective nodeId);
         void DoUpdateReinforcements(PvpTeamIndex teamIdx, int32 value);
 
+        int32 GetReinforcements(PvpTeamIndex teamIdx);
+        void SetReinforcements(PvpTeamIndex teamIdx, int32 reinforcements);
+
         IsleNode m_isleNode[BG_IC_MAX_OBJECTIVES];
 
         ObjectGuid m_keepGatesGuid[PVP_TEAM_COUNT][BG_IC_MAX_KEEP_GATES];
@@ -750,15 +752,14 @@ class BattleGroundIC : public BattleGround
 
         uint32 m_gatesAllianceState[BG_IC_MAX_KEEP_GATES];
         uint32 m_gatesHordeState[BG_IC_MAX_KEEP_GATES];
-        uint32 m_reinforcements[PVP_TEAM_COUNT];
         uint32 m_resourceTickTimer[BG_IC_MAX_RESOURCE_NODES];
         uint32 m_closeDoorTimer;
 
         bool m_isKeepInvaded[PVP_TEAM_COUNT];
 
-        GuidList m_hangarPortalsGuids[PVP_TEAM_COUNT];
-        GuidList m_hangarAnimGuids[PVP_TEAM_COUNT];
-        GuidList m_seaforiumBombsGuids[PVP_TEAM_COUNT];
+        std::set<uint32> m_hangarPortalsGuids[PVP_TEAM_COUNT];
+        std::set<uint32> m_hangarAnimGuids[PVP_TEAM_COUNT];
+        std::set<uint32> m_seaforiumBombsGuids[PVP_TEAM_COUNT];
         GuidList m_towerGatesGuids;
         GuidList m_teleporterGuids;
         GuidList m_teleporterAnimGuids;

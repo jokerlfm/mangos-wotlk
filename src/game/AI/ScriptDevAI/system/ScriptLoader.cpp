@@ -333,6 +333,7 @@ extern void AddSC_boss_razuvious();
 extern void AddSC_boss_sapphiron();
 extern void AddSC_boss_thaddius();
 extern void AddSC_instance_naxxramas();
+extern void AddSC_naxxramas();
 extern void AddSC_boss_malygos();                           // nexus, eye_of_eternity
 extern void AddSC_instance_eye_of_eternity();
 extern void AddSC_boss_anomalus();                          // nexus, nexus
@@ -467,6 +468,7 @@ extern void AddSC_instance_magtheridons_lair();
 extern void AddSC_boss_grand_warlock_nethekurse();          // HC, shattered_halls
 extern void AddSC_boss_warbringer_omrogg();
 extern void AddSC_boss_warchief_kargath_bladefist();
+extern void AddSC_shattered_halls();
 extern void AddSC_instance_shattered_halls();
 extern void AddSC_arcatraz();                               // TK, arcatraz
 extern void AddSC_boss_dalliah();
@@ -833,6 +835,7 @@ void AddScripts()
     AddSC_boss_sapphiron();
     AddSC_boss_thaddius();
     AddSC_instance_naxxramas();
+    AddSC_naxxramas();
     AddSC_boss_malygos();                                   // nexus, eye_of_eternity
     AddSC_instance_eye_of_eternity();
     AddSC_boss_anomalus();                                  // nexus, nexus
@@ -967,6 +970,7 @@ void AddScripts()
     AddSC_boss_grand_warlock_nethekurse();                  // HC, shattered_halls
     AddSC_boss_warbringer_omrogg();
     AddSC_boss_warchief_kargath_bladefist();
+    AddSC_shattered_halls();
     AddSC_instance_shattered_halls();
     AddSC_arcatraz();                                       // TK, arcatraz
     AddSC_boss_dalliah();

@@ -4,7 +4,7 @@
 
 #include "AI/ScriptDevAI/include/sc_common.h"
 #include "system.h"
-#include "ProgressBar.h"
+#include "Util/ProgressBar.h"
 #include "Globals/ObjectMgr.h"
 #include "Database/DatabaseEnv.h"
 #include "MotionGenerators/WaypointManager.h"
@@ -24,14 +24,13 @@ SystemMgr& SystemMgr::Instance()
 void SystemMgr::LoadVersion()
 {
     // Get Version information
-    QueryResult* result = WorldDatabase.PQuery("SELECT version FROM sd2_db_version LIMIT 1");
+    auto queryResult = WorldDatabase.PQuery("SELECT version FROM sd2_db_version LIMIT 1");
 
-    if (result)
+    if (queryResult)
     {
-        Field* fields = result->Fetch();
+        Field* fields = queryResult->Fetch();
 
         strSD2Version = fields[0].GetCppString();
-        delete result;
     }
     else
         script_error_log("Missing `sd2_db_version` information.");
@@ -66,12 +65,9 @@ void SystemMgr::LoadScriptWaypoints()
     uint64 creatureCount = 0;
 
     // Load Waypoints
-    QueryResult* result = WorldDatabase.PQuery("SELECT COUNT(Entry) FROM script_waypoint GROUP BY Entry");
+    std::unique_ptr<QueryResult> result(WorldDatabase.PQuery("SELECT COUNT(Entry) FROM script_waypoint GROUP BY Entry"));
     if (result)
-    {
         creatureCount = result->GetRowCount();
-        delete result;
-    }
 
     outstring_log("SD2: Loading Script Waypoints for " UI64FMTD " creature(s)...", creatureCount);
 
@@ -120,8 +116,6 @@ void SystemMgr::LoadScriptWaypoints()
             ++nodeCount;
         }
         while (result->NextRow());
-
-        delete result;
 
         outstring_log("\n>> Loaded %u Script Waypoint nodes.", nodeCount);
     }

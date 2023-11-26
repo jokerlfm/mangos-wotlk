@@ -77,11 +77,17 @@ enum
 
     NPC_ANUB_REKHAN             = 15956,
     NPC_FAERLINA                = 15953,
+    NPC_FAERLINA_WORSHIPPER     = 16506,
+    NPC_FAERLINA_FOLLOWER       = 16505,
+    NPC_CORPSE_SCARAB           = 16698,
+    NPC_CRYPT_GUARD             = 16573,
 
     NPC_THADDIUS                = 15928,
     NPC_STALAGG                 = 15929,
     NPC_FEUGEN                  = 15930,
     NPC_TESLA_COIL              = 16218,
+    NPC_NAXXRAMAS_TRIGGER       = 16082,
+    NPC_TOXIC_TUNNEL            = 16400,
 
     NPC_ZELIEK                  = 16063,
     NPC_THANE                   = 16064,
@@ -94,6 +100,11 @@ enum
     NPC_MR_BIGGLESWORTH         = 16998,
     NPC_LIVING_POISON           = 16027,
 
+    NPC_OBEDIENCE_CRYSTAL       = 29912,
+    NPC_DEATHKNIGHT_UNDERSTUDY  = 16803,
+
+    NPC_OLDWORLD_TRIGGER        = 15384,
+
     // Gothik
     NPC_GOTHIK                  = 16060,
     NPC_SUB_BOSS_TRIGGER        = 16137,                    // summon locations
@@ -104,6 +115,16 @@ enum
     NPC_SPECT_DEATH_KNIGHT      = 16148,
     NPC_SPECT_RIDER             = 16150,
     NPC_SPECT_HORSE             = 16149,
+
+    // Heigan
+    NPC_DISEASED_MAGGOT         = 16056,
+    NPC_ROTTING_MAGGOT          = 16057,
+    NPC_EYE_STALK               = 16236,
+
+    // Gluth
+    NPC_ZOMBIE_CHOW_N           = 16360,
+    NPC_ZOMBIE_CHOW_H           = 30303,
+    NPC_GLUTH                   = 15932,
 
     // Kel'Thuzad
     NPC_SOLDIER_FROZEN          = 16427,
@@ -147,6 +168,11 @@ enum
     // Frostwyrm Lair
     GO_KELTHUZAD_WATERFALL_DOOR = 181225,                   // exit, open after sapphiron is dead
     GO_KELTHUZAD_EXIT_DOOR      = 181228,
+    GO_KELTHUZAD_TRIGGER        = 181444,
+    GO_KELTHUZAD_WINDOW_1       = 181402,
+    GO_KELTHUZAD_WINDOW_2       = 181403,
+    GO_KELTHUZAD_WINDOW_3       = 181404,
+    GO_KELTHUZAD_WINDOW_4       = 181405,
 
     // Eyes
     GO_ARAC_EYE_RAMP            = 181212,
@@ -169,6 +195,7 @@ enum
     AREATRIGGER_KELTHUZAD       = 4112,
     AREATRIGGER_GOTHIK          = 4116,
     AREATRIGGER_THADDIUS_DOOR   = 4113,
+    AREATRIGGER_FROSTWYRM_TELE  = 4156,
 
     // Achievement related
     ACHIEV_CRIT_SAFETY_DANCE_N  = 7264,                     // Heigan, achievs 1996, 2139
@@ -241,6 +268,8 @@ class instance_naxxramas : public ScriptedInstance
         void OnCreatureCreate(Creature* pCreature) override;
         void OnObjectCreate(GameObject* pGo) override;
 
+        void OnCreatureRespawn(Creature* creature) override;
+
         void OnPlayerDeath(Player* pPlayer) override;
         void OnCreatureDeath(Creature* pCreature) override;
 
@@ -259,10 +288,10 @@ class instance_naxxramas : public ScriptedInstance
         void DoTriggerHeiganTraps(Creature* pHeigan, uint32 uiAreaIndex);
 
         // goth
-        void SetGothTriggers();
-        Creature* GetClosestAnchorForGoth(Creature* pSource, bool bRightSide);
-        void GetGothSummonPointCreatures(CreatureList& lList, bool bRightSide);
         bool IsInRightSideGothArea(Unit* pUnit);
+
+        // Gluth
+        const GuidVector& GetGluthTriggers() const { return m_gluthTriggers; }
 
         // thaddius
         void GetThadTeslaCreatures(GuidList& lList) const { lList = m_lThadTeslaCoilList; };
@@ -279,10 +308,11 @@ class instance_naxxramas : public ScriptedInstance
         std::string m_strInstData;
 
         GuidList m_lThadTeslaCoilList;
-        GuidList m_lGothTriggerList;
 
         std::unordered_map<ObjectGuid, GothTrigger> m_mGothTriggerMap;
         GuidList m_alHeiganTrapGuids[MAX_HEIGAN_TRAP_AREAS];
+        GuidVector m_heiganBackroomAdds;
+        GuidVector m_corpseScarabs;
 
         float m_fChamberCenterX;
         float m_fChamberCenterY;
@@ -294,8 +324,11 @@ class instance_naxxramas : public ScriptedInstance
         uint8 m_uiHorseMenKilled;
         uint32 m_uiLivingPoisonTimer;
         uint32 m_uiScreamsTimer;
+        uint32 m_despawnKTTriggerTimer;
 
         DialogueHelper m_dialogueHelper;
+
+        GuidVector m_gluthTriggers;
 };
 
 #endif

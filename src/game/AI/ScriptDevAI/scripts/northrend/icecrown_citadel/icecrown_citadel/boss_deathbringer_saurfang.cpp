@@ -184,14 +184,14 @@ struct boss_deathbringer_saurfangAI : public CombatAI
             // yell death and change flags
             DoScriptText(SAY_DEATH, m_creature);
 
-            ClearSelfRoot();
+            ClearCombatOnlyRoot();
             m_creature->RemoveAllAurasOnEvade();
             m_creature->CombatStopWithPets(true);
 
             DoCastSpellIfCan(m_creature, SPELL_REMOVE_MARKS, CAST_TRIGGERED);
             DoCastSpellIfCan(m_creature, SPELL_ACHIEVEMENT, CAST_TRIGGERED);
             DoCastSpellIfCan(m_creature, SPELL_FEIGN_DEATH, CAST_TRIGGERED);
-            m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
             m_creature->SetImmuneToPlayer(true);
 
             if (m_instance)

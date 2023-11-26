@@ -34,14 +34,14 @@ enum
 {
     MAX_ADDS                    = 5,
 
-    SAY_WAKE                    = -1542000,
-    SAY_ADD_AGGRO_1             = -1542001,
-    SAY_ADD_AGGRO_2             = -1542002,
-    SAY_ADD_AGGRO_3             = -1542003,
-    SAY_KILL_1                  = -1542004,
-    SAY_KILL_2                  = -1542005,
-    SAY_NOVA                    = -1542006,
-    SAY_DIE                     = -1542007,
+    SAY_WAKE                    = 15130,
+    SAY_ADD_AGGRO_1             = 17673,
+    SAY_ADD_AGGRO_2             = 17674,
+    SAY_ADD_AGGRO_3             = 17675,
+    SAY_KILL_1                  = 17670,
+    SAY_KILL_2                  = 17671,
+    SAY_NOVA                    = 15132,
+    SAY_DIE                     = 17672,
 
     SPELL_CORRUPTION_SD         = 30938,
     SPELL_EVOCATION             = 30935,
@@ -82,6 +82,7 @@ struct boss_kelidan_the_breakerAI : public CombatAI
         AddCombatAction(KELIDAN_SHADOW_BOLT_VOLLEY, 1000u);
         AddCombatAction(KELIDAN_CORRUPTION, 5000u);
         AddCustomAction(KELIDAN_SETUP_ADDS, 100u, [&]() { DoSetupAdds(); });
+        AddOnKillText(SAY_KILL_1, SAY_KILL_2);
     }
 
     instance_blood_furnace* m_instance;
@@ -107,20 +108,12 @@ struct boss_kelidan_the_breakerAI : public CombatAI
 
     void Aggro(Unit* /*who*/) override
     {
-        DoScriptText(SAY_WAKE, m_creature);
-    }
-
-    void KilledUnit(Unit* /*victim*/) override
-    {
-        if (urand(0, 1))
-            return;
-
-        DoScriptText(urand(0, 1) ? SAY_KILL_1 : SAY_KILL_2, m_creature);
+        DoBroadcastText(SAY_WAKE, m_creature);
     }
 
     void JustDied(Unit* /*killer*/) override
     {
-        DoScriptText(SAY_DIE, m_creature);
+        DoBroadcastText(SAY_DIE, m_creature);
 
         if (m_instance)
             m_instance->SetData(TYPE_KELIDAN_EVENT, DONE);
@@ -186,7 +179,7 @@ struct boss_kelidan_the_breakerAI : public CombatAI
                 caster->AI()->SendAIEvent(AI_EVENT_CUSTOM_A, target, caster);
         }
 
-        m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+        m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
         m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_NPC);
     }
 
@@ -211,7 +204,7 @@ struct boss_kelidan_the_breakerAI : public CombatAI
         ++m_uiKilledAdds;
         if (m_uiKilledAdds == MAX_ADDS)
         {
-            m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
             m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_NPC);
             m_creature->InterruptNonMeleeSpells(true);
             AttackStart(killer);
@@ -229,7 +222,7 @@ struct boss_kelidan_the_breakerAI : public CombatAI
             case KELIDAN_BURNING_NOVA:
                 if (DoCastSpellIfCan(nullptr, SPELL_BURNING_NOVA, CAST_TRIGGERED) == CAST_OK)
                 {
-                    DoScriptText(SAY_NOVA, m_creature);
+                    DoBroadcastText(SAY_NOVA, m_creature);
 
                     if (!m_isRegularMode)
                         DoCastSpellIfCan(nullptr, SPELL_VORTEX, CAST_TRIGGERED);
@@ -296,13 +289,13 @@ struct mob_shadowmoon_channelerAI : public CombatAI
         switch (urand(0, 2))
         {
             case 0:
-                DoScriptText(SAY_ADD_AGGRO_1, m_creature);
+                DoBroadcastText(SAY_ADD_AGGRO_1, m_creature);
                 break;
             case 1:
-                DoScriptText(SAY_ADD_AGGRO_2, m_creature);
+                DoBroadcastText(SAY_ADD_AGGRO_2, m_creature);
                 break;
             case 2:
-                DoScriptText(SAY_ADD_AGGRO_3, m_creature);
+                DoBroadcastText(SAY_ADD_AGGRO_3, m_creature);
                 break;
         }
 

@@ -70,6 +70,7 @@ Field which holds a combination of these flags:
     SCRIPT_FLAG_BUDDY_BY_SPAWN_GROUP        = 0x100,    (buddy is from spawn group - NYI - TODO:)
     SCRIPT_FLAG_ALL_ELIGIBLE_BUDDIES        = 0x200,    (multisource/multitarget - will execute for each eligible)
     SCRIPT_FLAG_BUDDY_BY_GO                 = 0x400,    (take the buddy by GO (for commands which can target both creature and GO))
+    SCRIPT_FLAG_BUDDY_BY_STRING_ID          = 0x800,    (takes buddy from string id - creature or go)
 
 Detailed meaning described below!
 
@@ -160,6 +161,7 @@ Defining a buddy could be done in several way:
     SCRIPT_FLAG_BUDDY_IS_PET                = 0x20  (buddy is a pet)
     SCRIPT_FLAG_BUDDY_IS_DESPAWNED          = 0x40  (buddy is dead or despawned)
     SCRIPT_FLAG_BUDDY_BY_POOL               = 0x80  (buddy should be part of a pool)
+    SCRIPT_FLAG_BUDDY_BY_STRING_ID          = 0x800 (buddy should be part of a spawn group)
 
 -- --------------------------
 ## Each command has different parameters, and are as follows:
@@ -221,12 +223,12 @@ Defining a buddy could be done in several way:
                                               (note, migrated from old where faction and modelid were 2 and 3 and now are in spawndatatemplate)
                                             * dataint4 = spawndatatemplate - if > 0 uses settings from creature_spawn_data_template
 
-11 SCRIPT_COMMAND_OPEN_DOOR                 source = any
+11 SCRIPT_COMMAND_OPEN_DOOR                 source = any, works on both doors and buttons
                                             * datalong = db_guid (can be skipped for buddy)
                                             * datalong2 = reset_delay
                                             * datalong3 = alternate state - bool 0 or 1
 
-12 SCRIPT_COMMAND_CLOSE_DOOR                source = any
+12 SCRIPT_COMMAND_CLOSE_DOOR                source = any, works on both doors and buttons
                                             * datalong = db_guid (can be skipped for buddy)
                                             * datalong2 = reset_delay
 
@@ -246,8 +248,9 @@ Defining a buddy could be done in several way:
 
 16 SCRIPT_COMMAND_PLAY_SOUND                source = any object, target=any/player
                                             * datalong = sound_id
-                                            * datalong2 (bitmask: 0/1=target-player, 0/2=with distance dependent, 0/4=map wide, 0/8=zone wide;
-                                                                  so 1|2 = 3 is target with distance dependent)
+                                            * datalong2 (bitmask: 0/1=target-player, 0/2=with distance dependent, 0/4=map wide, 0/8=zone wide, 0/16=area wide;
+                                                                  so 1|2 = 3 is target with distance dependent), 8+16 does not work together
+                                            * datalong3 if datalong2 &8 or &16 zoneId or areaId respectively, defaults to source zone/area if not set
                                             * data_flags & SCRIPT_FLAG_COMMAND_ADDITIONAL: play music instead of sound
 
 17 SCRIPT_COMMAND_CREATE_ITEM               source or target must be player
@@ -262,13 +265,18 @@ Defining a buddy could be done in several way:
                                             * datalog = movie id
 
 20 SCRIPT_COMMAND_MOVEMENT                  resultingSource = Creature
-                                            * datalong = MovementType (0:idle, 1:random, 2:waypoint, 3:path, 15:jump)
-                                            * datalong2 = wanderDistance (for random movement), pathId (for waypoint movement), relayId (for jump movement)
-                                            * datalong3 = timer for timed random movement or pass target to waypoint and path movegen (by default, source targets self)
+                                            * datalong = MovementType (0:idle, 1:random, 2:waypoint, 3:path, 4:linear, 15:jump, 18:fall)
+                                            * datalong2 = wanderDistance (for random movement), pathId (for waypoint movement), relayId (for fall or jump movement)
+                                            * datalong3 = 0x1 - timer for timed random movement or pass target to waypoint and path movegen (by default, source targets self)
+                                            *             0x2 - for waypoint, path and linear path - uses pathId from waypoint_path table
                                             * data_flags & SCRIPT_FLAG_COMMAND_ADDITIONAL: RandomMovement around current position
                                             * dataint = enum ForcedMovement
+                                            * dataFloat = vertical Speed - used by Jump and special case of Path
+                                            * speed = override of speed for Jump and Path
+                                            * Path when Vertical Speed is set - Uses exclusively waypoint_path, supports forcedMovement, pathId, speed, verticalSpeed
+                                              - moves to second to last point and jumps to last
 
-21 SCRIPT_COMMAND_SET_ACTIVEOBJECT          resultingSource = Creature
+21 SCRIPT_COMMAND_SET_ACTIVEOBJECT          resultingSource = WorldObject
                                             * datalong=bool 0=off, 1=on
 
 22 SCRIPT_COMMAND_SET_FACTION               resultingSource = Creature
@@ -357,6 +365,7 @@ Defining a buddy could be done in several way:
                                             * resultingSource = Creature OR NULL, resTarget must be Player
                                             * datalong = mailTemplateId
                                             * datalong2: AlternativeSenderEntry. Use as sender-Entry of the sent mail
+                                            * datalong3: Money
                                             * dataint1: Delay (>= 0) in Seconds
 
 39 SCRIPT_COMMAND_SET_HOVER                 * resultingSource = Creature
@@ -414,6 +423,13 @@ Defining a buddy could be done in several way:
                                                 - 102: Set formation options
                                                        Set flag 0x1 for keep compact option (after a member death)
                                                        Set flag 0x2 for disabling pathfinding (not impemented yet)
+                                                - 150: Add formation to that group
+                                                       You either have to provide spawngroup id in datalong1 or source/target being already in its spawngroup
+                                                       dataint is formation type -> Random(0), Queue(1), Side bu side(2), Geese(3), Fanned out behind(4), Fanned out in front(5), Circle leader(6)
+                                                       dataint1 is formation options
+                                                       x is formation spread
+                                                - 151: Remove formation from spawngroup (all followers will stop following the leader)
+                                                       datalong1 spawngroup id
 
 52 SCRIPT_COMMAND_SET_GOSSIP_MENU           Sets a new gossip menu id for creature
                                             * datalong = new gossip menu id
@@ -421,4 +437,11 @@ Defining a buddy could be done in several way:
 53 SCRIPT_COMMAND_SET_WORLDSTATE            Sets worldstate variable to new value in current map
                                             * dataint = worldstate variable id
                                             * dataint2 = new value
+
+54 SCRIPT_COMMAND_SET_SHEATHE               Sets source unit sheathe state to new value (UNIT_FIELD_BYTES_2, offset 1)
+                                            * datalong = new sheathe state - enum SheathState, SHEATH_STATE_UNARMED(0), SHEATH_STATE_MELEE(1), SHEATH_STATE_RANGED(2)
+
+55 SCRIPT_COMMAND_SET_STRING_ID             Sets or removes a string_id from a WorldObject
+                                            * datalong = string_id id
+                                            * apply = 0 remove, 1 add
 

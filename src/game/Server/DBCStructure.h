@@ -813,7 +813,7 @@ struct CreatureModelDataEntry
 {
     uint32      Id;
     uint32      Flags;
-    // char*    ModelPath[16]
+    char*       ModelPath;//[16];
     // uint32   Unk1;
     float       Scale;                                      // Used in calculation of unit collision data
     // int32    Unk2
@@ -927,9 +927,10 @@ struct DungeonEncounterEntry
     uint32 Difficulty;                                      // 2        m_difficulty
     uint32 encounterData;                                   // 3        m_orderIndex
     uint32 encounterIndex;                                  // 4        m_Bit
-    char*  encounterName[16];                               // 5-20     m_name_lang
-    // uint32 nameLangFlags;                                // 21       m_name_lang_flags
-    // uint32 spellIconID;                                  // 22       m_spellIconID
+    uint32 CompleteWorldStateID;                            // 5        m_CompleteWorldStateID - from 9.0.5
+    char*  encounterName[16];                               // 6-21     m_name_lang
+    uint32 nameLangFlags;                                   // 22       m_name_lang_flags
+    uint32 spellIconID;                                     // 23       m_spellIconID
 };
 
 struct DurabilityCostsEntry
@@ -1231,7 +1232,7 @@ struct HolidaysEntry
     uint32 Id;                                              // 0
     uint32 Duration[MAX_HOLIDAY_DURATIONS];                 // 1-10
     uint32 Date[MAX_HOLIDAY_DATES];                         // 11-36 dates in unix time starting at January, 1, 2000
-    uint32 Region;                                          // 37 WoW region
+    uint32 Region;                                          // 37 region
     uint32 Looping;                                         // 38
     uint32 CalendarFlags[MAX_HOLIDAY_FLAGS];                // 39-48
     //uint32 HolidayNameID;                                 // 49 HolidayNames.dbc
@@ -1998,6 +1999,12 @@ struct SpellCastTimesEntry
     int32     MinCastTime;                                  // 3        m_minimum
 };
 
+struct SpellCategoryEntry
+{
+    uint32 ID;                                           // 0        m_ID
+    uint32 Flags;                                        // 1        m_flags
+};
+
 struct SpellFocusObjectEntry
 {
     uint32    ID;                                           // 0        m_ID
@@ -2375,7 +2382,7 @@ struct WMOAreaTableEntry
     // uint32 field8;                                       // 8        m_IntroSound
     uint32 Flags;                                           // 9        m_flags (used for indoor/outdoor determination)
     uint32 areaId;                                          // 10       m_AreaTableID (AreaTable.dbc)
-    // char *Name[16];                                      //          m_AreaName_lang
+    char *Name[16];                                         //          m_AreaName_lang
     // uint32 nameFlags;
 };
 

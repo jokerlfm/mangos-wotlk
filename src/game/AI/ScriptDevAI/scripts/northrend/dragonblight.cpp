@@ -373,6 +373,95 @@ struct spell_ley_line_focus_item_trigger : public SpellScript
     }
 };
 
+enum
+{
+    SPELL_LIQUID_FIRE                   = 46770,
+    SPELL_LIQUID_FIRE_AURA              = 47972,
+
+    NPC_ELK                             = 26616,
+    NPC_GRIZZLY                         = 26643,
+
+    NPC_ELK_BUNNY                       = 27111,
+    NPC_GRIZZLY_BUNNY                   = 27112,
+};
+
+// 46770 - Liquid Fire of Elune
+struct LiquidFireOfElune : public SpellScript
+{
+    SpellCastResult OnCheckCast(Spell* spell, bool /*strict*/) const override
+    {
+        Unit* target = spell->m_targets.getUnitTarget();
+        if (!target || target->HasAura(SPELL_LIQUID_FIRE_AURA))
+            return SPELL_FAILED_BAD_TARGETS;
+
+        if (target->GetEntry() != NPC_ELK && target->GetEntry() != NPC_GRIZZLY)
+            return SPELL_FAILED_BAD_TARGETS;
+
+        return SPELL_CAST_OK;
+    }
+
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        Creature* target = dynamic_cast<Creature*>(spell->GetUnitTarget());
+        if (!target)
+            return;
+
+        if (!spell->GetCaster()->IsPlayer())
+            return;
+
+        if (target->HasAura(SPELL_LIQUID_FIRE_AURA))
+            return;
+
+        if (target->GetEntry() == NPC_ELK)
+        {
+            target->CastSpell(nullptr, SPELL_LIQUID_FIRE_AURA, TRIGGERED_OLD_TRIGGERED);
+            static_cast<Player*>(spell->GetCaster())->KilledMonsterCredit(NPC_ELK_BUNNY);
+        }
+        else if (target->GetEntry() == NPC_GRIZZLY)
+        {
+            target->CastSpell(nullptr, SPELL_LIQUID_FIRE_AURA, TRIGGERED_OLD_TRIGGERED);
+            static_cast<Player*>(spell->GetCaster())->KilledMonsterCredit(NPC_GRIZZLY_BUNNY);
+        }
+    }
+};
+
+struct HourglassOfEternity : public SpellScript
+{
+    SpellCastResult OnCheckCast(Spell* spell, bool /*strict*/) const override
+    {
+        if (spell->GetCaster()->HasAura(50867)) // Hourglass of Eternity Nearby
+            return SPELL_FAILED_FIZZLE;
+
+        return SPELL_CAST_OK;
+    }
+};
+
+// 48363 - Rescue Villager
+struct RescueVillager : public SpellScript
+{
+    void OnSpellCastResultOverride(SpellCastResult& result, uint32& param1, uint32& param2) const override
+    {
+        if (result == SPELL_FAILED_OUT_OF_RANGE || result == SPELL_FAILED_BAD_TARGETS)
+        {
+            result = SPELL_FAILED_CUSTOM_ERROR;
+            param1 = SPELL_FAILED_CUSTOM_ERROR_35;
+        }
+    }
+};
+
+// 49109 - Drop off Gnome
+struct DropOffGnome : public SpellScript
+{
+    void OnSpellCastResultOverride(SpellCastResult& result, uint32& param1, uint32& param2) const override
+    {
+        if (result == SPELL_FAILED_OUT_OF_RANGE || result == SPELL_FAILED_BAD_TARGETS)
+        {
+            result = SPELL_FAILED_CUSTOM_ERROR;
+            param1 = SPELL_FAILED_CUSTOM_ERROR_5;
+        }
+    }
+};
+
 void AddSC_dragonblight()
 {
     Script* pNewScript = new Script;
@@ -400,4 +489,8 @@ void AddSC_dragonblight()
     RegisterSpellScript<CorrosiveSpit>("spell_corrosive_spit");
     RegisterSpellScript<spell_ley_line_focus_item>("spell_ley_line_focus_ring");
     RegisterSpellScript<spell_ley_line_focus_item_trigger>("spell_ley_line_focus_item_trigger");
+    RegisterSpellScript<LiquidFireOfElune>("spell_liquid_fire_of_elune");
+    RegisterSpellScript<HourglassOfEternity>("spell_hourglass_of_eternity");
+    RegisterSpellScript<RescueVillager>("spell_rescue_villager");
+    RegisterSpellScript<DropOffGnome>("spell_drop_off_gnome");
 }

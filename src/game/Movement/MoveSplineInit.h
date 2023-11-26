@@ -58,7 +58,7 @@ namespace Movement
              * @param start_time - delay between movement starting time and beginning to move by parabolic trajectory
              * can't be combined with final animation
              */
-            void SetParabolic(float amplitude, float time_shift);
+            void SetParabolic(float amplitude, uint32 parabolicStartIdx);
             /* Plays animation after movement done
              * can't be combined with parabolic movement
              */
@@ -127,6 +127,9 @@ namespace Movement
             void SetExitVehicle();
 
             PointsArray& Path() { return args.path; }
+
+            void SetCombatSlowed(float slowed) { args.slowed = slowed; }
+            bool CheckBounds() const { return args._checkPathBounds(); }
         protected:
 
             MoveSplineInitArgs args;
@@ -172,16 +175,16 @@ namespace Movement
         }
     }
 
-    inline void MoveSplineInit::SetParabolic(float amplitude, float time_shift)
+    inline void MoveSplineInit::SetParabolic(float amplitude, uint32 parabolicStartIdx)
     {
-        args.time_perc = time_shift;
+        args.parabolic_start_Idx = parabolicStartIdx;
         args.parabolic_amplitude = amplitude;
         args.flags.EnableParabolic();
     }
 
     inline void MoveSplineInit::SetAnimation(AnimType anim)
     {
-        args.time_perc = 0.f;
+        args.animation_start_Idx = 0.f;
         args.flags.EnableAnimation((uint8)anim);
     }
 

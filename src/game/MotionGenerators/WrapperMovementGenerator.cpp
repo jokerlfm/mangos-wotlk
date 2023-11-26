@@ -121,7 +121,12 @@ void AbstractWrapperMovementGenerator::Inform(Unit& owner)
     const MovementGeneratorType type = GetMovementGeneratorType();
 
     if (UnitAI* ai = owner.AI())
+    {
+        if (i_id == EVENT_JUMP)
+            ai->JumpingEnded();
+
         ai->MovementInform(type, i_id);
+    }
 
     if (owner.GetTypeId() == TYPEID_UNIT && static_cast<Creature&>(owner).IsTemporarySummon())
     {
@@ -138,7 +143,7 @@ void AbstractWrapperMovementGenerator::Inform(Unit& owner)
     }
 
     if (m_relayId)
-        owner.GetMap()->ScriptsStart(sRelayScripts, m_relayId, &owner, m_guid ? owner.GetMap()->GetWorldObject(m_guid) : nullptr);
+        owner.GetMap()->ScriptsStart(SCRIPT_TYPE_RELAY, m_relayId, &owner, m_guid ? owner.GetMap()->GetWorldObject(m_guid) : nullptr);
 }
 
 void EffectMovementGenerator::Initialize(Unit& owner)

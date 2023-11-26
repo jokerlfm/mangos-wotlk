@@ -19,15 +19,16 @@
 #include "Loot/LootMgr.h"
 #include "Log.h"
 #include "Globals/ObjectMgr.h"
-#include "ProgressBar.h"
+#include "Util/ProgressBar.h"
 #include "World/World.h"
-#include "Util.h"
+#include "Util/Util.h"
 #include "Globals/SharedDefines.h"
 #include "Spells/SpellMgr.h"
 #include "Server/DBCStores.h"
 #include "Server/SQLStorages.h"
 #include "Entities/ItemEnchantmentMgr.h"
 #include "Tools/Language.h"
+#include "BattleGround/BattleGroundMgr.h"
 #include <sstream>
 #include <iomanip>
 
@@ -104,15 +105,15 @@ void LootStore::LoadLootTable()
     Clear();
 
     //                                                 0      1     2                    3        4              5         6
-    QueryResult* result = WorldDatabase.PQuery("SELECT entry, item, ChanceOrQuestChance, groupid, mincountOrRef, maxcount, condition_id FROM %s", GetName());
+    auto queryResult = WorldDatabase.PQuery("SELECT entry, item, ChanceOrQuestChance, groupid, mincountOrRef, maxcount, condition_id FROM %s", GetName());
 
-    if (result)
+    if (queryResult)
     {
-        BarGoLink bar(result->GetRowCount());
+        BarGoLink bar(queryResult->GetRowCount());
 
         do
         {
-            Field* fields = result->Fetch();
+            Field* fields = queryResult->Fetch();
             bar.step();
 
             uint32 entry               = fields[0].GetUInt32();
@@ -169,9 +170,7 @@ void LootStore::LoadLootTable()
             tab->second->AddEntry(storeitem);
             ++count;
         }
-        while (result->NextRow());
-
-        delete result;
+        while (queryResult->NextRow());
 
         Verify();                                           // Checks validity of the loot store
 
@@ -221,6 +220,40 @@ void LootStore::LoadAndCollectLootIds(LootIdSet& ids_set)
 
     for (LootTemplateMap::const_iterator tab = m_LootTemplates.begin(); tab != m_LootTemplates.end(); ++tab)
         ids_set.insert(tab->first);
+}
+
+void LootStore::LoadAndCheckReferenceNames()
+{
+    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT entry, name FROM `reference_loot_template_names`"));
+    if (result)
+    {
+        std::set<uint32> foundIds;
+        for (auto& data : m_LootTemplates)
+            foundIds.insert(data.first);
+
+        do
+        {
+            Field* fields = result->Fetch();
+
+            uint32 entry = fields[0].GetUInt32();
+            std::string name = fields[1].GetCppString();
+
+            if (name.empty())
+                sLog.outErrorDb("Table reference_loot_template_names for entry %u has empty name", entry);
+
+            if (foundIds.find(entry) != foundIds.end())
+                foundIds.erase(entry);
+            else
+            {
+                sLog.outErrorDb("Table reference_loot_template_names for entry %u has name but no entry", entry);
+                continue;
+            }
+        }
+        while (result->NextRow());
+
+        for (uint32 entry : foundIds)
+            sLog.outErrorDb("Table reference_loot_template has entry %u but no name", entry);
+    }
 }
 
 void LootStore::CheckLootRefs(LootIdSet* ref_set) const
@@ -1292,7 +1325,7 @@ void Loot::Release(Player* player)
                 {
                     if (!IsLootedForAll())
                     {
-                        updateClients = true;
+                        go->SetChestDespawn(); // chests despawn after 5 min even if nothing looted
                         break;
                     }
 
@@ -1910,25 +1943,27 @@ Loot::Loot(Player* player, Corpse* corpse, LootType type) :
     m_lootTarget = corpse;
     m_guidTarget = corpse->GetObjectGuid();
 
-    if (type != LOOT_INSIGNIA || corpse->GetType() == CORPSE_BONES)
+    if (type != LOOT_INSIGNIA && corpse->GetType() == CORPSE_BONES)
         return;
+
+    MANGOS_ASSERT(player->GetBattleGround());
 
     if (!corpse->lootForBody)
     {
         corpse->lootForBody = true;
         uint32 pLevel;
-        if (Player* plr = sObjectAccessor.FindPlayer(corpse->GetOwnerGuid()))
+        Player* plr = sObjectAccessor.FindPlayer(corpse->GetOwnerGuid());
+        if (plr)
             pLevel = plr->GetLevel();
         else
             pLevel = player->GetLevel(); // TODO:: not correct, need to save real player level in the corpse data in case of logout
 
-         m_ownerSet.insert(player->GetObjectGuid());
-         m_lootMethod = NOT_GROUP_TYPE_LOOT;
-         m_clientLootType = CLIENT_LOOT_CORPSE;
-
-        if (player->GetBattleGround()->GetTypeId() == BATTLEGROUND_AV)
-            FillLoot(0, LootTemplates_Creature, player, false);
-
+        m_ownerSet.insert(player->GetObjectGuid());
+        m_lootMethod = NOT_GROUP_TYPE_LOOT;
+        m_clientLootType = CLIENT_LOOT_CORPSE;
+        if (uint32 refLootId = player->GetBattleGround()->GetPlayerSkinRefLootId())
+            FillLoot(refLootId, LootTemplates_Reference, player, true);
+       
         // It may need a better formula
         // Now it works like this: lvl10: ~6copper, lvl70: ~9silver
         m_gold = (uint32)(urand(50, 150) * 0.016f * pow(((float)pLevel) / 5.76f, 2.5f) * sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_MONEY));
@@ -3018,7 +3053,7 @@ void LoadLootTemplates_Spell()
         {
             // not report about not trainable spells (optionally supported by DB)
             // ignore 61756 (Northrend Inscription Research (FAST QA VERSION) for example
-            if (!spellInfo->HasAttribute(SPELL_ATTR_NOT_SHAPESHIFT) || spellInfo->HasAttribute(SPELL_ATTR_TRADESPELL))
+            if (!spellInfo->HasAttribute(SPELL_ATTR_NOT_SHAPESHIFT) || spellInfo->HasAttribute(SPELL_ATTR_IS_TRADESKILL))
             {
                 LootTemplates_Spell.ReportNotExistedId(spell_id);
             }
@@ -3031,11 +3066,14 @@ void LoadLootTemplates_Spell()
     LootTemplates_Spell.ReportUnusedIds(ids_set);
 }
 
-void LoadLootTemplates_Reference()
-{
-    LootIdSet ids_set;
+void LoadLootTemplates_Reference(LootIdSet& ids_set)
+{    
     LootTemplates_Reference.LoadAndCollectLootIds(ids_set);
+    LootTemplates_Reference.LoadAndCheckReferenceNames();
+}
 
+void CheckLootTemplates_Reference(LootIdSet& ids_set)
+{
     // check references and remove used
     LootTemplates_Creature.CheckLootRefs(&ids_set);
     LootTemplates_Fishing.CheckLootRefs(&ids_set);
@@ -3049,6 +3087,9 @@ void LoadLootTemplates_Reference()
     LootTemplates_Mail.CheckLootRefs(&ids_set);
     LootTemplates_Reference.CheckLootRefs(&ids_set);
     LootTemplates_Spell.CheckLootRefs(&ids_set);
+    auto& usedIds = sBattleGroundMgr.GetUsedRefLootIds();
+    for (uint32 refLootId : usedIds)
+        ids_set.erase(refLootId);
 
     // output error for any still listed ids (not referenced from any loot table)
     LootTemplates_Reference.ReportUnusedIds(ids_set);
@@ -3185,7 +3226,7 @@ void LootMgr::CheckDropStats(ChatHandler& chat, uint32 amountOfCheck, uint32 loo
     if (amountOfCheck < 1)
         amountOfCheck = 1;
 
-    std::unique_ptr<Loot> loot = std::unique_ptr<Loot>(new Loot(LOOT_DEBUG));
+    std::unique_ptr<Loot> loot = std::make_unique<Loot>(LOOT_DEBUG);
 
     // get loot table for provided loot id
     LootTemplate const* lootTable = store->GetLootFor(lootId);
@@ -3231,4 +3272,9 @@ void LootMgr::CheckDropStats(ChatHandler& chat, uint32 amountOfCheck, uint32 loo
         chat.PSendSysMessage(LANG_ITEM_LIST_CHAT, itemId, itemId, name.c_str(), ss.str().c_str());
         sLog.outString("%6u - %-45s \tfound %6u/%-6u \tso %8s%% drop", itemStat.first, name.c_str(), itemStat.second, amountOfCheck, ss.str().c_str());
     }
+}
+
+bool LootMgr::ExistsRefLootTemplate(uint32 refLootId) const
+{
+    return LootTemplates_Reference.HaveLootFor(refLootId);
 }

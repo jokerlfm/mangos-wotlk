@@ -160,7 +160,7 @@ void WaypointMovementGenerator<Creature>::Reset(Creature& creature)
     SendNextWayPointPath(creature);
 }
 
-void WaypointMovementGenerator<Creature>::SwitchToNextNode(Creature& creature, WaypointPath::const_iterator& nodeItr)
+void WaypointMovementGenerator<Creature>::SwitchToNextNode(Creature& /*creature*/, WaypointPath::const_iterator& nodeItr)
 {
     // switch to next node
     ++nodeItr;
@@ -183,14 +183,23 @@ void WaypointMovementGenerator<Creature>::OnArrived(Creature& creature)
     if (node.script_id)
     {
         DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "Creature movement start script %u at point %u for %s.", node.script_id, i_currentNode, creature.GetGuidStr().c_str());
-        creature.GetMap()->ScriptsStart(sCreatureMovementScripts, node.script_id, &creature, m_guid ? creature.GetMap()->GetWorldObject(m_guid) : &creature);
+        creature.GetMap()->ScriptsStart(SCRIPT_TYPE_CREATURE_MOVEMENT, node.script_id, &creature, m_guid ? creature.GetMap()->GetWorldObject(m_guid) : &creature);
     }
 
     // Inform script
     if (creature.AI())
     {
-        uint32 type = WAYPOINT_MOTION_TYPE;
+        bool inform = false;
         if (m_PathOrigin == PATH_FROM_EXTERNAL)
+            inform = true;
+        else if (m_PathOrigin == PATH_FROM_WAYPOINT_PATH) // temporary transitional code for transitioning from script_texts to waypoint_path
+        {
+            if (m_pathId == creature.AI()->GetCurrentWaypointPath())
+                inform = true;
+        }
+
+        uint32 type = WAYPOINT_MOTION_TYPE;
+        if (inform)
             type = EXTERNAL_WAYPOINT_MOVE;
         InformAI(creature, type, i_currentNode);
     }
@@ -226,8 +235,17 @@ void WaypointMovementGenerator<Creature>::OnArrived(Creature& creature)
     // Fire event only if it is already moving to the next node (for normal start it is already done in SendNewPath)
     if (!m_nodeIndexes.empty() && !Stopped(creature))
     {
+        bool inform = false;
+        if (m_PathOrigin == PATH_FROM_EXTERNAL)
+            inform = true;
+        else if (m_PathOrigin == PATH_FROM_WAYPOINT_PATH) // temporary transitional code for transitioning from script_texts to waypoint_path
+        {
+            if (m_pathId == creature.AI()->GetCurrentWaypointPath())
+                inform = true;
+        }
+
         // Inform AI that we start to move
-        if (creature.AI() && m_PathOrigin == PATH_FROM_EXTERNAL)
+        if (creature.AI() && inform)
             InformAI(creature, uint32(EXTERNAL_WAYPOINT_MOVE_START), m_currentWaypointNode->first);
     }
 
@@ -307,8 +325,17 @@ void WaypointMovementGenerator<Creature>::SendNextWayPointPath(Creature& creatur
 
     WaypointNode const* nextNode = &m_currentWaypointNode->second;
 
+    bool inform = false;
+    if (m_PathOrigin == PATH_FROM_EXTERNAL)
+        inform = true;
+    else if (m_PathOrigin == PATH_FROM_WAYPOINT_PATH && creature.AI()) // temporary transitional code for transitioning from script_texts to waypoint_path
+    {
+        if (m_pathId == creature.AI()->GetCurrentWaypointPath())
+            inform = true;
+    }
+
     // Inform AI that we start to move or reached last node
-    if (creature.AI() && m_PathOrigin == PATH_FROM_EXTERNAL)
+    if (creature.AI() && inform)
     {
         uint32 type = uint32(EXTERNAL_WAYPOINT_MOVE_START);
         if (i_path->begin()->first == i_currentNode && i_path->rbegin()->first == m_lastReachedWaypoint)
@@ -587,7 +614,7 @@ bool WaypointMovementGenerator<Creature>::SetNextWaypoint(uint32 pointId)
     return true;
 }
 
-void LinearWPMovementGenerator<Creature>::SwitchToNextNode(Creature& creature, WaypointPath::const_iterator& nodeItr)
+void LinearWPMovementGenerator<Creature>::SwitchToNextNode(Creature& /*creature*/, WaypointPath::const_iterator& nodeItr)
 {
     // switch to next node
     if (!m_driveWayBack)

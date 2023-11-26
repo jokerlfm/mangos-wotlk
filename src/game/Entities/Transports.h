@@ -61,6 +61,9 @@ class GenericTransport : public GameObject
         uint32 GetPathProgress() const { return m_pathProgress; }
 
         void SetGoState(GOState state) override;
+
+        virtual void SpawnPassengers() {}
+        virtual void DespawnPassengers() {}
     protected:
         void UpdatePassengerPositions(PassengerSet& passengers);
 
@@ -70,12 +73,13 @@ class GenericTransport : public GameObject
         uint32 m_pathProgress; // for MO transport its full time since start for normal time in cycle
         uint32 m_movementStarted;
         bool m_stopped;
+        std::set<ObjectGuid> m_staticPassengers;
 };
 
 class ElevatorTransport : public GenericTransport
 {
     public:
-        bool Create(uint32 guidlow, uint32 name_id, Map* map, uint32 phaseMask, float x, float y, float z, float ang,
+        bool Create(uint32 dbGuid, uint32 guidlow, uint32 name_id, Map* map, uint32 phaseMask, float x, float y, float z, float ang,
             const QuaternionData& rotation = QuaternionData(), uint8 animprogress = GO_ANIMPROGRESS_DEFAULT, GOState go_state = GO_STATE_READY) override;
         void Update(const uint32 diff) override;
 
@@ -101,7 +105,8 @@ class Transport : public GenericTransport
 
         KeyFrameVec const& GetKeyFrames() const { return m_transportTemplate.keyFrames; }
 
-        void SpawnPassengers();
+        void SpawnPassengers() override;
+        void DespawnPassengers() override;
     private:
         void TeleportTransport(uint32 newMapid, float x, float y, float z, float o);
         void UpdateForMap(Map const* targetMap, bool newMap);

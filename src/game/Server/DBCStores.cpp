@@ -19,8 +19,8 @@
 #include "Server/DBCStores.h"
 #include "Policies/Singleton.h"
 #include "Log.h"
-#include "ProgressBar.h"
-#include "Util.h"
+#include "Util/ProgressBar.h"
+#include "Util/Util.h"
 #include "Globals/Locales.h"
 #include "Globals/SharedDefines.h"
 #include "Server/SQLStorages.h"
@@ -169,11 +169,11 @@ DBCStorage <SoundEntriesEntry> sSoundEntriesStore(SoundEntriesfmt);
 DBCStorage <SpellItemEnchantmentEntry> sSpellItemEnchantmentStore(SpellItemEnchantmentfmt);
 DBCStorage <SpellItemEnchantmentConditionEntry> sSpellItemEnchantmentConditionStore(SpellItemEnchantmentConditionfmt);
 DBCStorage <SpellVisualEntry> sSpellVisualStore(SpellVisualfmt);
-SpellCategoryStore sSpellCategoryStore;
 ItemSpellCategoryStore sItemSpellCategoryStore;
 PetFamilySpellsStore sPetFamilySpellsStore;
 
 DBCStorage <SpellCastTimesEntry> sSpellCastTimesStore(SpellCastTimefmt);
+DBCStorage <SpellCategoryEntry> sSpellCategoryStore(SpellCategoryfmt);
 DBCStorage <SpellDifficultyEntry> sSpellDifficultyStore(SpellDifficultyfmt);
 DBCStorage <SpellDurationEntry> sSpellDurationStore(SpellDurationfmt);
 DBCStorage <SpellFocusObjectEntry> sSpellFocusObjectStore(SpellFocusObjectfmt);
@@ -421,6 +421,17 @@ void LoadDBCStores(const std::string& dataPath)
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sAuctionHouseStore,        dbcPath, "AuctionHouse.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sBankBagSlotPricesStore,   dbcPath, "BankBagSlotPrices.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sBattlemasterListStore,    dbcPath, "BattlemasterList.dbc");
+    {
+        // repairs entry for netherstorm - should be moved to SQL
+        if (BattlemasterListEntry const* bmEntry = sBattlemasterListStore.LookupEntry(32)) // random battleground
+        {
+            BattlemasterListEntry* randomBg = new BattlemasterListEntry(*bmEntry); // easier time dealing with it in code
+            randomBg->minLevel = 10;
+            randomBg->maxLevel = MAX_LEVEL_WOTLK;
+            sBattlemasterListStore.EraseEntry(32);
+            sBattlemasterListStore.InsertEntry(randomBg, 32);
+        }
+    }
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sBarberShopStyleStore,     dbcPath, "BarberShopStyle.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sCharStartOutfitStore,     dbcPath, "CharStartOutfit.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sCharTitlesStore,          dbcPath, "CharTitles.dbc");
@@ -514,11 +525,13 @@ void LoadDBCStores(const std::string& dataPath)
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sMapStore,                 dbcPath, "Map.dbc");
     {
         // repairs entry for netherstorm - should be moved to SQL
-        MapEntry const* mEntry = sMapStore.LookupEntry(550);
-        MapEntry* tempestKeepMap = new MapEntry(*mEntry);
-        tempestKeepMap->ghost_entrance_map = 530;
-        sMapStore.EraseEntry(550);
-        sMapStore.InsertEntry(tempestKeepMap, 550);
+        if (MapEntry const* mEntry = sMapStore.LookupEntry(550))
+        {
+            MapEntry* tempestKeepMap = new MapEntry(*mEntry);
+            tempestKeepMap->ghost_entrance_map = 530;
+            sMapStore.EraseEntry(550);
+            sMapStore.InsertEntry(tempestKeepMap, 550);
+        }
     }
 
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sMapDifficultyStore,       dbcPath, "MapDifficulty.dbc");
@@ -567,7 +580,7 @@ void LoadDBCStores(const std::string& dataPath)
         }
 
         SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(skillLine->spellId);
-        if (spellInfo && (spellInfo->Attributes & (SPELL_ATTR_ABILITY | SPELL_ATTR_PASSIVE | SPELL_ATTR_DO_NOT_DISPLAY | SPELL_ATTR_HIDE_IN_COMBAT_LOG)) == (SPELL_ATTR_ABILITY | SPELL_ATTR_PASSIVE | SPELL_ATTR_DO_NOT_DISPLAY | SPELL_ATTR_HIDE_IN_COMBAT_LOG))
+        if (spellInfo && (spellInfo->Attributes & (SPELL_ATTR_IS_ABILITY | SPELL_ATTR_PASSIVE | SPELL_ATTR_DO_NOT_DISPLAY | SPELL_ATTR_DO_NOT_LOG)) == (SPELL_ATTR_IS_ABILITY | SPELL_ATTR_PASSIVE | SPELL_ATTR_DO_NOT_DISPLAY | SPELL_ATTR_DO_NOT_LOG))
         {
             for (unsigned int i = 1; i < sCreatureFamilyStore.GetNumRows(); ++i)
             {
@@ -584,6 +597,7 @@ void LoadDBCStores(const std::string& dataPath)
     }
 
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sSpellCastTimesStore,      dbcPath, "SpellCastTimes.dbc");
+    LoadDBC(availableDbcLocales, bar, bad_dbc_files, sSpellCategoryStore,       dbcPath, "SpellCategory.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sSpellDurationStore,       dbcPath, "SpellDuration.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sSpellDifficultyStore,     dbcPath, "SpellDifficulty.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sSpellFocusObjectStore,    dbcPath, "SpellFocusObject.dbc");

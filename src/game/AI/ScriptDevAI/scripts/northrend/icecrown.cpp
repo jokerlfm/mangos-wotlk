@@ -31,6 +31,7 @@ EndContentData */
 
 #include "AI/ScriptDevAI/include/sc_common.h"
 #include "AI/ScriptDevAI/base/escort_ai.h"
+#include "Entities/Vehicle.h"
 
 /*######
 ## npc_squad_leader
@@ -775,7 +776,7 @@ struct npc_grand_admiral_westwindAI : public ScriptedAI
                 m_bIsDefeated = true;
                 m_uiEscapeTimer = 5000;
 
-                m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_SPAWNING);
+                m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE | UNIT_FLAG_SPAWNING);
                 EnterEvadeMode();
 
                 // Note: the portal entry is guesswork!
@@ -933,6 +934,98 @@ bool EffectDummyCreature_npc_grand_admiral_westwind(Unit* pCaster, uint32 uiSpel
     return false;
 }
 
+/*######
+## spell_create_lance - 63845
+######*/
+
+struct SpellCreateLanceData
+{
+    Races playerRace;
+    uint32 spellId, itemId;
+};
+
+static const SpellCreateLanceData createLanceData[] =
+{
+    {RACE_HUMAN,    63914, 46069},
+    {RACE_DWARF,    63915, 46069},
+    {RACE_NIGHTELF, 63916, 46069},
+    {RACE_GNOME,    63917, 46069},
+    {RACE_DRAENEI,  63918, 46069},
+    {RACE_ORC,      63919, 46070},
+    {RACE_UNDEAD,   63920, 46070},
+    {RACE_TAUREN,   63921, 46070},
+    {RACE_TROLL,    63922, 46070},
+    {RACE_BLOODELF, 63923, 46070},
+};
+
+struct spell_create_lance : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* caster = spell->GetAffectiveCaster();
+        Unit* target = spell->GetUnitTarget();
+        if (!target || !target->IsPlayer())
+            return;
+
+        Player* playerTarget = (Player*)target;
+
+        for (const auto& i : createLanceData)
+            if (playerTarget->getRace() == i.playerRace && !playerTarget->HasItemCount(i.itemId, 1))
+                playerTarget->CastSpell(playerTarget, i.spellId, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+// 56683 - Grab Captured Crusader
+struct GrabCapturedCrusader : public SpellScript
+{
+    SpellCastResult OnCheckCast(Spell* spell, bool /*strict*/) const override
+    {
+        if (VehicleInfo* vehicle = spell->GetCaster()->GetVehicleInfo())
+        {
+            if (vehicle->GetPassenger(1) != nullptr)
+            {
+                spell->SetParam1(SPELL_FAILED_CUSTOM_ERROR_43);
+                return SPELL_FAILED_CUSTOM_ERROR;
+            }
+        }
+        return SPELL_CAST_OK;
+    }
+
+    void OnEffectExecute(Spell* spell, SpellEffectIndex /*effIdx*/) const override
+    {
+        if (!spell->GetUnitTarget())
+            return;
+
+        spell->GetUnitTarget()->CastSpell(spell->GetCaster(), spell->GetDamage(), TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+// 56684 - Drop Off Captured Crusader
+struct DropOffCapturedCrusader : public SpellScript
+{
+    SpellCastResult OnCheckCast(Spell* spell, bool /*strict*/) const override
+    {
+        if (VehicleInfo* vehicle = spell->GetCaster()->GetVehicleInfo())
+        {
+            if (vehicle->GetPassenger(1) == nullptr)
+            {
+                spell->SetParam1(SPELL_FAILED_CUSTOM_ERROR_41);
+                return SPELL_FAILED_CUSTOM_ERROR;
+            }
+        }
+        return SPELL_CAST_OK;
+    }
+
+    void OnEffectExecute(Spell* spell, SpellEffectIndex /*effIdx*/) const override
+    {
+        if (VehicleInfo* vehicle = spell->GetCaster()->GetVehicleInfo())
+            vehicle->UnBoard(vehicle->GetPassenger(1), false);
+    }
+};
+
 void AddSC_icecrown()
 {
     Script* pNewScript = new Script;
@@ -963,4 +1056,8 @@ void AddSC_icecrown()
     pNewScript->GetAI = &GetAI_npc_grand_admiral_westwind;
     pNewScript->pEffectDummyNPC = &EffectDummyCreature_npc_grand_admiral_westwind;
     pNewScript->RegisterSelf();
+
+    RegisterSpellScript<spell_create_lance>("spell_create_lance");
+    RegisterSpellScript<GrabCapturedCrusader>("spell_grab_captured_crusader");
+    RegisterSpellScript<DropOffCapturedCrusader>("spell_drop_off_captured_crusader");
 }

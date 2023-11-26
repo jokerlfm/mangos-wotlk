@@ -20,6 +20,7 @@
 #include "Spells/SpellAuras.h"
 #include "Spells/SpellMgr.h"
 
+// 19185 - Entrapment
 struct Entrapment : public AuraScript
 {
     SpellAuraProcResult OnProc(Aura* /*aura*/, ProcExecutionData& procData) const override
@@ -30,6 +31,7 @@ struct Entrapment : public AuraScript
     }
 };
 
+// 34026 - Kill Command
 struct KillCommand : public SpellScript
 {
     void OnHit(Spell* spell, SpellMissInfo /*missInfo*/) const override
@@ -39,6 +41,7 @@ struct KillCommand : public SpellScript
     }
 };
 
+// 34477 - Misdirection
 struct Misdirection : public SpellScript
 {
     SpellCastResult OnCheckCast(Spell* spell, bool/* strict*/) const override
@@ -57,6 +60,7 @@ struct Misdirection : public SpellScript
     }
 };
 
+// 34501 - Expose Weakness
 struct ExposeWeakness : public AuraScript
 {
     int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
@@ -65,6 +69,17 @@ struct ExposeWeakness : public AuraScript
             value = (data.caster->GetStat(STAT_AGILITY) * value) / 100;
 
         return value;
+    }
+};
+
+struct WyvernSting : public AuraScript
+{
+    int32 OnDurationCalculate(WorldObject const* caster, Unit const* target, int32 duration) const override
+    {
+        // PVP DR example
+        if (target && caster->IsControlledByPlayer() && target->IsPlayerControlled())
+            return 6000;
+        return duration;
     }
 };
 
@@ -181,12 +196,79 @@ struct LockAndLoadTrigger : public SpellScript
     }
 };
 
+// 53241 - Marked For Death
+struct MarkedForDeathHunter : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (aura->GetEffIndex() == EFFECT_INDEX_0)
+        {
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_DAMAGE_DONE, apply);
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_MELEE_DAMAGE_DONE, apply);
+        }
+    }
+
+    void OnDamageCalculate(Aura* aura, Unit* /*attacker*/, Unit* victim, int32& /*advertisedBenefit*/, float& totalMod) const override
+    {
+        // Hunter's Mark
+        if (victim->GetAura(SPELL_AURA_MOD_STALKED, SPELLFAMILY_HUNTER, uint64(0x0000000000000400)))
+            totalMod *= (aura->GetModifier()->m_amount + 100.0f) / 100.0f;
+    }
+};
+
+// 56826 - Glyph of Steady Shot
+struct GlyphOfSteadyShot : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (aura->GetEffIndex() == EFFECT_INDEX_0)
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_MELEE_DAMAGE_DONE, apply);
+    }
+
+    void OnDamageCalculate(Aura* aura, Unit* /*attacker*/, Unit* victim, int32& /*advertisedBenefit*/, float& totalMod) const override
+    {
+        // Steady Shot - Serpent Sting
+        if (victim->GetAura(SPELL_AURA_PERIODIC_DAMAGE, SPELLFAMILY_HUNTER, uint64(0x0000000000004000)))
+            totalMod *= (aura->GetModifier()->m_amount + 100.0f) / 100.0f;
+    }
+};
+
+// 56842 - Glyph of Trueshot Aura
+struct GlyphOfTrueshotAura : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_CRIT_CHANCE, apply);
+    }
+
+    void OnCritChanceCalculate(Aura* aura, Unit const* target, float& chance, SpellEntry const* spellInfo) const override
+    {
+        // has trueshot aura
+        if (aura->GetTarget()->GetAura(SPELL_AURA_MOD_RANGED_ATTACK_POWER_PCT, SPELLFAMILY_HUNTER, aura->GetAuraSpellClassMask().Flags))
+            chance += aura->GetModifier()->m_amount;
+    }
+};
+
+// 3044 - Arcane Shot
+struct ArcaneShotHunter : public SpellScript
+{
+    void OnSuccessfulFinish(Spell* spell) const override
+    {
+        if (Aura* glyph = spell->GetCaster()->GetAura(56841, EFFECT_INDEX_0)) // Glyph of Arcane Shot
+        {
+            int32 refund = spell->GetPowerCost() * glyph->GetAmount() / 100;
+            spell->GetCaster()->CastCustomSpell(nullptr, 61389, &refund, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
+        }
+    }
+};
+
 void LoadHunterScripts()
 {
     RegisterSpellScript<Entrapment>("spell_entrapment");
     RegisterSpellScript<KillCommand>("spell_kill_command");
     RegisterSpellScript<Misdirection>("spell_misdirection");
     RegisterSpellScript<ExposeWeakness>("spell_expose_weakness");
+    RegisterSpellScript<WyvernSting>("spell_wyvern_sting");
     RegisterSpellScript<Disengage>("spell_disengage");
     RegisterSpellScript<RoarOfSacrifice>("spell_roar_of_sacrifice");
     RegisterSpellScript<RapidRecuperationPeriodic>("spell_rapid_recuperation_periodic");
@@ -194,4 +276,8 @@ void LoadHunterScripts()
     RegisterSpellScript<ExplosiveShot>("spell_explosive_shot");
     RegisterSpellScript<LockAndLoad>("spell_lock_and_load");
     RegisterSpellScript<LockAndLoadTrigger>("spell_lock_and_load_trigger");
+    RegisterSpellScript<MarkedForDeathHunter>("spell_marked_for_death_hunter");
+    RegisterSpellScript<GlyphOfSteadyShot>("spell_glyph_of_steady_shot");
+    RegisterSpellScript<GlyphOfTrueshotAura>("spell_glyph_of_trueshot_aura");
+    RegisterSpellScript<ArcaneShotHunter>("spell_arcane_shot_hunter");
 }

@@ -29,7 +29,6 @@ go_tele_to_dalaran_crystal
 go_tele_to_violet_stand
 go_andorhal_tower
 go_scourge_enclosure
-go_lab_work_reagents
 go_containment_coffer
 EndContentData */
 
@@ -401,45 +400,6 @@ bool GOUse_go_scourge_enclosure(Player* pPlayer, GameObject* pGo)
     }
     pPlayer->KilledMonsterCredit(NPC_GYMER_LOCK_DUMMY);
     return true;
-}
-
-/*######
-## go_lab_work_reagents
-######*/
-
-enum
-{
-    QUEST_LAB_WORK                          = 12557,
-
-    SPELL_WIRHERED_BATWING_KILL_CREDIT      = 51226,
-    SPELL_MUDDY_MIRE_MAGGOT_KILL_CREDIT     = 51227,
-    SPELL_AMBERSEED_KILL_CREDIT             = 51228,
-    SPELL_CHILLED_SERPENT_MUCUS_KILL_CREDIT = 51229,
-
-    GO_AMBERSEED                            = 190459,
-    GO_CHILLED_SERPENT_MUCUS                = 190462,
-    GO_WITHERED_BATWING                     = 190473,
-    GO_MUDDY_MIRE_MAGGOTS                   = 190478,
-};
-
-bool GOUse_go_lab_work_reagents(Player* pPlayer, GameObject* pGo)
-{
-    if (pPlayer->GetQuestStatus(QUEST_LAB_WORK) == QUEST_STATUS_INCOMPLETE)
-    {
-        uint32 uiCreditSpellId = 0;
-        switch (pGo->GetEntry())
-        {
-            case GO_AMBERSEED:              uiCreditSpellId = SPELL_AMBERSEED_KILL_CREDIT; break;
-            case GO_CHILLED_SERPENT_MUCUS:  uiCreditSpellId = SPELL_CHILLED_SERPENT_MUCUS_KILL_CREDIT; break;
-            case GO_WITHERED_BATWING:       uiCreditSpellId = SPELL_WIRHERED_BATWING_KILL_CREDIT; break;
-            case GO_MUDDY_MIRE_MAGGOTS:     uiCreditSpellId = SPELL_MUDDY_MIRE_MAGGOT_KILL_CREDIT; break;
-        }
-
-        if (uiCreditSpellId)
-            pPlayer->CastSpell(pPlayer, uiCreditSpellId, TRIGGERED_OLD_TRIGGERED);
-    }
-
-    return false;
 }
 
 /*####
@@ -1083,7 +1043,7 @@ struct go_unadorned_spike : public GameObjectAI
 {
     go_unadorned_spike(GameObject* go) : GameObjectAI(go) {}
 
-    void OnLootStateChange() override
+    void OnLootStateChange(Unit* /*user*/) override
     {
         if (m_go->GetLootState() != GO_ACTIVATED)
             return;
@@ -1139,28 +1099,116 @@ GameObjectAI* GetAI_go_containment(GameObject* go)
     return new go_containment(go);
 }
 
-// lfm quest 11670 
-struct go_warsong_banner_magmothregar : public GameObjectAI
+// note - conditions are likely some form of unit or ai condition, currently only chess event has one so using this overly simplified system of enabling it on encounter start
+struct go_aura_generator : public GameObjectAI
 {
-    go_warsong_banner_magmothregar(GameObject* go) : GameObjectAI(go) {}
+    go_aura_generator(GameObject* go) : GameObjectAI(go), m_auraSearchTimer(1000), m_spellInfo(sSpellTemplate.LookupEntry<SpellEntry>(go->GetGOInfo()->auraGenerator.auraID1)), m_started(m_spellInfo && !go->GetGOInfo()->auraGenerator.conditionID1 && !go->GetGOInfo()->auraGenerator.conditionID2),
+                                        m_radius(m_spellInfo ? GetSpellRadius(sSpellRadiusStore.LookupEntry(m_spellInfo->EffectRadiusIndex[EFFECT_INDEX_0])) : 0.f) {}
 
-    void JustSpawned()
+    uint32 m_auraSearchTimer;
+    SpellEntry const* m_spellInfo;
+    bool m_started;
+    float m_radius; // must be after m_spellInfo
+
+    void ReceiveAIEvent(AIEventType eventType, uint32 miscValue = 0) override
     {
-        if (Player* spawnerPlayer = (Player*)m_go->GetSpawner())
+        if (eventType == AI_EVENT_CUSTOM_A)
+            ChangeState(bool(miscValue));
+    }
+
+    void ChangeState(bool apply)
+    {
+        m_started = apply;
+        if (apply)
+            CheckAndApplyAura();
+        else
         {
-            if (spawnerPlayer->HasAura(45759))
+            for (auto& ref : m_go->GetMap()->GetPlayers())
             {
-                //spawnerPlayer->KilledMonsterCredit(25581);
-                spawnerPlayer->CastSpell(nullptr, 45744, TriggerCastFlags::TRIGGERED_NONE);
+                Player* player = ref.getSource();
+                auto bounds = player->GetSpellAuraHolderBounds(m_spellInfo->Id);
+                SpellAuraHolder* myHolder = nullptr;
+                for (auto itr = bounds.first; itr != bounds.second; ++itr)
+                {
+                    SpellAuraHolder* holder = (*itr).second;
+                    if (holder->GetCasterGuid() == m_go->GetObjectGuid())
+                    {
+                        myHolder = holder;
+                        break;
+                    }
+                }
+                if (myHolder)
+                    player->RemoveSpellAuraHolder(myHolder);
             }
         }
     }
+
+    void CheckAndApplyAura()
+    {
+        for (auto& ref : m_go->GetMap()->GetPlayers())
+        {
+            Player* player = ref.getSource();
+            float x, y, z;
+            m_go->GetPosition(x, y, z);
+            auto bounds = player->GetSpellAuraHolderBounds(m_spellInfo->Id);
+            SpellAuraHolder* myHolder = nullptr;
+            for (auto itr = bounds.first; itr != bounds.second; ++itr)
+            {
+                SpellAuraHolder* holder = (*itr).second;
+                if (holder->GetCasterGuid() == m_go->GetObjectGuid())
+                {
+                    myHolder = holder;
+                    break;
+                }
+            }
+            bool isCloseEnough = player->GetDistance(x, y, z, DIST_CALC_COMBAT_REACH) < m_go->GetGOInfo()->auraGenerator.radius;
+            if (!myHolder)
+            {
+                if (isCloseEnough)
+                {
+                    myHolder = CreateSpellAuraHolder(m_spellInfo, player, m_go);
+                    GameObjectAura* Aur = new GameObjectAura(m_spellInfo, EFFECT_INDEX_0, nullptr, nullptr, myHolder, player, m_go);
+                    myHolder->AddAura(Aur, EFFECT_INDEX_0);
+                    if (!player->AddSpellAuraHolder(myHolder))
+                        delete myHolder;
+                }
+            }
+            else if (!isCloseEnough)
+                player->RemoveSpellAuraHolder(myHolder);
+        }
+    }
+
+    void UpdateAI(const uint32 diff) override
+    {
+        if (!m_started)
+            return;
+
+        if (m_auraSearchTimer <= diff)
+        {
+            m_auraSearchTimer = 1000;
+            CheckAndApplyAura();
+        }
+        else m_auraSearchTimer -= diff;
+    }
 };
 
-GameObjectAI* GetAI_go_warsong_banner_magmothregar(GameObject* go)
+struct go_ai_ectoplasmic_distiller_trap : public GameObjectAI
 {
-    return new go_warsong_banner_magmothregar(go);
-}
+    go_ai_ectoplasmic_distiller_trap(GameObject* go) : GameObjectAI(go), m_castTimer(1000) {}
+
+    uint32 m_castTimer;
+
+    void UpdateAI(const uint32 uiDiff) override
+    {
+        if (m_castTimer <= uiDiff)
+        {
+            m_go->CastSpell(nullptr, nullptr, m_go->GetGOInfo()->trap.spellId, TRIGGERED_OLD_TRIGGERED);
+            m_castTimer = 2 * IN_MILLISECONDS;
+        }
+        else
+            m_castTimer -= uiDiff;
+    }
+};
 
 void AddSC_go_scripts()
 {
@@ -1225,11 +1273,6 @@ void AddSC_go_scripts()
     pNewScript->RegisterSelf();
 
     pNewScript = new Script;
-    pNewScript->Name = "go_lab_work_reagents";
-    pNewScript->pGOUse =          &GOUse_go_lab_work_reagents;
-    pNewScript->RegisterSelf();
-
-    pNewScript = new Script;
     pNewScript->Name = "go_brewfest_music";
     pNewScript->GetGameObjectAI = &GetAIgo_brewfest_music;
     pNewScript->RegisterSelf();
@@ -1274,9 +1317,13 @@ void AddSC_go_scripts()
     pNewScript->GetGameObjectAI = &GetAI_go_containment;
     pNewScript->RegisterSelf();
 
-    // lfm go scripts
     pNewScript = new Script;
-    pNewScript->Name = "go_warsong_banner_magmothregar";
-    pNewScript->GetGameObjectAI = &GetAI_go_warsong_banner_magmothregar;
+    pNewScript->Name = "go_aura_generator";
+    pNewScript->GetGameObjectAI = &GetNewAIInstance<go_aura_generator>;
+    pNewScript->RegisterSelf();
+
+    pNewScript = new Script;
+    pNewScript->Name = "go_ectoplasmic_distiller_trap";
+    pNewScript->GetGameObjectAI = &GetNewAIInstance<go_ai_ectoplasmic_distiller_trap>;
     pNewScript->RegisterSelf();
 }

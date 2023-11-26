@@ -107,7 +107,7 @@ SpellTargetInfo SpellTargetInfoTable[MAX_SPELL_TARGETS] =
     /*[74]*/    { "TARGET_LOCATION_UNIT_RANDOM_SIDE",                     TARGET_TYPE_LOCATION_DEST                                                 },
     /*[75]*/    { "TARGET_LOCATION_UNIT_RANDOM_CIRCUMFERENCE",            TARGET_TYPE_LOCATION_DEST                                                 },
     /*[76]*/    { "TARGET_LOCATION_CHANNEL_TARGET_DEST",                  TARGET_TYPE_LOCATION_DEST                                                 },
-    // lfm spell targets correction 
+    /*[77]*/    { "TARGET_UNIT_CHANNEL_TARGET",                           TARGET_TYPE_UNIT,             TARGET_NEUTRAL,    TARGET_ENUMERATOR_SINGLE },
     ///*[77]*/    { "TARGET_UNIT_CHANNEL_TARGET",                           TARGET_TYPE_UNIT,             TARGET_HARMFUL,    TARGET_ENUMERATOR_SINGLE },
     /*[77]*/    { "TARGET_UNIT_CHANNEL_TARGET",                           TARGET_TYPE_UNIT,             TARGET_SCRIPT,    TARGET_ENUMERATOR_SINGLE },
     /*[78]*/    { "TARGET_LOCATION_NORTH",                                TARGET_TYPE_LOCATION_DEST                                                 },
@@ -406,6 +406,8 @@ void SpellTargetMgr::Initialize()
             if (!spellInfo->Effect[effIdxSource])
                 continue;
 
+            SpellEffectInfo& effectTargetingSource = SpellEffectInfoTable[spellInfo->Effect[effIdxSource]];
+
             SpellTargetImplicitType implicitEffectType = data.implicitType[effIdxSource];
             for (uint8 rightSource = 0; rightSource < 2; ++rightSource)
             {
@@ -427,6 +429,11 @@ void SpellTargetMgr::Initialize()
                 // start from first next target
                 for (uint32 effIdxTarget = effIdxSource; effIdxTarget < MAX_EFFECT_INDEX; ++effIdxTarget)
                 {
+                    if (!spellInfo->Effect[effIdxTarget])
+                        continue;
+
+                    SpellEffectInfo& effectTargetingTarget = SpellEffectInfoTable[spellInfo->Effect[effIdxTarget]];
+
                     SpellTargetImplicitType implicitEffectTypeTarget = data.implicitType[effIdxTarget];
                     for (uint8 rightTarget = effIdxSource == effIdxTarget ? rightSource + 1 : 0; rightTarget < 2; ++rightTarget)
                     {
@@ -467,7 +474,8 @@ void SpellTargetMgr::Initialize()
                                     case TARGET_TYPE_UNIT:
                                     case TARGET_TYPE_PLAYER:
                                     {
-                                        if (info.enumerator == TARGET_ENUMERATOR_SINGLE) // always ignore subsequent
+                                        // always ignore subsequent
+                                        if (info.enumerator == TARGET_ENUMERATOR_SINGLE && CanEffectConsumeTarget(info.type, effectTargetingSource.requiredTarget))
                                         {
                                             ignore = true;
                                             break;
@@ -565,6 +573,17 @@ bool SpellTargetMgr::CanEffectBeFilledWithMask(uint32 spellId, uint32 effIdx, ui
     }
 }
 
+bool SpellTargetMgr::CanEffectConsumeTarget(SpellTargetImplicitType targetType, SpellTargetImplicitType effectTargetType)
+{
+    switch (targetType)
+    {
+        // incomplete mapping - adjust as needed
+        case TARGET_TYPE_UNIT: if (effectTargetType == TARGET_TYPE_LOCATION_DEST) return false; // 43178
+        default: break;
+    }
+    return true;
+}
+
 float SpellTargetMgr::GetJumpRadius(uint32 spellId)
 {
     switch (spellId)
@@ -590,6 +609,8 @@ float SpellTargetMgr::GetJumpRadius(uint32 spellId)
             return 50.f;
         case 45664: // Legion Lightning - KJ
             return 18.f;
+        case 62131: // Thorim - Chain Lightning - 5yd
+            return 5.f;
     }
     return CHAIN_SPELL_JUMP_RADIUS;
 }

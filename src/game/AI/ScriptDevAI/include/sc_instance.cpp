@@ -3,6 +3,7 @@
  * Please see the included DOCS/LICENSE.TXT for more information */
 
 #include "AI/ScriptDevAI/include/sc_common.h"
+#include "Maps/MapPersistentStateMgr.h"
 
 /**
    Function that uses a door or a button
@@ -147,7 +148,7 @@ Player* ScriptedInstance::GetPlayerInMap(bool onlyAlive /*=false*/, bool canBeGa
     for (const auto& playerRef : players)
     {
         Player* player = playerRef.getSource();
-        if (player && (!onlyAlive || (player->IsAlive() && player->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED) && !player->IsFeigningDeathSuccessfully() && !player->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE_2))) && (canBeGamemaster || !player->IsGameMaster()))
+        if (player && (!onlyAlive || (player->IsAlive() && player->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED) && !player->IsFeigningDeathSuccessfully() && !player->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNTARGETABLE))) && (canBeGamemaster || !player->IsGameMaster()))
             return player;
     }
 
@@ -205,6 +206,7 @@ void ScriptedInstance::DespawnGuids(GuidVector& spawns)
 
 void ScriptedInstance::RespawnDbGuids(std::vector<uint32>& spawns, uint32 respawnDelay)
 {
+    time_t respawnTime = time(nullptr) + respawnDelay;
     for (uint32 spawn : spawns)
     {
         if (respawnDelay)
@@ -219,6 +221,7 @@ void ScriptedInstance::RespawnDbGuids(std::vector<uint32>& spawns, uint32 respaw
             }
         }
         instance->GetSpawnManager().RespawnCreature(spawn, respawnDelay);
+        instance->GetPersistentState()->SaveCreatureRespawnTime(spawn, respawnTime);
     }
 }
 

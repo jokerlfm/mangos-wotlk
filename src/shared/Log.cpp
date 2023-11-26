@@ -20,14 +20,14 @@
 #include "Log.h"
 #include "Policies/Singleton.h"
 #include "Config/Config.h"
-#include "Util.h"
-#include "ByteBuffer.h"
-#include "ProgressBar.h"
+#include "Util/Util.h"
+#include "Util/ByteBuffer.h"
+#include "Util/ProgressBar.h"
 
-#include <stdarg.h>
 #include <fstream>
 #include <iostream>
 #include <thread>
+#include <cstdarg>
 
 #include <boost/stacktrace.hpp>
 

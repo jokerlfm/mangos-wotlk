@@ -77,7 +77,8 @@ namespace Movement
             // float           duration_mod_next;
             float           vertical_acceleration;
             float           initialOrientation;
-            int32           effect_start_time;
+            int32           parabolic_start_time;
+            int32           animation_start_time;
             int32           point_Idx;
             int32           point_Idx_offset;
 
@@ -134,12 +135,14 @@ namespace Movement
             bool isFacingPoint() const { return splineflags.final_point; }
             bool isFacingTarget() const { return splineflags.final_target; }
             bool isFacingAngle() const { return splineflags.final_angle; }
+            bool IsBoarding() const;
             const Vector3 FinalDestination() const;
             const Vector3 CurrentDestination() const { return Initialized() ? spline.getPoint(point_Idx + 1) : Vector3();}
             int32 currentPathIdx() const;
             int32 GetRawPathIndex() const { return point_Idx; }
 
             uint32 Duration() const { return spline.length();}
+            uint32 DurationAtPointIdx(uint32 idx) const { return spline.length(idx);}
             int32 ComputeTimeToIndex(uint32 idx) const { return spline.length(idx) - time_passed; }
 
             float Speed() const { return speed; }

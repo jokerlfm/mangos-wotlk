@@ -18,7 +18,7 @@
 
 #include "Common.h"
 #include "Server/DBCStores.h"
-#include "WorldPacket.h"
+#include "Server/WorldPacket.h"
 #include "Server/WorldSession.h"
 #include "Globals/ObjectMgr.h"
 #include "Spells/SpellMgr.h"
@@ -250,10 +250,10 @@ void WorldSession::HandleOpenItemOpcode(WorldPacket& recvPacket)
 
     if (pItem->HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_WRAPPED))// wrapped?
     {
-        QueryResult* result = CharacterDatabase.PQuery("SELECT entry, flags FROM character_gifts WHERE item_guid = '%u'", pItem->GetGUIDLow());
-        if (result)
+        auto queryResult = CharacterDatabase.PQuery("SELECT entry, flags FROM character_gifts WHERE item_guid = '%u'", pItem->GetGUIDLow());
+        if (queryResult)
         {
-            Field* fields = result->Fetch();
+            Field* fields = queryResult->Fetch();
             uint32 entry = fields[0].GetUInt32();
             uint32 flags = fields[1].GetUInt32();
 
@@ -261,7 +261,6 @@ void WorldSession::HandleOpenItemOpcode(WorldPacket& recvPacket)
             pItem->SetEntry(entry);
             pItem->SetUInt32Value(ITEM_FIELD_FLAGS, flags);
             pItem->SetState(ITEM_CHANGED, pUser);
-            delete result;
         }
         else
         {
@@ -341,6 +340,15 @@ void WorldSession::HandleGameObjectUseOpcode(WorldPacket& recv_data)
     // client checks this but needs recheck
     if (obj->GetGOInfo()->CannotBeUsedUnderImmunity() && _player->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE))
         return;
+
+    // code meant to be in CanUseNow
+    if (obj->GetGoType() == GAMEOBJECT_TYPE_CHAIR)
+    {
+        float x, y;
+        std::tie(x, y) = obj->GetClosestChairSlotPosition(_player);
+        if (_player->GetDistance(x, y, obj->GetPositionZ(), DIST_CALC_NONE, obj->GetTransport()) > 3.f * 3.f)
+            return;
+    }
 
     obj->Use(_player);
 }
@@ -512,7 +520,7 @@ void WorldSession::HandleCancelAuraOpcode(WorldPacket& recvPacket)
     if (!spellInfo)
         return;
 
-    if (spellInfo->HasAttribute(SPELL_ATTR_CANT_CANCEL))
+    if (spellInfo->HasAttribute(SPELL_ATTR_NO_AURA_CANCEL))
         return;
 
     if (IsPassiveSpell(spellInfo))
@@ -521,6 +529,10 @@ void WorldSession::HandleCancelAuraOpcode(WorldPacket& recvPacket)
     SpellAuraHolder* holder = _player->GetSpellAuraHolder(spellId);
 
     if (!holder)
+        return;
+
+    // cant remove any auras while possessed
+    if (_player->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_POSSESSED) || _player->HasCharmer())
         return;
 
     if (!holder->IsPositive())
@@ -573,10 +585,6 @@ void WorldSession::HandlePetCancelAuraOpcode(WorldPacket& recvPacket)
     recvPacket >> guid;
     recvPacket >> spellId;
 
-    // ignore for remote control state
-    if (!_player->IsSelfMover())
-        return;
-
     SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
     if (!spellInfo)
     {
@@ -605,9 +613,6 @@ void WorldSession::HandlePetCancelAuraOpcode(WorldPacket& recvPacket)
     }
 
     pet->RemoveAurasDueToSpell(spellId);
-
-    // TODO: check if its correctly handled in aura remove
-    //pet->AddCreatureSpellCooldown(spellId);
 }
 
 void WorldSession::HandleCancelGrowthAuraOpcode(WorldPacket& /*recvPacket*/)

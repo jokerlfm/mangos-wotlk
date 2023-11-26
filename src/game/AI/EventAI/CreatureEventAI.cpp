@@ -109,15 +109,10 @@ CreatureEventAI::CreatureEventAI(Creature* creature) : CreatureAI(creature),
 void CreatureEventAI::InitAI()
 {
     m_CreatureEventAIList.clear();
-    m_distanceSpells.clear();
-    m_mainSpells.clear();
-    // Need make copy for filter unneeded steps and safe in case table reload
-    CreatureEventAI_Event_Map::const_iterator creatureEventsItr = sEventAIMgr.GetCreatureEventAIMap().find(m_creature->GetEntry());
-    if (creatureEventsItr != sEventAIMgr.GetCreatureEventAIMap().end())
+
+    auto processMap = [&](const CreatureEventAI_Event_Vec& creatureEvent)
     {
         uint32 events_count = 0;
-
-        const CreatureEventAI_Event_Vec& creatureEvent = creatureEventsItr->second;
         for (const auto& i : creatureEvent)
         {
             // Debug check
@@ -147,22 +142,22 @@ void CreatureEventAI::InitAI()
         else
         {
             m_CreatureEventAIList.reserve(events_count);
-            for (const auto& i : creatureEvent)
+            for (const auto& aiEvent : creatureEvent)
             {
                 // Debug check
 #ifndef MANGOS_DEBUG
-                if (i.event_flags & EFLAG_DEBUG_ONLY)
+                if (aiEvent.event_flags & EFLAG_DEBUG_ONLY)
                     continue;
 #endif
                 bool storeEvent = false;
-                if (i.event_flags & (EFLAG_DIFFICULTY_ALL))
+                if (aiEvent.event_flags & (EFLAG_DIFFICULTY_ALL))
                 {
                     if (m_creature->GetMap()->IsDungeon())
                     {
-                        if ((1 << (m_creature->GetMap()->GetSpawnMode() + 1)) & i.event_flags)
+                        if ((1 << (m_creature->GetMap()->GetSpawnMode() + 1)) & aiEvent.event_flags)
                             storeEvent = true;
                     }
-                    else if (IsEventFlagsFitForNormalMap(i.event_flags))
+                    else if (IsEventFlagsFitForNormalMap(aiEvent.event_flags))
                         storeEvent = true;
                 }
                 else
@@ -170,23 +165,40 @@ void CreatureEventAI::InitAI()
 
                 if (storeEvent)
                 {
-                    m_CreatureEventAIList.push_back(CreatureEventAIHolder(i));
+                    m_CreatureEventAIList.push_back(CreatureEventAIHolder(aiEvent));
                     // Cache for fast use
-                    if (i.event_type == EVENT_T_OOC_LOS)
+                    if (aiEvent.event_type == EVENT_T_OOC_LOS)
                         m_HasOOCLoSEvent = true;
 
                     for (uint32 actionIdx = 0; actionIdx < MAX_ACTIONS; ++actionIdx)
-                        if (i.action[actionIdx].type == ACTION_T_CAST)
+                        if (aiEvent.action[actionIdx].type == ACTION_T_CAST)
                         {
-                            if (i.action[actionIdx].cast.castFlags & CAST_MAIN_SPELL)
-                                AddMainSpell(i.action[actionIdx].cast.spellId);
+                            if (aiEvent.action[actionIdx].cast.castFlags & CAST_MAIN_SPELL)
+                                AddMainSpell(aiEvent.action[actionIdx].cast.spellId);
 
-                            if (i.action[actionIdx].cast.castFlags & CAST_DISTANCE_YOURSELF)
-                                AddDistanceSpell(i.action[actionIdx].cast.spellId);
+                            if (aiEvent.action[actionIdx].cast.castFlags & CAST_DISTANCE_YOURSELF)
+                                AddDistanceSpell(aiEvent.action[actionIdx].cast.spellId);
                         }
                 }
             }
         }
+    };
+
+    // Need make copy for filter unneeded steps and safe in case table reload
+    auto creatureEventsItr = m_creature->GetMap()->GetMapDataContainer().GetCreatureEventEntryAIMap()->find(m_creature->GetEntry());
+    if (creatureEventsItr != m_creature->GetMap()->GetMapDataContainer().GetCreatureEventEntryAIMap()->end())
+    {
+        const CreatureEventAI_Event_Vec& creatureEvent = creatureEventsItr->second;
+        processMap(creatureEvent);
+    }
+
+    if (m_creature->GetDbGuid() == 5026)
+        printf("");
+    auto creatureEventsGuidItr = m_creature->GetMap()->GetMapDataContainer().GetCreatureEventGuidAIMap()->find(m_creature->GetDbGuid());
+    if (creatureEventsGuidItr != m_creature->GetMap()->GetMapDataContainer().GetCreatureEventGuidAIMap()->end())
+    {
+        const CreatureEventAI_Event_Vec& creatureEvent = creatureEventsGuidItr->second;
+        processMap(creatureEvent);
     }
 }
 
@@ -360,15 +372,19 @@ bool CreatureEventAI::CheckEvent(CreatureEventAIHolder& holder, Unit* actionInvo
                 if (!actionInvoker)
                     return false;
 
-                if (Player* player = actionInvoker->GetBeneficiaryPlayer())
-                    if (!sObjectMgr.IsConditionSatisfied(event.death.conditionId, player, player->GetMap(), m_creature, CONDITION_FROM_EVENTAI))
-                        return false;
+                Unit const* controller = actionInvoker->GetControllingPlayer();
+                if (!controller) // only allow going forward if we can evaluate condition
+                    controller = actionInvoker;
+
+                if (!sObjectMgr.IsConditionSatisfied(event.death.conditionId, controller, controller->GetMap(), m_creature, CONDITION_FROM_EVENTAI))
+                    return false;
             }
             break;
         case EVENT_T_EVADE:
             break;
         case EVENT_T_SPELLHIT:
         case EVENT_T_SPELLHIT_TARGET:
+        case EVENT_T_SPELL_CAST:
             break;
         case EVENT_T_RANGE:
             if (!m_creature->IsInCombat() || !m_creature->GetVictim() || !m_creature->IsInMap(m_creature->GetVictim()))
@@ -405,7 +421,7 @@ bool CreatureEventAI::CheckEvent(CreatureEventAIHolder& holder, Unit* actionInvo
             if (!m_creature->IsInCombat())
                 return false;
 
-            CreatureEventAI_EventComputedData const& data = (*sEventAIMgr.GetEAIComputedDataMap().find(event.event_id)).second; // always found
+            CreatureEventAI_EventComputedData const& data = m_creature->GetMap()->GetMapDataContainer().GetEAIComputedDataMap()->find(event.event_id)->second; // always found
             Unit* pUnit = DoSelectLowestHpFriendly(float(event.friendly_hp.radius), float(event.friendly_hp.hpDeficit), event.friendly_hp.isPercent, data.friendlyHp.targetSelf);
             if (!pUnit)
                 return false;
@@ -443,7 +459,7 @@ bool CreatureEventAI::CheckEvent(CreatureEventAIHolder& holder, Unit* actionInvo
                 pList = DoFindFriendlyMissingBuff((float)event.friendly_buff.radius, event.friendly_buff.spellId, false);
             }
             else if (event.friendly_buff.inCombat == 1)            
-                pList = DoFindFriendlyMissingBuff((float)event.friendly_buff.radius, event.friendly_buff.spellId, true);
+                pList = DoFindFriendlyMissingBuff((float)event.friendly_buff.radius, event.friendly_buff.spellId, m_creature->IsInCombat());
             else if (event.friendly_buff.inCombat == 2)
             {
                 if (m_creature->IsInCombat())
@@ -811,8 +827,6 @@ bool CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
                 SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
                 if (!spellInfo)
                     return false;
-                if (!IsIgnoreLosSpellCast(spellInfo))
-                    selectFlags = SELECT_FLAG_IN_LOS;
                 if (action.cast.castFlags & CAST_PLAYER_ONLY)
                     selectFlags |= SELECT_FLAG_PLAYER;
                 if (action.cast.castFlags & CAST_AURA_NOT_PRESENT)
@@ -934,9 +948,9 @@ bool CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
             SetCombatMovement(action.combat_movement.state != 0, true);
 
             if (hasCombatMovement && action.combat_movement.melee && m_creature->IsInCombat() && m_creature->GetVictim())
-                m_creature->SendMeleeAttackStart(m_creature->GetVictim());
+                m_creature->SendMeleeAttackStart(*m_creature->GetVictim());
             else if (action.combat_movement.melee && m_creature->IsInCombat() && m_creature->GetVictim())
-                m_creature->SendMeleeAttackStop(m_creature->GetVictim());
+                m_creature->SendMeleeAttackStop(*m_creature->GetVictim());
             break;
         }
         case ACTION_T_SET_PHASE:
@@ -1188,7 +1202,7 @@ bool CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
         }
         case ACTION_T_CHANGE_MOVEMENT:
         {
-            if (action.changeMovement.asDefault)
+            if (action.changeMovement.flags & CHANGE_MOVEMENT_FLAG_AS_DEFAULT)
                 m_defaultMovement = MovementGeneratorType(action.changeMovement.movementType);
             switch (action.changeMovement.movementType)
             {
@@ -1199,15 +1213,34 @@ bool CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
                     m_creature->GetMotionMaster()->MoveRandomAroundPoint(m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), float(action.changeMovement.wanderORpathID));
                     break;
                 case WAYPOINT_MOTION_TYPE:
+                {
                     m_creature->StopMoving();
                     m_creature->GetMotionMaster()->Clear(false, true);
-                    m_creature->GetMotionMaster()->MoveWaypoint(action.changeMovement.wanderORpathID);
+                    WaypointPathOrigin origin = PATH_NO_PATH;
+                    if (action.changeMovement.flags & CHANGE_MOVEMENT_FLAG_WAYPOINT_PATH)
+                        origin = PATH_FROM_WAYPOINT_PATH;
+                    m_creature->GetMotionMaster()->MoveWaypoint(action.changeMovement.wanderORpathID, origin);
                     break;
+                }
+                case PATH_MOTION_TYPE:
+                {
+                    m_creature->StopMoving();
+                    WaypointPathOrigin origin = PATH_NO_PATH;
+                    if (action.changeMovement.flags & CHANGE_MOVEMENT_FLAG_WAYPOINT_PATH)
+                        origin = PATH_FROM_WAYPOINT_PATH;
+                    m_creature->GetMotionMaster()->MovePath(action.changeMovement.wanderORpathID, origin);
+                    break;
+                }
                 case LINEAR_WP_MOTION_TYPE:
+                {
                     m_creature->StopMoving();
                     m_creature->GetMotionMaster()->Clear(false, true);
-                    m_creature->GetMotionMaster()->MoveLinearWP(action.changeMovement.wanderORpathID);
+                    WaypointPathOrigin origin = PATH_NO_PATH;
+                    if (action.changeMovement.flags & CHANGE_MOVEMENT_FLAG_WAYPOINT_PATH)
+                        origin = PATH_FROM_WAYPOINT_PATH;
+                    m_creature->GetMotionMaster()->MoveLinearWP(action.changeMovement.wanderORpathID, origin);
                     break;
+                }
             }
             break;
         }
@@ -1245,10 +1278,10 @@ bool CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
                 uint32 relayId = sScriptMgr.GetRandomRelayDbscriptFromTemplate(uint32(-action.relayScript.relayId));
                 if (relayId == 0)
                     break;
-                m_creature->GetMap()->ScriptsStart(sRelayScripts, relayId, target, m_creature);
+                m_creature->GetMap()->ScriptsStart(SCRIPT_TYPE_RELAY, relayId, target, m_creature);
             }
             else
-                m_creature->GetMap()->ScriptsStart(sRelayScripts, action.relayScript.relayId, target, m_creature);
+                m_creature->GetMap()->ScriptsStart(SCRIPT_TYPE_RELAY, action.relayScript.relayId, target, m_creature);
             break;
         }
         case ACTION_T_TEXT_NEW:
@@ -1357,7 +1390,7 @@ bool CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
         }
         case ACTION_T_SET_IMMOBILIZED_STATE:
         {
-            SetRootSelf(action.immobilizedState.apply, action.immobilizedState.combatOnly);
+            SetAIImmobilizedState(action.immobilizedState.apply, action.immobilizedState.combatOnly);
             break;
         }
         case ACTION_T_SET_DESPAWN_AGGREGATION:
@@ -1438,7 +1471,7 @@ void CreatureEventAI::Reset()
     // reset AI state
     SetAIOrder(ORDER_NONE);
     SetCombatScriptStatus(false);
-    ClearSelfRoot();
+    ClearCombatOnlyRoot();
 
     // Reset all events to enabled
     for (auto& i : m_CreatureEventAIList)
@@ -1584,6 +1617,18 @@ void CreatureEventAI::CorpseRemoved(uint32& respawnDelay)
     // can happen due to forced despawn of allies
     if ((m_despawnAggregationMask & AGGREGATION_EVADE) != 0)
         DespawnGuids(m_despawnGuids);
+}
+
+void CreatureEventAI::OnSpellCast(SpellEntry const* spellInfo, Unit* target)
+{
+    IncreaseDepthIfNecessary();
+    for (auto& i : m_CreatureEventAIList)
+        if (i.event.event_type == EVENT_T_SPELL_CAST)
+            // If spell id matches (or no spell id) & if spell school matches (or no spell school)
+            if (spellInfo->Id == i.event.spellCast.spellId)
+                CheckAndReadyEventForExecution(i, target);
+
+    ProcessEvents(target);
 }
 
 void CreatureEventAI::EnterCombat(Unit* enemy)

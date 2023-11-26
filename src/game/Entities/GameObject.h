@@ -22,7 +22,7 @@
 #include "Common.h"
 #include "Globals/SharedDefines.h"
 #include "Entities/Object.h"
-#include "Util.h"
+#include "Util/Util.h"
 #include "AI/BaseAI/GameObjectAI.h"
 #include "Spells/SpellDefines.h"
 #include "Entities/GameObjectDefines.h"
@@ -426,6 +426,7 @@ struct GameObjectInfo
 
     uint32 MinMoneyLoot;
     uint32 MaxMoneyLoot;
+    uint32 StringId;
     uint32 ScriptId;
 
     // helpers
@@ -638,12 +639,14 @@ struct GameObjectData
     int32 spawntimesecsmin;
     int32 spawntimesecsmax;
     uint32 animprogress;
-    GOState go_state;
+    int32 goState;
+    uint32 StringId;
     uint8 spawnMask;
     uint16 gameEvent;
     uint16 GuidPoolId;
     uint16 EntryPoolId;
     uint16 OriginalZoneId;
+    QuaternionData path_rotation;
 
     uint32 GetRandomRespawnTime() const { return urand(uint32(spawntimesecsmin), uint32(spawntimesecsmax)); }
 
@@ -654,13 +657,6 @@ struct GameObjectData
 struct GameObjectTemplateAddon
 {
     std::array<uint32, 4> artKits = {};
-};
-
-// from `gameobject_addon`
-struct GameObjectDataAddon
-{
-    uint32 guid;
-    QuaternionData path_rotation;
 };
 
 enum class GameObjectActions : uint32
@@ -752,8 +748,9 @@ class GameObject : public WorldObject
         void AddToWorld() override;
         void RemoveFromWorld() override;
 
-        virtual bool Create(uint32 guidlow, uint32 name_id, Map* map, uint32 phaseMask, float x, float y, float z, float ang,
+        virtual bool Create(uint32 dbGuid, uint32 guidlow, uint32 name_id, Map* map, uint32 phaseMask, float x, float y, float z, float ang,
                     const QuaternionData & rotation = QuaternionData(), uint8 animprogress = GO_ANIMPROGRESS_DEFAULT, GOState go_state = GO_STATE_READY);
+
         void Update(const uint32 diff) override;
         void Heartbeat() override;
         GameObjectInfo const* GetGOInfo() const;
@@ -823,6 +820,7 @@ class GameObject : public WorldObject
         uint32 GetRespawnDelay() const { return m_respawnDelay; }
         void SetRespawnDelay(uint32 delay, bool once = false) { m_respawnDelay = delay; m_respawnOverriden = true; m_respawnOverrideOnce = once; }
         void SetForcedDespawn() { m_forcedDespawn = true; };
+        void SetChestDespawn();
         void Refresh();
         void Delete();
 
@@ -848,7 +846,7 @@ class GameObject : public WorldObject
         void Use(Unit* user, SpellEntry const* spellInfo = nullptr);
 
         LootState GetLootState() const { return m_lootState; }
-        void SetLootState(LootState state);
+        void SetLootState(LootState state, Unit* user = nullptr);
 
         void AddToSkillupList(Player* player);
         bool IsInSkillupList(Player* player) const;
@@ -887,7 +885,7 @@ class GameObject : public WorldObject
         bool ActivateToQuest(Player* pTarget) const;
         void UseDoorOrButton(uint32 time_to_restore = 0, bool alternative = false);
         // 0 = use `gameobject`.`spawntimesecs`
-        void ResetDoorOrButton();
+        void ResetDoorOrButton(Unit* user = nullptr);
         void UseOpenableObject(bool open, uint32 withRestoreTime = 0, bool useAlternativeState = false);
 
         ReputationRank GetReactionTo(Unit const* unit) const override;
@@ -947,6 +945,8 @@ class GameObject : public WorldObject
         float GetStationaryZ() const { if (GetGOInfo()->type != GAMEOBJECT_TYPE_MO_TRANSPORT) return m_stationaryPosition.GetPositionZ(); return 0.f; }
         float GetStationaryO() const { if (GetGOInfo()->type != GAMEOBJECT_TYPE_MO_TRANSPORT) return m_stationaryPosition.GetPositionO(); return GetOrientation(); }
 
+        std::pair<float, float> GetClosestChairSlotPosition(Unit* user) const;
+
         SpellCastResult CastSpell(Unit* temporaryCaster, Unit* Victim, uint32 spellId, uint32 triggeredFlags, Item* castItem = nullptr, Aura* triggeredByAura = nullptr, ObjectGuid originalCaster = ObjectGuid(), SpellEntry const* triggeredBy = nullptr);
 
         SpellCastResult CastSpell(Unit* temporaryCaster, Unit* Victim, uint32 spellId, TriggerCastFlags triggeredFlags, Item* castItem = nullptr, Aura* triggeredByAura = nullptr, ObjectGuid originalCaster = ObjectGuid(), SpellEntry const* triggeredBy = nullptr)
@@ -958,7 +958,6 @@ class GameObject : public WorldObject
 
         void GenerateLootFor(Player* player); // used to tie chest loot to encounter at the moment of its end
 
-        uint32 GetDbGuid() const override { return m_dbGuid; }
         HighGuid GetParentHigh() const override { return HIGHGUID_GAMEOBJECT; }
 
         void SetCooldown(uint32 cooldown); // seconds
@@ -1008,7 +1007,7 @@ class GameObject : public WorldObject
         // Used for chest type
         bool m_isInUse;                                     // only one player at time are allowed to open chest
         time_t m_reStockTimer;                              // timer to refill the chest
-        time_t m_despawnTimer;                              // timer to despawn the chest if something changed in it
+        TimePoint m_despawnTimer;                           // timer to despawn the chest if something changed in it
 
         void TriggerSummoningRitual();
         void TriggerDelayedAction();
@@ -1020,8 +1019,6 @@ class GameObject : public WorldObject
         ObjectGuid m_linkedTrap;
 
         std::unique_ptr<GameObjectAI> m_AI;
-
-        uint32 m_dbGuid;
 
         ObjectGuid m_spawnerGuid;
 

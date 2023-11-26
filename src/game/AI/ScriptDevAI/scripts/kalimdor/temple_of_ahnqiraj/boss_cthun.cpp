@@ -92,8 +92,8 @@ enum
 
 static const float cthunLocations[4][4] =
 {
-    { -8571.0f,  1990.0f,    -98.0f,  1.22f},       // Flesh Tentacles locations
-    { -8525.0f,  1994.0f,    -98.0f,  2.12f},
+    { -8571.47f, 1990.2f, -98.7779f, 1.01229f},       // Flesh Tentacles locations
+    { -8525.08f, 1994.71f, -98.2553f, 2.58309f},
     { -8563.56f, 2040.69f,   -97.0f,  4.9426f},     // Stomach teleport location (in)
     { -8576.06f, 1985.8359f, 100.23f, 6.10865f},    // Stomach eject location (out)
 };
@@ -290,7 +290,7 @@ struct boss_cthunAI : public CombatAI
         m_playersInStomachList.clear();
 
         // Reset flags
-        m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+        m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
         SetCombatMovement(false);
         SetMeleeEnabled(false);
         SetReactState(REACT_PASSIVE);
@@ -403,7 +403,7 @@ struct boss_cthunAI : public CombatAI
             // Make ready for fight
             SetReactState(REACT_AGGRESSIVE);
             DoCastSpellIfCan(m_creature, SPELL_CARAPACE_CTHUN, CAST_TRIGGERED | CAST_AURA_NOT_PRESENT);
-            m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
             m_creature->SetInCombatWithZone();
         }
     }

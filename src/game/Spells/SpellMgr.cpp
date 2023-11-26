@@ -21,7 +21,7 @@
 #include "Spells/SpellAuraDefines.h"
 #include "Spells/SpellTargets.h"
 #include "Spells/SpellEffectDefines.h"
-#include "ProgressBar.h"
+#include "Util/ProgressBar.h"
 #include "Server/DBCStores.h"
 #include "Server/SQLStorages.h"
 #include "Chat/Chat.h"
@@ -76,7 +76,7 @@ int32 GetSpellMaxDuration(SpellEntry const* spellInfo)
     return (du->Duration[2] == -1) ? -1 : abs(du->Duration[2]);
 }
 
-int32 CalculateSpellDuration(SpellEntry const* spellInfo, Unit const* caster)
+int32 CalculateSpellDuration(SpellEntry const* spellInfo, Unit const* caster, Unit const* target, AuraScript* auraScript)
 {
     int32 duration = GetSpellDuration(spellInfo);
 
@@ -84,20 +84,25 @@ int32 CalculateSpellDuration(SpellEntry const* spellInfo, Unit const* caster)
     {
         int32 maxduration = GetSpellMaxDuration(spellInfo);
 
-        if (duration != maxduration && caster->GetTypeId() == TYPEID_PLAYER)
+        if (duration != maxduration && caster->IsPlayer())
             duration += int32((maxduration - duration) * caster->GetComboPoints() / 5);
+
+        if (auraScript)
+            duration = auraScript->OnDurationCalculate(caster, target, duration);
 
         if (Player* modOwner = caster->GetSpellModOwner())
         {
             modOwner->ApplySpellMod(spellInfo->Id, SPELLMOD_DURATION, duration);
 
-            if (spellInfo->HasAttribute(SPELL_ATTR_EX5_HASTE_AFFECT_DURATION) || caster->HasAffectedAura(SPELL_AURA_PERIODIC_HASTE, spellInfo))
+            if (spellInfo->HasAttribute(SPELL_ATTR_EX5_SPELL_HASTE_AFFECTS_PERIODIC) || caster->HasAffectedAura(SPELL_AURA_PERIODIC_HASTE, spellInfo))
                 duration = int32(duration * caster->GetFloatValue(UNIT_MOD_CAST_SPEED));
 
             if (duration < 0)
                 duration = 0;
         }
     }
+    else if (auraScript)
+        duration = auraScript->OnDurationCalculate(caster, target, duration);
 
     return duration;
 }
@@ -150,7 +155,7 @@ uint32 GetSpellCastTime(SpellEntry const* spellInfo, WorldObject* caster, Spell*
     castTime = std::max(castTime, spellCastTimeEntry->MinCastTime);
 
     // Hunter Ranged spells need cast time + 0.5s to reflect tooltips, excluding Auto Shot
-    if (spellInfo->HasAttribute(SPELL_ATTR_RANGED) && (!spell || !spell->IsAutoRepeat()))
+    if (spellInfo->HasAttribute(SPELL_ATTR_USES_RANGED_SLOT) && (!spell || !spell->IsAutoRepeat()))
         castTime += 500;
 
     if (spell)
@@ -161,7 +166,7 @@ uint32 GetSpellCastTime(SpellEntry const* spellInfo, WorldObject* caster, Spell*
         if (caster->IsUnit())
         {
             Unit* unitCaster = static_cast<Unit*>(caster);
-            if (!spellInfo->HasAttribute(SPELL_ATTR_ABILITY) && !spellInfo->HasAttribute(SPELL_ATTR_TRADESPELL) && !spellInfo->HasAttribute(SPELL_ATTR_EX3_IGNORE_CASTER_MODIFIERS))
+            if (!spellInfo->HasAttribute(SPELL_ATTR_IS_ABILITY) && !spellInfo->HasAttribute(SPELL_ATTR_IS_TRADESKILL) && !spellInfo->HasAttribute(SPELL_ATTR_EX3_IGNORE_CASTER_MODIFIERS))
                 castTime = int32(castTime * unitCaster->GetFloatValue(UNIT_MOD_CAST_SPEED));
             else if (spell->IsRangedSpell() && !spell->IsAutoRepeat())
                 castTime = int32(castTime * unitCaster->m_modAttackSpeedPct[RANGED_ATTACK]);
@@ -338,7 +343,7 @@ WeaponAttackType GetWeaponAttackType(SpellEntry const* spellInfo)
     switch (spellInfo->DmgClass)
     {
         case SPELL_DAMAGE_CLASS_MELEE:
-            if (spellInfo->HasAttribute(SPELL_ATTR_EX3_REQ_OFFHAND))
+            if (spellInfo->HasAttribute(SPELL_ATTR_EX3_REQUIRES_OFFHAND_WEAPON))
                 return OFF_ATTACK;
             return BASE_ATTACK;
         case SPELL_DAMAGE_CLASS_RANGED:
@@ -346,9 +351,9 @@ WeaponAttackType GetWeaponAttackType(SpellEntry const* spellInfo)
         default:
         {
             // Wands
-            if (spellInfo->HasAttribute(SPELL_ATTR_EX2_AUTOREPEAT_FLAG))
+            if (spellInfo->HasAttribute(SPELL_ATTR_EX3_NORMAL_RANGED_ATTACK))
                 return RANGED_ATTACK;
-            if (spellInfo->HasAttribute(SPELL_ATTR_EX3_REQ_OFFHAND))
+            if (spellInfo->HasAttribute(SPELL_ATTR_EX3_REQUIRES_OFFHAND_WEAPON))
                 return OFF_ATTACK;
             return BASE_ATTACK;
         }
@@ -476,7 +481,7 @@ SpellSpecific GetSpellSpecific(uint32 spellId)
     }
 
     // Tracking spells (exclude Well Fed, some other always allowed cases)
-    if (spellInfo->HasAttribute(SPELL_ATTR_EX6_CASTABLE_WHILE_ON_VEHICLE) && (IsSpellHaveAura(spellInfo, SPELL_AURA_TRACK_CREATURES) ||
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX6_ALLOW_WHILE_RIDING_VEHICLE) && (IsSpellHaveAura(spellInfo, SPELL_AURA_TRACK_CREATURES) ||
         IsSpellHaveAura(spellInfo, SPELL_AURA_TRACK_STEALTHED) ||
         IsSpellHaveAura(spellInfo, SPELL_AURA_TRACK_RESOURCES)))
         return SPELL_TRACKER;
@@ -557,7 +562,7 @@ SpellCastResult GetErrorAtShapeshiftedCast(SpellEntry const* spellInfo, uint32 f
     else
     {
         // needs shapeshift
-        if (!spellInfo->HasAttribute(SPELL_ATTR_EX2_NOT_NEED_SHAPESHIFT) && spellInfo->Stances[0] != 0)
+        if (!spellInfo->HasAttribute(SPELL_ATTR_EX2_ALLOW_WHILE_NOT_SHAPESHIFTED) && spellInfo->Stances[0] != 0)
             return SPELL_FAILED_ONLY_SHAPESHIFT;
     }
 
@@ -571,8 +576,8 @@ void SpellMgr::LoadSpellTargetPositions()
     uint32 count = 0;
 
     //                                                0   1           2                  3                  4                  5
-    QueryResult* result = WorldDatabase.Query("SELECT id, target_map, target_position_x, target_position_y, target_position_z, target_orientation FROM spell_target_position");
-    if (!result)
+    auto queryResult = WorldDatabase.Query("SELECT id, target_map, target_position_x, target_position_y, target_position_z, target_orientation FROM spell_target_position");
+    if (!queryResult)
     {
         BarGoLink bar(1);
         bar.step();
@@ -581,11 +586,11 @@ void SpellMgr::LoadSpellTargetPositions()
         return;
     }
 
-    BarGoLink bar(result->GetRowCount());
+    BarGoLink bar(queryResult->GetRowCount());
 
     do
     {
-        Field* fields = result->Fetch();
+        Field* fields = queryResult->Fetch();
 
         bar.step();
 
@@ -637,9 +642,7 @@ void SpellMgr::LoadSpellTargetPositions()
         mSpellTargetPositions[Spell_ID] = st;
         ++count;
     }
-    while (result->NextRow());
-
-    delete result;
+    while (queryResult->NextRow());
 
     sLog.outString(">> Loaded %u spell target destination coordinates", count);
     sLog.outString();
@@ -828,9 +831,9 @@ void SpellMgr::LoadSpellProcEvents()
 {
     mSpellProcEventMap.clear();                             // need for reload case
 
-    //                                                0      1           2                3                  4                  5                  6                  7                  8                  9                  10                 11                 12         13      14       15            16
-    QueryResult* result = WorldDatabase.Query("SELECT entry, SchoolMask, SpellFamilyName, SpellFamilyMaskA0, SpellFamilyMaskA1, SpellFamilyMaskA2, SpellFamilyMaskB0, SpellFamilyMaskB1, SpellFamilyMaskB2, SpellFamilyMaskC0, SpellFamilyMaskC1, SpellFamilyMaskC2, procFlags, procEx, ppmRate, CustomChance, Cooldown FROM spell_proc_event");
-    if (!result)
+    //                                             0      1           2                3                  4                  5                  6                  7                  8                  9                  10                 11                 12         13      14       15            16
+    auto queryResult = WorldDatabase.Query("SELECT entry, SchoolMask, SpellFamilyName, SpellFamilyMaskA0, SpellFamilyMaskA1, SpellFamilyMaskA2, SpellFamilyMaskB0, SpellFamilyMaskB1, SpellFamilyMaskB2, SpellFamilyMaskC0, SpellFamilyMaskC1, SpellFamilyMaskC2, procFlags, procEx, ppmRate, CustomChance, Cooldown FROM spell_proc_event");
+    if (!queryResult)
     {
         BarGoLink bar(1);
         bar.step();
@@ -841,10 +844,10 @@ void SpellMgr::LoadSpellProcEvents()
 
     SpellRankHelper<SpellProcEventEntry, DoSpellProcEvent, SpellProcEventMap> rankHelper(*this, mSpellProcEventMap);
 
-    BarGoLink bar(result->GetRowCount());
+    BarGoLink bar(queryResult->GetRowCount());
     do
     {
-        Field* fields = result->Fetch();
+        Field* fields = queryResult->Fetch();
 
         bar.step();
 
@@ -869,11 +872,9 @@ void SpellMgr::LoadSpellProcEvents()
 
         rankHelper.RecordRank(spe, entry);
     }
-    while (result->NextRow());
+    while (queryResult->NextRow());
 
     rankHelper.FillHigherRanks();
-
-    delete result;
 
     sLog.outString(">> Loaded %u extra spell proc event conditions +%u custom proc (inc. +%u custom ranks)",  rankHelper.worker.count, rankHelper.worker.customProc, rankHelper.customRank);
     sLog.outString();
@@ -894,9 +895,9 @@ void SpellMgr::LoadSpellProcItemEnchant()
 
     uint32 count = 0;
 
-    //                                                0      1
-    QueryResult* result = WorldDatabase.Query("SELECT entry, ppmRate FROM spell_proc_item_enchant");
-    if (!result)
+    //                                             0      1
+    auto queryResult = WorldDatabase.Query("SELECT entry, ppmRate FROM spell_proc_item_enchant");
+    if (!queryResult)
     {
         BarGoLink bar(1);
         bar.step();
@@ -905,11 +906,11 @@ void SpellMgr::LoadSpellProcItemEnchant()
         return;
     }
 
-    BarGoLink bar(result->GetRowCount());
+    BarGoLink bar(queryResult->GetRowCount());
 
     do
     {
-        Field* fields = result->Fetch();
+        Field* fields = queryResult->Fetch();
 
         bar.step();
 
@@ -941,9 +942,7 @@ void SpellMgr::LoadSpellProcItemEnchant()
 
         ++count;
     }
-    while (result->NextRow());
-
-    delete result;
+    while (queryResult->NextRow());
 
     sLog.outString(">> Loaded %u proc item enchant definitions", count);
     sLog.outString();
@@ -997,9 +996,9 @@ void SpellMgr::LoadSpellBonuses()
 {
     mSpellBonusMap.clear();                             // need for reload case
     uint32 count = 0;
-    //                                                0      1             2          3
-    QueryResult* result = WorldDatabase.Query("SELECT entry, direct_bonus, dot_bonus, ap_bonus, ap_dot_bonus FROM spell_bonus_data");
-    if (!result)
+    //                                             0      1             2          3
+    auto queryResult = WorldDatabase.Query("SELECT entry, direct_bonus, dot_bonus, ap_bonus, ap_dot_bonus FROM spell_bonus_data");
+    if (!queryResult)
     {
         BarGoLink bar(1);
         bar.step();
@@ -1008,10 +1007,10 @@ void SpellMgr::LoadSpellBonuses()
         return;
     }
 
-    BarGoLink bar(result->GetRowCount());
+    BarGoLink bar(queryResult->GetRowCount());
     do
     {
-        Field* fields = result->Fetch();
+        Field* fields = queryResult->Fetch();
         bar.step();
         uint32 entry = fields[0].GetUInt32();
 
@@ -1142,9 +1141,7 @@ void SpellMgr::LoadSpellBonuses()
 
         ++count;
     }
-    while (result->NextRow());
-
-    delete result;
+    while (queryResult->NextRow());
 
     sLog.outString(">> Loaded %u extra spell bonus data",  count);
     sLog.outString();
@@ -1237,8 +1234,8 @@ bool SpellMgr::IsSpellProcEventCanTriggeredBy(SpellProcEventEntry const* spellPr
     }
     else // all spells hits here only if resist/reflect/immune/evade
     {
-        // Exist req for PROC_EX_EX_TRIGGER_ALWAYS
-        if (procEvent_procEx & PROC_EX_EX_TRIGGER_ALWAYS)
+        // Exist req for PROC_EX_EX_TRIGGER_ON_NO_DAMAGE
+        if (procEvent_procEx & PROC_EX_EX_TRIGGER_ON_NO_DAMAGE)
             return true;
         // Check Extra Requirement like (hit/crit/miss/resist/parry/dodge/block/immune/reflect/absorb and other)
         if (procEvent_procEx & procExtra)
@@ -1253,9 +1250,9 @@ void SpellMgr::LoadSpellElixirs()
 
     uint32 count = 0;
 
-    //                                                0      1
-    QueryResult* result = WorldDatabase.Query("SELECT entry, mask FROM spell_elixir");
-    if (!result)
+    //                                             0      1
+    auto queryResult = WorldDatabase.Query("SELECT entry, mask FROM spell_elixir");
+    if (!queryResult)
     {
         BarGoLink bar(1);
 
@@ -1266,11 +1263,11 @@ void SpellMgr::LoadSpellElixirs()
         return;
     }
 
-    BarGoLink bar(result->GetRowCount());
+    BarGoLink bar(queryResult->GetRowCount());
 
     do
     {
-        Field* fields = result->Fetch();
+        Field* fields = queryResult->Fetch();
 
         bar.step();
 
@@ -1289,9 +1286,7 @@ void SpellMgr::LoadSpellElixirs()
 
         ++count;
     }
-    while (result->NextRow());
-
-    delete result;
+    while (queryResult->NextRow());
 
     sLog.outString(">> Loaded %u spell elixir definitions", count);
     sLog.outString();
@@ -1366,9 +1361,9 @@ void SpellMgr::LoadSpellThreats()
 {
     mSpellThreatMap.clear();                                // need for reload case
 
-    //                                                0      1       2           3
-    QueryResult* result = WorldDatabase.Query("SELECT entry, Threat, multiplier, ap_bonus FROM spell_threat");
-    if (!result)
+    //                                             0      1       2           3
+    auto queryResult = WorldDatabase.Query("SELECT entry, Threat, multiplier, ap_bonus FROM spell_threat");
+    if (!queryResult)
     {
         BarGoLink bar(1);
         bar.step();
@@ -1379,11 +1374,11 @@ void SpellMgr::LoadSpellThreats()
 
     SpellRankHelper<SpellThreatEntry, DoSpellThreat, SpellThreatMap> rankHelper(*this, mSpellThreatMap);
 
-    BarGoLink bar(result->GetRowCount());
+    BarGoLink bar(queryResult->GetRowCount());
 
     do
     {
-        Field* fields = result->Fetch();
+        Field* fields = queryResult->Fetch();
 
         bar.step();
 
@@ -1396,11 +1391,9 @@ void SpellMgr::LoadSpellThreats()
 
         rankHelper.RecordRank(ste, entry);
     }
-    while (result->NextRow());
+    while (queryResult->NextRow());
 
     rankHelper.FillHigherRanks();
-
-    delete result;
 
     sLog.outString(">> Loaded %u spell threat entries", rankHelper.worker.count);
     sLog.outString();
@@ -1750,8 +1743,8 @@ void SpellMgr::LoadSpellChains()
     }
 
     // load custom case
-    QueryResult* result = WorldDatabase.Query("SELECT spell_id, prev_spell, first_spell, `rank`, req_spell FROM spell_chain");
-    if (!result)
+    auto queryResult = WorldDatabase.Query("SELECT spell_id, prev_spell, first_spell, `rank`, req_spell FROM spell_chain");
+    if (!queryResult)
     {
         BarGoLink bar(1);
         bar.step();
@@ -1766,11 +1759,11 @@ void SpellMgr::LoadSpellChains()
     uint32 new_count = 0;
     uint32 req_count = 0;
 
-    BarGoLink bar(result->GetRowCount());
+    BarGoLink bar(queryResult->GetRowCount());
     do
     {
         bar.step();
-        Field* fields = result->Fetch();
+        Field* fields = queryResult->Fetch();
 
         uint32 spell_id = fields[0].GetUInt32();
 
@@ -1921,9 +1914,7 @@ void SpellMgr::LoadSpellChains()
 
         ++new_count;
     }
-    while (result->NextRow());
-
-    delete result;
+    while (queryResult->NextRow());
 
     // additional integrity checks
     for (SpellChainMap::const_iterator i = mSpellChains.begin(); i != mSpellChains.end(); ++i)
@@ -2046,9 +2037,9 @@ void SpellMgr::LoadSpellLearnSpells()
 {
     mSpellLearnSpells.clear();                              // need for reload case
 
-    //                                                0      1        2
-    QueryResult* result = WorldDatabase.Query("SELECT entry, SpellID, Active FROM spell_learn_spell");
-    if (!result)
+    //                                             0      1        2
+    auto queryResult = WorldDatabase.Query("SELECT entry, SpellID, Active FROM spell_learn_spell");
+    if (!queryResult)
     {
         BarGoLink bar(1);
         bar.step();
@@ -2061,11 +2052,11 @@ void SpellMgr::LoadSpellLearnSpells()
 
     uint32 count = 0;
 
-    BarGoLink bar(result->GetRowCount());
+    BarGoLink bar(queryResult->GetRowCount());
     do
     {
         bar.step();
-        Field* fields = result->Fetch();
+        Field* fields = queryResult->Fetch();
 
         uint32 spell_id    = fields[0].GetUInt32();
 
@@ -2096,9 +2087,7 @@ void SpellMgr::LoadSpellLearnSpells()
 
         ++count;
     }
-    while (result->NextRow());
-
-    delete result;
+    while (queryResult->NextRow());
 
     // search auto-learned spells and add its to map also for use in unlearn spells/talents
     uint32 dbc_count = 0;
@@ -2232,7 +2221,7 @@ void SpellMgr::LoadSpellScriptTarget()
 
                 if (!sObjectMgr.GetGOData(itr->targetEntry))
                 {
-                    sLog.outErrorDb("Table `spell_script_target`: gameobject entry %u does not exist.", itr->targetEntry);
+                    sLog.outErrorDb("Table `spell_script_target`: gameobject guid %u does not exist.", itr->targetEntry);
                     sSpellScriptTargetStorage.EraseEntry(itr->spellId);
                 }
                 break;
@@ -2241,7 +2230,16 @@ void SpellMgr::LoadSpellScriptTarget()
             {
                 if (!sObjectMgr.GetCreatureData(itr->targetEntry))
                 {
-                    sLog.outErrorDb("Table `spell_script_target`: creature entry %u does not exist.", itr->targetEntry);
+                    sLog.outErrorDb("Table `spell_script_target`: creature guid %u does not exist.", itr->targetEntry);
+                    sSpellScriptTargetStorage.EraseEntry(itr->spellId);
+                }
+                break;
+            }
+            case SPELL_TARGET_TYPE_STRING_ID:
+            {
+                if (!sScriptMgr.ExistsStringId(itr->targetEntry))
+                {
+                    sLog.outErrorDb("Table `spell_script_target`: stringId %u does not exist.", itr->targetEntry);
                     sSpellScriptTargetStorage.EraseEntry(itr->spellId);
                 }
                 break;
@@ -2305,9 +2303,9 @@ void SpellMgr::LoadSpellPetAuras()
 
     uint32 count = 0;
 
-    //                                                0      1         2    3
-    QueryResult* result = WorldDatabase.Query("SELECT spell, effectId, pet, aura FROM spell_pet_auras");
-    if (!result)
+    //                                             0      1         2    3
+    auto queryResult = WorldDatabase.Query("SELECT spell, effectId, pet, aura FROM spell_pet_auras");
+    if (!queryResult)
     {
         BarGoLink bar(1);
         bar.step();
@@ -2316,11 +2314,11 @@ void SpellMgr::LoadSpellPetAuras()
         return;
     }
 
-    BarGoLink bar(result->GetRowCount());
+    BarGoLink bar(queryResult->GetRowCount());
 
     do
     {
-        Field* fields = result->Fetch();
+        Field* fields = queryResult->Fetch();
 
         bar.step();
 
@@ -2370,9 +2368,7 @@ void SpellMgr::LoadSpellPetAuras()
 
         ++count;
     }
-    while (result->NextRow());
-
-    delete result;
+    while (queryResult->NextRow());
 
     sLog.outString(">> Loaded %u spell pet auras", count);
     sLog.outString();
@@ -2644,10 +2640,10 @@ void SpellMgr::LoadSpellAreas()
 
     uint32 count = 0;
 
-    //                                                0      1     2            3                   4          5             6           7         8       9
-    QueryResult* result = WorldDatabase.Query("SELECT spell, area, quest_start, quest_start_active, quest_end, condition_id, aura_spell, racemask, gender, autocast FROM spell_area");
+    //                                             0      1     2            3                   4          5             6           7         8       9
+    auto queryResult = WorldDatabase.Query("SELECT spell, area, quest_start, quest_start_active, quest_end, condition_id, aura_spell, racemask, gender, autocast FROM spell_area");
 
-    if (!result)
+    if (!queryResult)
     {
         BarGoLink bar(1);
         bar.step();
@@ -2656,11 +2652,11 @@ void SpellMgr::LoadSpellAreas()
         return;
     }
 
-    BarGoLink bar(result->GetRowCount());
+    BarGoLink bar(queryResult->GetRowCount());
 
     do
     {
-        Field* fields = result->Fetch();
+        Field* fields = queryResult->Fetch();
 
         bar.step();
 
@@ -2844,9 +2840,7 @@ void SpellMgr::LoadSpellAreas()
 
         ++count;
     }
-    while (result->NextRow());
-
-    delete result;
+    while (queryResult->NextRow());
 
     sLog.outString(">> Loaded %u spell area requirements", count);
     sLog.outString();
@@ -2876,7 +2870,7 @@ SpellCastResult SpellMgr::GetSpellAllowedInLocationError(SpellEntry const* spell
     }
 
     // continent limitation (virtual continent), ignore for GM
-    if (spellInfo->HasAttribute(SPELL_ATTR_EX4_CAST_ONLY_IN_OUTLAND) && !(player && player->IsGameMaster()))
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX4_ONLY_FLYING_AREAS) && !(player && player->IsGameMaster()))
     {
         uint32 v_map = GetVirtualMapForMapAndZone(map_id, zone_id);
         MapEntry const* mapEntry = sMapStore.LookupEntry(v_map);
@@ -2885,7 +2879,7 @@ SpellCastResult SpellMgr::GetSpellAllowedInLocationError(SpellEntry const* spell
     }
 
     // raid instance limitation
-    if (spellInfo->HasAttribute(SPELL_ATTR_EX6_NOT_IN_RAID_INSTANCE))
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX6_NOT_IN_RAID_INSTANCES))
     {
         MapEntry const* mapEntry = sMapStore.LookupEntry(map_id);
         if (!mapEntry || mapEntry->IsRaid())
@@ -2909,13 +2903,13 @@ SpellCastResult SpellMgr::GetSpellAllowedInLocationError(SpellEntry const* spell
     // do not allow spells to be cast in arenas
     // - with SPELL_ATTR_EX4_NOT_USABLE_IN_ARENA flag
     // - with greater than 10 min CD
-    if (spellInfo->HasAttribute(SPELL_ATTR_EX4_NOT_USABLE_IN_ARENA) ||
-            (GetSpellRecoveryTime(spellInfo) > 10 * MINUTE * IN_MILLISECONDS && !spellInfo->HasAttribute(SPELL_ATTR_EX4_USABLE_IN_ARENA)))
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX4_NOT_IN_ARENA) ||
+            (GetSpellRecoveryTime(spellInfo) > 10 * MINUTE * IN_MILLISECONDS && !spellInfo->HasAttribute(SPELL_ATTR_EX4_IGNORE_DEFAULT_ARENA_RESTRICTIONS)))
         if (player && player->InArena())
             return SPELL_FAILED_NOT_IN_ARENA;
 
     // Spell casted only on battleground
-    if (spellInfo->HasAttribute(SPELL_ATTR_EX3_BATTLEGROUND))
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX3_ONLY_BATTLEGROUNDS))
         if (!player || !player->InBattleGround())
             return SPELL_FAILED_ONLY_BATTLEGROUNDS;
 
@@ -2931,11 +2925,6 @@ SpellCastResult SpellMgr::GetSpellAllowedInLocationError(SpellEntry const* spell
             return map_id == 30 && bg
                    && bg->GetStatus() != STATUS_WAIT_JOIN ? SPELL_CAST_OK : SPELL_FAILED_REQUIRES_AREA;
         }
-        case 23333:                                         // Warsong Flag
-        case 23335:                                         // Silverwing Flag
-            return map_id == 489 && player && player->InBattleGround() ? SPELL_CAST_OK : SPELL_FAILED_REQUIRES_AREA;
-        case 34976:                                         // Netherstorm Flag
-            return map_id == 566 && player && player->InBattleGround() ? SPELL_CAST_OK : SPELL_FAILED_REQUIRES_AREA;
         case 2584:                                          // Waiting to Resurrect
         case 42792:                                         // Recently Dropped Flag
         case 44521:                                         // Preparation
@@ -3038,9 +3027,9 @@ void SpellMgr::CheckUsedSpells(char const* table) const
     uint32 countMasks = 0;
 
     //                                                 0       1               2                3                4         5           6             7          8          9         10   11
-    QueryResult* result = WorldDatabase.PQuery("SELECT spellid,SpellFamilyName,SpellFamilyMaskA,SpellFamilyMaskB,SpellIcon,SpellVisual,SpellCategory,EffectType,EffectAura,EffectIdx,Name,Code FROM %s", table);
+    auto queryResult = WorldDatabase.PQuery("SELECT spellid,SpellFamilyName,SpellFamilyMaskA,SpellFamilyMaskB,SpellIcon,SpellVisual,SpellCategory,EffectType,EffectAura,EffectIdx,Name,Code FROM %s", table);
 
-    if (!result)
+    if (!queryResult)
     {
         BarGoLink bar(1);
 
@@ -3051,11 +3040,11 @@ void SpellMgr::CheckUsedSpells(char const* table) const
         return;
     }
 
-    BarGoLink bar(result->GetRowCount());
+    BarGoLink bar(queryResult->GetRowCount());
 
     do
     {
-        Field* fields = result->Fetch();
+        Field* fields = queryResult->Fetch();
 
         bar.step();
 
@@ -3095,7 +3084,7 @@ void SpellMgr::CheckUsedSpells(char const* table) const
         }
 
         // TODO: for spellCategory better check need dbc loading
-        if (category < -1 || (category >= 0 && sSpellCategoryStore.find(category) == sSpellCategoryStore.end()))
+        if (category < -1 || (category >= 0 && sSpellCategoryStore.LookupEntry(category)))
         {
             sLog.outError("Table '%s' for spell %u have wrong SpellCategory value(%u), skipped.", table, spell, category);
             continue;
@@ -3273,9 +3262,7 @@ void SpellMgr::CheckUsedSpells(char const* table) const
             }
         }
     }
-    while (result->NextRow());
-
-    delete result;
+    while (queryResult->NextRow());
 
     sLog.outString();
     sLog.outString(">> Checked %u spells and %u spell masks", countSpells, countMasks);
@@ -3405,13 +3392,6 @@ int32 GetDiminishingReturnsLimitDuration(DiminishingGroup group, SpellEntry cons
     // Explicit diminishing duration
     switch (spellproto->SpellFamilyName)
     {
-        case SPELLFAMILY_HUNTER:
-        {
-            // Wyvern Sting
-            if (spellproto->SpellFamilyFlags & uint64(0x0000100000000000))
-                return 6000;
-            break;
-        }
         case SPELLFAMILY_PALADIN:
         {
             // Repentance - limit to 6 seconds in PvP

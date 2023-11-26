@@ -1010,7 +1010,7 @@ struct npc_brain_yogg_saronAI : public Scripted_NoMovementAI, private DialogueHe
 
         DoCastSpellIfCan(m_creature, SPELL_MATCH_HEALTH);
 
-        m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_IMMUNE_TO_PLAYER);
+        m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE | UNIT_FLAG_IMMUNE_TO_PLAYER);
     }
 
     void AttackStart(Unit* /*pWho*/) override { }
@@ -1199,7 +1199,7 @@ struct npc_brain_yogg_saronAI : public Scripted_NoMovementAI, private DialogueHe
             DoCastSpellIfCan(m_creature, SPELL_BRAIN_HURT_VISUAL, CAST_TRIGGERED);
             DoCastSpellIfCan(m_creature, SPELL_SHATTERED_ILLUSION_REMOVE, CAST_TRIGGERED);
             m_creature->RemoveAurasDueToSpell(SPELL_MATCH_HEALTH);
-            m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_IMMUNE_TO_PLAYER);
+            m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE | UNIT_FLAG_IMMUNE_TO_PLAYER);
 
             if (m_pInstance)
             {
@@ -1650,6 +1650,33 @@ UnitAI* GetAI_npc_keeper_thorim(Creature* pCreature)
     return new npc_keeper_thorimAI(pCreature);
 }
 
+struct HodirsProtectiveGaze : AuraScript
+{
+    void OnAbsorb(Aura* aura, int32& currentAbsorb, int32& remainingDamage, uint32& /*reflectedSpellId*/, int32& /*reflectDamage*/, bool& preventedDeath, bool& dropCharge, DamageEffectType /*damageType*/) const override
+    {
+        currentAbsorb = 0;
+        dropCharge = false;
+        Player* player = dynamic_cast<Player*>(aura->GetTarget());
+        if (!player)
+            return;
+        if (player->GetHealth() > remainingDamage)
+            return;
+        instance_ulduar* instance = dynamic_cast<instance_ulduar*>(player->GetMap()->GetInstanceData());
+        if (!instance)
+            return;
+        Creature* hodir = instance->GetSingleCreatureFromStorage(NPC_HODIR_HELPER);
+        if (!hodir)
+            return;
+        if (!hodir->AI())
+            return;
+        player->CastSpell(player, 64175, TRIGGERED_OLD_TRIGGERED, nullptr, aura, hodir->GetObjectGuid());
+        hodir->AI()->ResetTimer(TIMER_HODIRS_PROTECTIVE_GAZE, 25s);
+        dropCharge = true;
+        preventedDeath = true;
+        remainingDamage = 0;
+    }
+};
+
 void AddSC_boss_yogg_saron()
 {
     Script* pNewScript = new Script;
@@ -1713,4 +1740,6 @@ void AddSC_boss_yogg_saron()
     pNewScript->Name = "npc_keeper_thorim";
     pNewScript->GetAI = &GetAI_npc_keeper_thorim;
     pNewScript->RegisterSelf();
+
+    RegisterSpellScript<HodirsProtectiveGaze>("spell_hodirs_protective_gaze");
 }

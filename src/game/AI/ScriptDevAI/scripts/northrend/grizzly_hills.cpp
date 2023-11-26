@@ -692,7 +692,7 @@ struct spell_assemble_cage : public SpellScript
 
         target->CastSpell(target, 47045, TRIGGERED_OLD_TRIGGERED);
 
-        target->AI()->ClearSelfRoot();
+        target->AI()->ClearCombatOnlyRoot();
         target->RemoveAllAurasOnEvade();
         target->CombatStopWithPets(true);
         target->SetImmuneToNPC(true);
@@ -700,6 +700,18 @@ struct spell_assemble_cage : public SpellScript
 
         Creature* troll = static_cast<Creature*>(target);
         troll->ForcedDespawn(10000);
+    }
+};
+
+// 52812 - Molten Fury
+struct MoltenFuryFlamebringer : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0 || !spell->GetUnitTarget() || !spell->GetUnitTarget()->IsStunned())
+            return;
+
+        spell->SetDamage(spell->GetDamage() * 2);
     }
 };
 
@@ -728,4 +740,5 @@ void AddSC_grizzly_hills()
     RegisterSpellScript<spell_tag_troll>("spell_tag_troll");
     RegisterSpellScript<spell_out_cold>("spell_out_cold");
     RegisterSpellScript<spell_assemble_cage>("spell_assemble_cage");
+    RegisterSpellScript<MoltenFuryFlamebringer>("spell_molten_fury_flamebringer");
 }

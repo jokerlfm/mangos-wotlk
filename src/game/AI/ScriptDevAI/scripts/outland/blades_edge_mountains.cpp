@@ -180,7 +180,7 @@ struct mobs_nether_drakeAI : public ScriptedAI
                         DoScriptText(SAY_NIHIL_4, m_creature);
                         break;
                     case 4:
-                        m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+                        m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
                         // take off to location above
                         m_creature->SetLevitate(true);
                         m_creature->SetByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_MISC_FLAGS, UNIT_BYTE1_FLAG_FLY_ANIM);
@@ -1120,6 +1120,9 @@ enum
     SPELL_INTERRUPT_UNHOLY_GROWTH = 40547,
     SPELL_SUMMON_GRIMOIRE       = 39862,
     SPELL_SHADOWBOLT_VOLLEY     = 40070,
+
+    SAY_VIMGOL_1                = 20773,
+    SAY_VIMGOL_2                = 21264,
 };
 
 struct npc_vimgol_AI : public ScriptedAI
@@ -1160,7 +1163,7 @@ struct npc_vimgol_AI : public ScriptedAI
         m_creature->SetImmobilizedState(true);
         growing = true;
         m_creature->CastSpell(m_creature, SPELL_UNHOLY_GROWTH, TRIGGERED_NONE);
-        //m_creature->GetMotionMaster()->MoveChase(m_creature->GetVictim());
+        DoBroadcastText(SAY_VIMGOL_2, m_creature);
     }
 
     void JustDied(Unit* /*pKiller*/) override
@@ -1397,6 +1400,7 @@ struct npc_vimgol_middle_bunnyAI : public ScriptedAI
     {
         pSummoned->CastSpell(pSummoned, SPELL_SUMMONED_DEMON, TRIGGERED_OLD_TRIGGERED);
         CastBunnySpell(nullptr, SPELL_PENTAGRAM_BEAM);
+        DoBroadcastText(SAY_VIMGOL_1, pSummoned);
         m_uiSpawned = true;
 
         for (bool& m_uiActiveCircle : m_uiActiveCircles)
@@ -1430,7 +1434,7 @@ struct npc_vimgol_middle_bunnyAI : public ScriptedAI
             }
             else
             {
-                if (playersInsideCircles() == 5)
+                if (playersInsideCircles() == 1)
                     m_creature->SummonCreature(NPC_VIMGOL_THE_VILE, m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), m_creature->GetOrientation(), TEMPSPAWN_TIMED_OOC_OR_DEAD_DESPAWN, 90000);
                 if (m_uiBeamTimer == 0)
                 {
@@ -1866,7 +1870,7 @@ struct npc_fel_cannon : public Scripted_NoMovementAI
     {
         m_uiCannonBlastTimer = 1000;
         m_bMCed = false;
-        m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+        m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
     }
 
     bool CanHandleCharm() override { return true; }
@@ -1882,7 +1886,7 @@ struct npc_fel_cannon : public Scripted_NoMovementAI
                 m_creature->FixateTarget(target);
             }
 
-            m_creature->RemoveFlag(UNIT_FIELD_FLAGS,UNIT_FLAG_NOT_SELECTABLE);
+            m_creature->RemoveFlag(UNIT_FIELD_FLAGS,UNIT_FLAG_UNINTERACTIBLE);
 
             m_creature->GetCombatManager().SetLeashingDisable(true);
         }
@@ -2065,7 +2069,7 @@ struct npc_warp_gate : public Scripted_NoMovementAI
         if (pSummoned->GetEntry() == NPC_UNSTABLE_FEL_IMP)
         {
             m_vImpGuids.push_back(pSummoned->GetObjectGuid());
-            pSummoned->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            pSummoned->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
             pSummoned->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
             if (Creature* cannon = m_creature->GetMap()->GetCreature(m_guidFelCannon))
             {
@@ -2280,7 +2284,7 @@ struct npc_soulgrinderAI : public ScriptedAI
             ogre->CastSpell(ogre, SPELL_SOULGRINDER_GHOST_TRANSFORM, TRIGGERED_NONE);
             ogre->CastSpell(ogre, SPELL_SPIRIT_PARTICLES_PURPLE, TRIGGERED_NONE);
             ogre->CastSpell(ogre, SPELL_SOULGRINDER_GHOST_SPAWN_IN, TRIGGERED_NONE);
-            ogre->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            ogre->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
             ogre->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
             ogre->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_NPC);
             m_ogreAttackTimer = urand(2000,4000);
@@ -2385,7 +2389,7 @@ struct npc_soulgrinderAI : public ScriptedAI
                         {
                             DoScriptText(SAY_SKULLOC_SOULGRINDER, gronn);
                             gronn->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
-                            gronn->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+                            gronn->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
                         }
                         m_uiTimer = 6000;
                         m_uiPhase++;
@@ -2471,7 +2475,7 @@ bool QuestRewarded_into_the_soulgrinder(Player* player, Creature* pCreature, Que
     {
         DoScriptText(SAY_MOGDORG_1, pCreature, player);
         player->CastSpell(player, SPELL_OGRE_FORCE_REACTION, TRIGGERED_OLD_TRIGGERED);
-        player->GetMap()->ScriptsStart(sRelayScripts, DBSCRIPT_SPAWN_OGRES, player, pCreature);
+        player->GetMap()->ScriptsStart(SCRIPT_TYPE_RELAY, DBSCRIPT_SPAWN_OGRES, player, pCreature);
     }
 
     return true;
@@ -2973,7 +2977,7 @@ struct npc_evergrove_druidAI : public ScriptedAI
             alreadySummoned = true;
             m_summonerGuid = caster->GetObjectGuid();
             m_creature->CastSpell(m_creature, SPELL_EVERGROVE_DRUID_TRANSFORM_CROW, TRIGGERED_NONE);
-            m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
             m_creature->GetMotionMaster()->MoveFollow(caster, 1.f, 0.f);
         }
     }
@@ -2998,7 +3002,7 @@ struct npc_evergrove_druidAI : public ScriptedAI
             m_creature->SetLevitate(true);
             m_creature->SetHover(false);
             m_creature->SetCanFly(false);
-            m_creature->GetMap()->ScriptsStart(sRelayScripts, DBSCRIPT_LANDING_SCRIPT, m_creature, who);
+            m_creature->GetMap()->ScriptsStart(SCRIPT_TYPE_RELAY, DBSCRIPT_LANDING_SCRIPT, m_creature, who);
         }
     }
 
@@ -3013,7 +3017,7 @@ struct npc_evergrove_druidAI : public ScriptedAI
 
         returnTimer = 0;
         Unit* summoned = m_creature->GetMap()->GetUnit(m_summonerGuid);
-        m_creature->GetMap()->ScriptsStart(sRelayScripts, DBSCRIPT_FLY_OFF_SCRIPT, m_creature, summoned);
+        m_creature->GetMap()->ScriptsStart(SCRIPT_TYPE_RELAY, DBSCRIPT_FLY_OFF_SCRIPT, m_creature, summoned);
     }
 
     void ReceiveAIEvent(AIEventType eventType, Unit* sender, Unit* /*invoker*/, uint32 /*miscValue*/) override

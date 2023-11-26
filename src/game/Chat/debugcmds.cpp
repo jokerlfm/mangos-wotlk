@@ -17,7 +17,7 @@
  */
 
 #include "Common.h"
-#include "WorldPacket.h"
+#include "Server/WorldPacket.h"
 #include "Entities/Player.h"
 #include "Server/Opcodes.h"
 #include "Chat/Chat.h"
@@ -33,7 +33,7 @@
 #include "Spells/SpellMgr.h"
 #include "AI/ScriptDevAI/ScriptDevAIMgr.h"
 #include "Maps/InstanceData.h"
-#include "Cinematics/M2Stores.h"
+#include "Models/M2Stores.h"
 #include "Entities/Transports.h"
 #include "World/World.h"
 
@@ -439,7 +439,7 @@ bool ChatHandler::HandleDebugSendQuestInvalidMsgCommand(char* args)
     return true;
 }
 
-bool ChatHandler::HandleDebugListUpdateFieldsCommand(char* args)
+bool ChatHandler::HandleDebugListUpdateFieldsCommand(char* /*args*/)
 {
     Unit* pTarget = getSelectedUnit();
 
@@ -1817,7 +1817,7 @@ bool ChatHandler::HandleDebugObjectFlags(char* args)
     return true;
 }
 
-bool ChatHandler::HandleDebugOutPacketHistory(char* args)
+bool ChatHandler::HandleDebugOutPacketHistory(char* /*args*/)
 {
     Player* player = getSelectedPlayer();
     if (player == nullptr)
@@ -1835,7 +1835,7 @@ bool ChatHandler::HandleDebugOutPacketHistory(char* args)
     return true;
 }
 
-bool ChatHandler::HandleDebugIncPacketHistory(char* args)
+bool ChatHandler::HandleDebugIncPacketHistory(char* /*args*/)
 {
     Player* player = getSelectedPlayer();
     if (player == nullptr)
@@ -1853,7 +1853,7 @@ bool ChatHandler::HandleDebugIncPacketHistory(char* args)
     return true;
 }
 
-bool ChatHandler::HandleDebugTransports(char* args)
+bool ChatHandler::HandleDebugTransports(char* /*args*/)
 {
     Player* player = GetSession()->GetPlayer();
     if (!player->IsInWorld())
@@ -1866,7 +1866,7 @@ bool ChatHandler::HandleDebugTransports(char* args)
     return true;
 }
 
-bool ChatHandler::HandleDebugSpawnsList(char* args)
+bool ChatHandler::HandleDebugSpawnsList(char* /*args*/)
 {
     Player* player = GetSession()->GetPlayer();
     if (!player->IsInWorld())
@@ -1876,7 +1876,7 @@ bool ChatHandler::HandleDebugSpawnsList(char* args)
     return true;
 }
 
-bool ChatHandler::HandleDebugRespawnDynguid(char* args)
+bool ChatHandler::HandleDebugRespawnDynguid(char* /*args*/)
 {
     Creature* target = getSelectedCreature();
     if (!target)
@@ -1904,6 +1904,10 @@ bool ChatHandler::HandleDebugPacketLog(char* args)
 bool ChatHandler::HandleDebugDbscript(char* args)
 {
     Unit* target = getSelectedUnit();
+    uint32 scriptType;
+    if (!ExtractUInt32(&args, scriptType) || scriptType > SCRIPT_TYPE_INTERNAL)
+        return false;
+
     uint32 chosenId;
     if (!ExtractUInt32(&args, chosenId))
         return false;
@@ -1912,7 +1916,92 @@ bool ChatHandler::HandleDebugDbscript(char* args)
     if (!player || !player->IsInWorld())
         return false;
 
-    player->GetMap()->ScriptsStart(sRelayScripts, chosenId, player, target);
+    player->GetMap()->ScriptsStart(ScriptMapType(scriptType), chosenId, player, target);
+    return true;
+}
+
+bool ChatHandler::HandleDebugDbscriptTargeted(char* args)
+{
+    Unit* source = getSelectedUnit();
+    uint32 scriptType;
+    if (!ExtractUInt32(&args, scriptType) || scriptType > SCRIPT_TYPE_INTERNAL)
+        return false;
+
+    uint32 chosenId;
+    if (!ExtractUInt32(&args, chosenId))
+        return false;
+
+    uint32 dbGuidTarget;
+    if (!ExtractUInt32(&args, dbGuidTarget))
+        return false;
+
+    Player* player = GetSession()->GetPlayer();
+    if (!player || !player->IsInWorld())
+        return false;
+
+    Creature* target = player->GetMap()->GetCreature(dbGuidTarget);
+    if (!source || !target)
+        return false;
+
+    player->GetMap()->ScriptsStart(ScriptMapType(scriptType), chosenId, source, target);
+    return true;
+}
+
+bool ChatHandler::HandleDebugDbscriptSourced(char* args)
+{
+    Unit* target = getSelectedUnit();
+    uint32 scriptType;
+    if (!ExtractUInt32(&args, scriptType) || scriptType > SCRIPT_TYPE_INTERNAL)
+        return false;
+
+    uint32 chosenId;
+    if (!ExtractUInt32(&args, chosenId))
+        return false;
+
+    uint32 dbGuidSource;
+    if (!ExtractUInt32(&args, dbGuidSource))
+        return false;
+
+    Player* player = GetSession()->GetPlayer();
+    if (!player || !player->IsInWorld())
+        return false;
+
+    Creature* source = player->GetMap()->GetCreature(dbGuidSource);
+    if (!source || !target)
+        return false;
+
+    player->GetMap()->ScriptsStart(ScriptMapType(scriptType), chosenId, source, target);
+    return true;
+}
+
+bool ChatHandler::HandleDebugDbscriptGuided(char* args)
+{
+    uint32 scriptType;
+    if (!ExtractUInt32(&args, scriptType) || scriptType > SCRIPT_TYPE_INTERNAL)
+        return false;
+
+    uint32 chosenId;
+    if (!ExtractUInt32(&args, chosenId))
+        return false;
+
+    uint32 dbGuidSource;
+    if (!ExtractUInt32(&args, dbGuidSource))
+        return false;
+
+    uint32 dbGuidTarget;
+    if (!ExtractUInt32(&args, dbGuidTarget))
+        return false;
+
+    Player* player = GetSession()->GetPlayer();
+    if (!player || !player->IsInWorld())
+        return false;
+
+    Creature* source = player->GetMap()->GetCreature(dbGuidSource);
+    Creature* target = player->GetMap()->GetCreature(dbGuidTarget);
+    if (!source || !target)
+        return false;
+
+    player->GetMap()->ScriptsStart(ScriptMapType(scriptType), chosenId, source, target);
     return true;
 }
 

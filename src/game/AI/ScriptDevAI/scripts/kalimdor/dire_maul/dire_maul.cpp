@@ -111,7 +111,7 @@ struct npc_warlock_mount_ritualAI : public  Scripted_NoMovementAI
 
     void DoSummonPack(uint8 uiIndex)
     {
-        m_creature->GetMap()->ScriptsStart(sRelayScripts, SUMMON_WAVES_RELAY_SCRIPT_START_ID + uiIndex, m_creature, m_creature);
+        m_creature->GetMap()->ScriptsStart(SCRIPT_TYPE_RELAY, SUMMON_WAVES_RELAY_SCRIPT_START_ID + uiIndex, m_creature, m_creature);
         m_pInstance->DoRespawnGameObject(m_pInstance->GetRitualSymbolGuids().at(uiIndex - 1), 900);
     }
 
@@ -210,7 +210,7 @@ struct DreadsteedQuestObjects : public GameObjectAI
         }
     }
 
-    void OnLootStateChange() override
+    void OnLootStateChange(Unit* /*user*/) override
     {
         if (m_go->GetLootState() == GO_JUST_DEACTIVATED)
             m_uiPulseTimer = 0;

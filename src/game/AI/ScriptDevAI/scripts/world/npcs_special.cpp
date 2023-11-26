@@ -440,7 +440,7 @@ struct npc_doctorAI : public ScriptedAI
 
         m_bIsEventInProgress = false;
 
-        m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+        m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
     }
 
     void BeginEvent(Player* pPlayer);
@@ -473,7 +473,7 @@ struct npc_injured_patientAI : public ScriptedAI
         m_pCoord = nullptr;
 
         // no select
-        m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+        m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
 
         // to make them lay with face down
         m_creature->SetStandState(UNIT_STAND_STATE_DEAD);
@@ -501,7 +501,7 @@ struct npc_injured_patientAI : public ScriptedAI
         if (pCaster->GetTypeId() == TYPEID_PLAYER && m_creature->IsAlive() && pSpell->Id == 20804)
         {
             // make not selectable
-            m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
 
             // stand up
             m_creature->SetStandState(UNIT_STAND_STATE_STAND);
@@ -547,7 +547,7 @@ struct npc_injured_patientAI : public ScriptedAI
     void UpdateAI(const uint32 uiDiff) override
     {
         // Don't reduce health if already healed
-        if (m_creature->hasUnitState(UNIT_FLAG_NOT_SELECTABLE) || isSaved)
+        if (m_creature->hasUnitState(UNIT_FLAG_UNINTERACTIBLE) || isSaved)
             return;
 
         // lower HP on every world tick makes it a useful counter, not officlone though
@@ -560,7 +560,7 @@ struct npc_injured_patientAI : public ScriptedAI
         if (m_creature->IsAlive() && m_creature->GetHealth() <= 1 + uiHPLose)
         {
             m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IN_COMBAT);
-            m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
             m_creature->SetDeathState(JUST_DIED);
             m_creature->SetFlag(UNIT_DYNAMIC_FLAGS, UNIT_DYNFLAG_DEAD);
 
@@ -609,7 +609,7 @@ void npc_doctorAI::BeginEvent(Player* pPlayer)
     }
 
     m_bIsEventInProgress = true;
-    m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+    m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
 }
 
 void npc_doctorAI::PatientDied(Location* pPoint)
@@ -1508,7 +1508,7 @@ struct npc_burster_wormAI : public CombatAI
         // sequences
         AddCustomAction(BURSTER_BIRTH_DELAY, true, [&]()
         {
-            m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
             SetMeleeEnabled(true);
             SetCombatScriptStatus(false);
         });
@@ -1587,7 +1587,6 @@ struct npc_burster_wormAI : public CombatAI
         m_creature->CastSpell(nullptr, SPELL_SUBMERGED, TRIGGERED_NONE);
         if (passive)
             DoCastSpellIfCan(nullptr, m_uiBorePassive, CAST_TRIGGERED | CAST_AURA_NOT_PRESENT);
-        m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
     }
 
     void SpellHitTarget(Unit* target, const SpellEntry* spellInfo) override
@@ -1607,7 +1606,7 @@ struct npc_burster_wormAI : public CombatAI
         m_creature->RemoveAurasDueToSpell(SPELL_SANDWORM_SUBMERGE_VISUAL);
         m_creature->RemoveAurasDueToSpell(m_uiBorePassive);
         SetCombatScriptStatus(true);
-        SetRootSelf(true, true);
+        SetAIImmobilizedState(true, true);
 
         if (DoCastSpellIfCan(nullptr, SPELL_STAND) == CAST_OK)
         {
@@ -1637,7 +1636,6 @@ struct npc_burster_wormAI : public CombatAI
             case 1: // after teleport
             {
                 // come up
-                m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
                 m_creature->RemoveAurasDueToSpell(SPELL_SANDWORM_SUBMERGE_VISUAL);
                 DoCastSpellIfCan(nullptr, SPELL_STAND);
                 timer = 1000;
@@ -1729,13 +1727,14 @@ enum npc_aoe_damage_trigger
     NPC_VOID_ZONE = 16697,
     NPC_LESSER_SHADOW_FISSURE = 17471,
     NPC_LESSER_SHADOW_FISSURE_H = 20570,
-    NPC_WILD_SHADOW_FISSURE = 18370,
+    NPC_WILD_SHADOW_FISSURE = 18370, // nethekurse
     NPC_WILD_SHADOW_FISSURE_H = 20598,
 
     // m_uiAuraPassive
     SPELL_CONSUMPTION_NPC_16697 = 28874,
     SPELL_CONSUMPTION_NPC_17471 = 30497,
     SPELL_CONSUMPTION_NPC_20570 = 35952,
+    SPELL_CONSUMPTION_NPC_18370 = 32250,
 };
 
 struct npc_aoe_damage_triggerAI : public ScriptedAI
@@ -1763,6 +1762,9 @@ struct npc_aoe_damage_triggerAI : public ScriptedAI
                 return SPELL_CONSUMPTION_NPC_17471;
             case NPC_LESSER_SHADOW_FISSURE_H:
                 return SPELL_CONSUMPTION_NPC_20570;
+            case NPC_WILD_SHADOW_FISSURE:
+            case NPC_WILD_SHADOW_FISSURE_H:
+                return SPELL_CONSUMPTION_NPC_18370;
             default:
                 return SPELL_CONSUMPTION_NPC_17471;
         }
@@ -1936,6 +1938,11 @@ enum
 
     SPELL_HUNTER_SNAKE_TRAP_SCALING_01 = 62915,
 
+    SPELL_AVOIDANCE_HUNTER      = 65220,
+
+    SPELL_GLYPH_OF_SNAKE_TRAP   = 56849,
+    SPELL_GLYPH_OF_SNAKE_TRAP_AVOIDANCE_CUSTOM = 80001, // no spell in sniff
+
     // SPELL_RANDOM_AGGRO = 34701 // unk purpose
 };
 
@@ -1952,6 +1959,9 @@ struct npc_snakesAI : public ScriptedAI
         m_creature->GetMotionMaster()->MoveRandomAroundPoint(m_creature->GetPositionX(), m_creature->GetPositionY(), m_creature->GetPositionZ(), 5.f);
         DoCastSpellIfCan(nullptr, SPELL_DEADLY_POISON_PASSIVE, CAST_AURA_NOT_PRESENT | CAST_TRIGGERED);
         DoCastSpellIfCan(nullptr, SPELL_HUNTER_SNAKE_TRAP_SCALING_01, CAST_AURA_NOT_PRESENT | CAST_TRIGGERED);
+        if (Unit* spawner = m_creature->GetSpawner())
+            if (spawner->HasAura(SPELL_GLYPH_OF_SNAKE_TRAP)) // Glyph of Snake Trap
+                DoCastSpellIfCan(nullptr, SPELL_GLYPH_OF_SNAKE_TRAP_AVOIDANCE_CUSTOM, CAST_AURA_NOT_PRESENT | CAST_TRIGGERED);
     }
 
     void UpdateAI(const uint32 diff) override
@@ -1974,11 +1984,6 @@ struct npc_snakesAI : public ScriptedAI
         DoMeleeAttackIfReady();
     }
 };
-
-UnitAI* GetAI_npc_snakes(Creature* pCreature)
-{
-    return new npc_snakesAI(pCreature);
-}
 
 enum
 {
@@ -2396,7 +2401,7 @@ struct mob_phoenix_tkAI : public CombatAI
         m_creature->RemoveAllAurasOnDeath();
         m_creature->ModifyAuraState(AURA_STATE_HEALTHLESS_20_PERCENT, false);
         m_creature->ModifyAuraState(AURA_STATE_HEALTHLESS_35_PERCENT, false);
-        m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+        m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
         m_creature->ClearAllReactives();
         m_creature->SetTarget(nullptr);
         m_creature->SetStandState(UNIT_STAND_STATE_DEAD);
@@ -2448,7 +2453,8 @@ struct mob_phoenix_tkAI : public CombatAI
             SetMeleeEnabled(true);
             DoStartMovement(m_creature->GetVictim());
             SetCombatScriptStatus(false);
-            m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            SetDeathPrevention(true);
+            m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
 
             DoCastSpellIfCan(nullptr, m_burnSpellId, CAST_TRIGGERED);
         }
@@ -2513,14 +2519,6 @@ struct npc_advanced_target_dummyAI : public ScriptedAI
     void Reset() override {}
 
     uint32 m_dieTimer;
-
-    void JustRespawned() override
-    {
-        if (!m_creature->GetSpawner())
-            return;
-
-        m_creature->SetLootRecipient(m_creature->GetSpawner());
-    }
 
     void UpdateAI(const uint32 diff) override
     {
@@ -2614,9 +2612,18 @@ struct npc_imp_in_a_ball : public ScriptedAI
     }
 };
 
+struct HarvestSilithidEgg : public SpellScript
+{
+    void OnInit(Spell* spell) const override
+    {
+        spell->SetEffectChance(75, EFFECT_INDEX_1);
+        spell->SetEffectChance(1, EFFECT_INDEX_2);
+    }
+};
+
 struct ImpInABottleSay : public SpellScript
 {
-    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    void OnEffectExecute(Spell* spell, SpellEffectIndex /*effIdx*/) const override
     {
         if (Unit* caster = spell->GetCaster())
             if (Unit* spawner = caster->GetSpawner())
@@ -2700,8 +2707,8 @@ struct GossipNPCAI : public ScriptedAI
             case NPC_ORC_COMMONER:
             case NPC_TAUREN_COMMONER:
             case NPC_TROLL_COMMONER:
-            case NPC_FORSAKEN_COMMONER:
-            case NPC_GOBLIN_COMMONER: m_team = HORDE; break;
+            case NPC_FORSAKEN_COMMONER: m_team = HORDE; break;
+            case NPC_GOBLIN_COMMONER: m_team = TEAM_NONE; break;
         }
     }
 
@@ -2820,7 +2827,7 @@ struct GossipNPCAI : public ScriptedAI
 
 struct GossipNPCPeriodicTriggerFidget : public SpellScript
 {
-    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    void OnEffectExecute(Spell* spell, SpellEffectIndex /*effIdx*/) const override
     {
         spell->GetCaster()->HandleEmote(EMOTE_ONESHOT_TALK);
     }
@@ -2839,9 +2846,19 @@ struct GossipNPCPeriodicTalk : public AuraScript
 
 const std::vector<uint32> winterTextsAlliance = { 16422, 24341, 16032, 24342 };
 const std::vector<uint32> winterTextsHorde = { 16464, 24324, 24325 };
+const std::vector<uint32> winterTextsGoblin = { 16423, 16463 };
+
+const std::vector<uint32> midsummerTextsAlliance = { 24532, 24531 };
+const std::vector<uint32> midsummerTextsHorde = { 24533, 24534 };
 
 const std::vector<uint32> brewfestTextsAlliance = { 23629, 23630 };
 const std::vector<uint32> brewfestTextsHorde = { 23627, 23628 };
+
+const std::vector<uint32> hallowsEndTextsAlliance = { 24346, 24348, 24338, 24339, 23287, 23293, 24347, 23357 };
+const std::vector<uint32> hallowsEndTextsHorde = { 23295, 24331, 23298, 24329, 24336, 23351, 24337, 24330 };
+
+const std::vector<uint32> lunarTextsAlliance = { 24349, 24350 };
+const std::vector<uint32> lunarTextsHorde = { 24332, 24333 };
 
 uint32 GetRandomText(const std::vector<uint32> texts)
 {
@@ -2850,7 +2867,7 @@ uint32 GetRandomText(const std::vector<uint32> texts)
 
 struct GossipNPCPeriodicTriggerTalk : public SpellScript
 {
-    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    void OnEffectExecute(Spell* spell, SpellEffectIndex /*effIdx*/) const override
     {
         GossipNPCAI* ai = dynamic_cast<GossipNPCAI*>(spell->GetCaster()->AI());
         if (!ai)
@@ -2872,19 +2889,63 @@ struct GossipNPCPeriodicTriggerTalk : public SpellScript
                 case NPC_ORC_COMMONER:
                 case NPC_TAUREN_COMMONER:
                 case NPC_TROLL_COMMONER:
-                case NPC_FORSAKEN_COMMONER:
-                case NPC_GOBLIN_COMMONER: textId = GetRandomText(winterTextsHorde); break;
+                case NPC_FORSAKEN_COMMONER: textId = GetRandomText(winterTextsHorde); break;
+                case NPC_GOBLIN_COMMONER: textId = GetRandomText(winterTextsGoblin); break;
             }
         }
 
         if (events == GOSSIP_EVENT_HALLOWS_END)
         {
-
+            std::vector<uint32> texts;
+            switch (spell->GetCaster()->GetEntry())
+            {
+                default:
+                case NPC_HUMAN_COMMONER: // 23358 human only
+                case NPC_DWARF_COMMONER: // 23359 prolly dwarf only
+                case NPC_GNOME_COMMONER: // 23361 gnome only
+                case NPC_NIGHT_ELF_COMMONER: // 23362
+                case NPC_DRAENEI_COMMONER: texts = hallowsEndTextsAlliance; break; // 23362
+                case NPC_BLOOD_ELF_COMMONER: // 23356
+                case NPC_ORC_COMMONER: // 23352
+                case NPC_TAUREN_COMMONER: // 23355
+                case NPC_TROLL_COMMONER: // 23354
+                case NPC_FORSAKEN_COMMONER: // 23353
+                case NPC_GOBLIN_COMMONER: texts = hallowsEndTextsHorde; break;
+            }
+            switch (spell->GetCaster()->GetEntry())
+            {
+                default:
+                case NPC_HUMAN_COMMONER: texts.push_back(23358); break;
+                case NPC_DWARF_COMMONER: texts.push_back(23359); break;
+                case NPC_GNOME_COMMONER: texts.push_back(23361); break;
+                case NPC_NIGHT_ELF_COMMONER: texts.push_back(23362); break;
+                case NPC_DRAENEI_COMMONER: texts.push_back(23362); break; 
+                case NPC_BLOOD_ELF_COMMONER: texts.push_back(23356); break;
+                case NPC_ORC_COMMONER: texts.push_back(23352); break; 
+                case NPC_TAUREN_COMMONER: texts.push_back(23355); break;
+                case NPC_TROLL_COMMONER: texts.push_back(23354); break;
+                case NPC_FORSAKEN_COMMONER: texts.push_back(23353); break;
+            }
+            textId = GetRandomText(texts);
         }
 
         if (events == GOSSIP_EVENT_LUNAR_FESTIVAL)
         {
-
+            switch (spell->GetCaster()->GetEntry())
+            {
+                default:
+                case NPC_HUMAN_COMMONER:
+                case NPC_DWARF_COMMONER:
+                case NPC_GNOME_COMMONER:
+                case NPC_NIGHT_ELF_COMMONER:
+                case NPC_DRAENEI_COMMONER: textId = GetRandomText(lunarTextsAlliance); break;
+                case NPC_BLOOD_ELF_COMMONER:
+                case NPC_ORC_COMMONER:
+                case NPC_TAUREN_COMMONER:
+                case NPC_TROLL_COMMONER:
+                case NPC_FORSAKEN_COMMONER: textId = GetRandomText(lunarTextsHorde); break;
+                case NPC_GOBLIN_COMMONER: textId = GetRandomText(lunarTextsHorde); break;
+            }
         }
 
         if (events == GOSSIP_EVENT_BREWFEST)
@@ -2901,14 +2962,28 @@ struct GossipNPCPeriodicTriggerTalk : public SpellScript
                 case NPC_ORC_COMMONER:
                 case NPC_TAUREN_COMMONER:
                 case NPC_TROLL_COMMONER:
-                case NPC_FORSAKEN_COMMONER:
-                case NPC_GOBLIN_COMMONER: textId = GetRandomText(brewfestTextsHorde); break;
+                case NPC_FORSAKEN_COMMONER: textId = GetRandomText(brewfestTextsHorde); break;
+                case NPC_GOBLIN_COMMONER: textId = 23631; break;
             }
         }
 
-        if (events == GOSSIP_EVENT_SPIRIT_OF_COMPETITION)
+        if (events == GOSSIP_EVENT_MIDSUMMER)
         {
-
+            switch (spell->GetCaster()->GetEntry())
+            {
+                default:
+                case NPC_HUMAN_COMMONER:
+                case NPC_DWARF_COMMONER:
+                case NPC_GNOME_COMMONER:
+                case NPC_NIGHT_ELF_COMMONER:
+                case NPC_DRAENEI_COMMONER: textId = GetRandomText(midsummerTextsAlliance); break;
+                case NPC_BLOOD_ELF_COMMONER:
+                case NPC_ORC_COMMONER:
+                case NPC_TAUREN_COMMONER:
+                case NPC_TROLL_COMMONER:
+                case NPC_FORSAKEN_COMMONER:
+                case NPC_GOBLIN_COMMONER: textId = GetRandomText(midsummerTextsHorde); break;
+            }
         }
 
         if (events == GOSSIP_EVENT_PIRATES_DAY)
@@ -2933,7 +3008,7 @@ struct GossipNPCPeriodicTriggerTalk : public SpellScript
 
 struct GossipNPCAppearanceAllBrewfest : public AuraScript
 {
-    void OnApply(Aura* aura, bool apply) const override
+    void OnApply(Aura* aura, bool /*apply*/) const override
     {
         uint32 entry = 0;
         switch (aura->GetTarget()->GetEntry())
@@ -3005,8 +3080,9 @@ struct GossipNPCAppearanceAllPirateDay : public AuraScript
 
 enum GossipNpcGossips
 {
-    GOSSIP_WINTER_VEIL_A            = 10513,
-    GOSSIP_WINTER_VEIL_H            = 0,
+    GOSSIP_WINTER_VEIL_A            = 7907,
+    GOSSIP_WINTER_VEIL_H            = 7911,
+    GOSSIP_WINTER_VEIL_GOBLIN       = 8065,
     GOSSIP_LUNAR_FESTIVAL           = 0,
     GOSSIP_HALLOWS_END              = 8939,
     GOSSIP_BREWFEST                 = 8988,
@@ -3027,7 +3103,7 @@ bool GossipHello_npc_gossip_npc(Player* player, Creature* creature)
         Team team = ai->m_team;
         switch (gossipEvent)
         {
-            case GOSSIP_EVENT_WINTER_VEIL: gossipId = team == ALLIANCE ? GOSSIP_WINTER_VEIL_A : GOSSIP_WINTER_VEIL_H; break;
+            case GOSSIP_EVENT_WINTER_VEIL: gossipId = team == ALLIANCE ? GOSSIP_WINTER_VEIL_A : team == TEAM_NONE ? GOSSIP_WINTER_VEIL_GOBLIN : GOSSIP_WINTER_VEIL_H; break;
             case GOSSIP_EVENT_LUNAR_FESTIVAL: gossipId = GOSSIP_LUNAR_FESTIVAL; break;
             case GOSSIP_EVENT_HALLOWS_END: gossipId = GOSSIP_HALLOWS_END; break;
             case GOSSIP_EVENT_BREWFEST: gossipId = GOSSIP_BREWFEST; break;
@@ -3196,7 +3272,7 @@ void AddSC_npcs_special()
 
     pNewScript = new Script;
     pNewScript->Name = "npc_snakes";
-    pNewScript->GetAI = &GetAI_npc_snakes;
+    pNewScript->GetAI = &GetNewAIInstance<npc_snakesAI>;
     pNewScript->RegisterSelf();
 
     pNewScript = new Script;
@@ -3250,6 +3326,7 @@ void AddSC_npcs_special()
     pNewScript->pGossipHello = &GossipHello_npc_gossip_npc;
     pNewScript->RegisterSelf();
 
+    RegisterSpellScript<HarvestSilithidEgg>("spell_harvest_silithid_egg");
     RegisterSpellScript<ImpInABottleSay>("spell_imp_in_a_bottle_say");
     RegisterSpellScript<GossipNPCPeriodicTriggerFidget>("spell_gossip_npc_periodic_trigger_fidget");
     RegisterSpellScript<GossipNPCPeriodicTalk>("spell_gossip_npc_periodic_talk");

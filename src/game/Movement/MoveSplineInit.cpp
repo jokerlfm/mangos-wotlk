@@ -92,13 +92,22 @@ namespace Movement
             moveFlags |= (MOVEFLAG_SPLINE_ENABLED | MOVEFLAG_FORWARD);
 
         if (args.velocity == 0.f) // ignore swim speed and flight speed because its not used in generic scripting - always possible to override
-            args.velocity = unit.GetSpeed(MovementInfo::GetSpeedType(MovementFlags(moveFlags &~ (MOVEFLAG_FLYING | MOVEFLAG_SWIMMING))));
+        {
+            args.velocity = unit.GetSpeed(MovementInfo::GetSpeedType(MovementFlags(moveFlags & ~(MOVEFLAG_FLYING | MOVEFLAG_SWIMMING))));
+            if (args.slowed != 0.f) // when set always > 0.5
+                args.velocity *= args.slowed;
+        }
 
         if (!args.Validate(&unit))
             return 0;
 
+        bool removedRoot = false;
         if (args.flags.hasFlag(MoveSplineFlag::eFlags::BoardVehicle | MoveSplineFlag::eFlags::ExitVehicle))
+        {
+            if (moveFlags & MOVEFLAG_ROOT)
+                removedRoot = true;
             moveFlags &= ~MOVEFLAG_ROOT;
+        }
 
         if (moveFlags & MOVEFLAG_ROOT && !pathEmpty)
         {
@@ -110,6 +119,7 @@ namespace Movement
         args.splineId = splineCounter++;
 
         unit.m_movementInfo.SetMovementFlags(MovementFlags(moveFlags));
+
         move_spline.Initialize(args);
 
         WorldPacket data(SMSG_MONSTER_MOVE, 64);
@@ -132,6 +142,9 @@ namespace Movement
 
         PacketBuilder::WriteMonsterMove(move_spline, data);
         unit.SendMessageToAllWhoSeeMe(data, true);
+
+        if (removedRoot)
+            unit.m_movementInfo.AddMovementFlag(MOVEFLAG_ROOT);
 
         return move_spline.Duration();
     }

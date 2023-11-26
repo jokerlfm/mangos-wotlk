@@ -278,6 +278,7 @@ class Pet : public Creature
         }
 
         virtual CombatData* GetCombatData() override { return m_combatData; }
+        virtual CombatData const* GetCombatData() const override { return m_combatData; }
 
         virtual void RegenerateHealth() override;
 
@@ -298,7 +299,9 @@ class Pet : public Creature
         bool IsSaveAutoCast() const { return m_saveAutocast; }
         void InitializeSpellsForControllableGuardian(bool load);
 
-        void StartCooldown(Unit* owner);
+        bool IgnoresOwnersDeath() const;
+
+        std::vector<uint32> GetCharmSpells() const;
     protected:
         uint32  m_happinessTimer;
         PetType m_petType;
@@ -315,7 +318,6 @@ class Pet : public Creature
         bool m_controllableGuardian;
         bool m_doNotFollowMounted;
         bool m_saveAutocast;
-        bool m_imposedCooldown;
 
         void SaveToDB(uint32, uint8, uint32) override       // overwrite of Creature::SaveToDB     - don't must be called
         {

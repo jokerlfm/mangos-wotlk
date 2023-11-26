@@ -203,6 +203,9 @@ class SpellAuraHolder
 
         void SetCreationDelayFlag();
 
+        bool IsProcReady(TimePoint const& now) const;
+        void SetProcCooldown(std::chrono::milliseconds cooldown, TimePoint const& now);
+
         bool IsReducedProcChancePast60() { return m_reducedProcChancePast60; }
         void SetReducedProcChancePast60() { m_reducedProcChancePast60 = true; }
 
@@ -249,6 +252,8 @@ class SpellAuraHolder
         bool m_deleted: 1;
         bool m_skipUpdate: 1;
 
+        TimePoint m_procCooldown;
+
         bool m_reducedProcChancePast60;
 
         // Scripting System
@@ -272,7 +277,7 @@ typedef void(Aura::*pAuraHandler)(bool Apply, bool Real);
 class Aura
 {
         friend struct ReapplyAffectedPassiveAurasHelper;
-        friend Aura* CreateAura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* currentDamage, int32 const* currentBasePoints, SpellAuraHolder* holder, Unit* target, Unit* caster, Item* castItem);
+        friend Aura* CreateAura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* currentDamage, int32 const* currentBasePoints, SpellAuraHolder* holder, Unit* target, Unit* caster, Item* castItem, uint64 scriptValue);
 
     public:
         // aura handlers
@@ -518,7 +523,7 @@ class Aura
 
         ClassFamilyMask const& GetAuraSpellClassMask() const { return  m_spellAuraHolder->GetSpellProto()->GetEffectSpellClassMask(m_effIndex); }
         bool isAffectedOnSpell(SpellEntry const* spell) const;
-        bool CanProcFrom(SpellEntry const* spell, uint32 procFlag, uint32 EventProcEx, uint32 procEx, bool active, bool useClassMask) const;
+        bool CanProcFrom(SpellEntry const* spell, uint32 procFlag, uint32 EventProcEx, uint32 procEx, bool damaging, bool absorbing, bool useClassMask) const;
 
         SpellAuraHolder* GetHolder() { return m_spellAuraHolder; }
         SpellAuraHolder const* GetHolder() const { return m_spellAuraHolder; }
@@ -543,13 +548,14 @@ class Aura
         ScriptStorage* GetScriptStorage() { return m_storage; }
         // hooks
         void OnAuraInit();
-        int32 OnAuraValueCalculate(Unit* caster, int32 currentValue);
-        void OnDamageCalculate(Unit* victim, int32& advertisedBenefit, float& totalMod);
+        int32 OnAuraValueCalculate(Unit* caster, int32 currentValue, Item* castItem);
+        void OnDamageCalculate(Unit* victim, Unit* attacker, int32& advertisedBenefit, float& totalMod);
+        void OnCritChanceCalculate(Unit const* victim, float& chance, SpellEntry const* spellInfo);
         void OnApply(bool apply);
         void OnAfterApply(bool apply);
         bool OnCheckProc(ProcExecutionData& data);
         SpellAuraProcResult OnProc(ProcExecutionData& data);
-        void OnAbsorb(int32& currentAbsorb, int32& remainingDamage, uint32& reflectedSpellId, int32& reflectDamage, bool& preventedDeath);
+        void OnAbsorb(int32& currentAbsorb, int32& remainingDamage, uint32& reflectedSpellId, int32& reflectDamage, bool& preventedDeath, bool& dropCharge, DamageEffectType damageType);
         void OnManaAbsorb(int32& currentAbsorb);
         void OnAuraDeathPrevention(int32& remainingDamage);
         void OnPeriodicTrigger(PeriodicTriggerData& data);
@@ -557,9 +563,11 @@ class Aura
         void OnPeriodicTickEnd();
         void OnPeriodicCalculateAmount(uint32& amount);
         void OnHeartbeat();
+        bool OnAffectCheck(SpellEntry const* spellInfo) const;
         uint32 GetAuraScriptCustomizationValue();
         // Hook Requirements
         void ForcePeriodicity(uint32 periodicTime);
+        void SetAffectOverriden() { m_affectOverriden = true; } // spell script must implement condition
 
     protected:
         Aura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* currentDamage, int32 const* currentBasePoints, SpellAuraHolder* holder, Unit* target, Unit* caster = nullptr, Item* castItem = nullptr);
@@ -601,6 +609,7 @@ class Aura
         // Scripting system
         uint64 m_scriptValue; // persistent value for spell script state
         ScriptStorage* m_storage;
+        bool m_affectOverriden;
     private:
         void ReapplyAffectedPassiveAuras(Unit* target, bool owner_mode);
 };
@@ -625,19 +634,6 @@ class PersistentAreaAura : public Aura
         virtual ~PersistentAreaAura();
     protected:
         void Update(uint32 diff) override;
-};
-
-class SingleEnemyTargetAura : public Aura
-{
-        friend Aura* CreateAura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* currentDamage, int32 const* currentBasePoints, SpellAuraHolder* holder, Unit* target, Unit* caster, Item* castItem);
-
-    public:
-        virtual ~SingleEnemyTargetAura();
-        Unit* GetTriggerTarget() const override;
-
-    protected:
-        SingleEnemyTargetAura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* currentDamage, int32 const* currentBasePoints, SpellAuraHolder* holder, Unit* target, Unit* caster  = nullptr, Item* castItem = nullptr);
-        ObjectGuid m_castersTargetGuid;
 };
 
 // lfm since channel spell can use on allies, so create SingleUnitTargetAura 
@@ -665,6 +661,6 @@ class GameObjectAura : public Aura
         void Update(uint32 diff) override;
 };
 
-Aura* CreateAura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* currentDamage, int32 const* currentBasePoints, SpellAuraHolder* holder, Unit* target, Unit* caster = nullptr, Item* castItem = nullptr);
+Aura* CreateAura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* currentDamage, int32 const* currentBasePoints, SpellAuraHolder* holder, Unit* target, Unit* caster = nullptr, Item* castItem = nullptr, uint64 scriptValue = 0);
 SpellAuraHolder* CreateSpellAuraHolder(SpellEntry const* spellproto, Unit* target, WorldObject* caster, Item* castItem = nullptr, SpellEntry const* triggeredBy = nullptr);
 #endif

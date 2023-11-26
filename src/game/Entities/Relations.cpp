@@ -352,8 +352,9 @@ bool Unit::IsFriend(const Unit* unit) const
 /// Client-side counterpart: <tt>CGUnit_C::CanAttack(const CGUnit_C *this, const CGUnit_C *unit)</tt>
 /// Backbone of all spells which can target hostile units.
 /// Dependent 2.0+ macro API condition: <tt>[harm]</tt>
+/// Altered - Added ignoreFlags for ignoring UNIT_FLAG_NON_ATTACKABLE_2
 /////////////////////////////////////////////////
-bool Unit::CanAttack(const Unit* unit) const
+bool Unit::CanAttack(const Unit* unit, bool ignoreUntargetable) const
 {
     MANGOS_ASSERT(unit)
 
@@ -371,7 +372,11 @@ bool Unit::CanAttack(const Unit* unit) const
     }
 
     // We can't attack unit when at least one of these flags is present on it:
-    const uint32 mask = (UNIT_FLAG_SPAWNING | UNIT_FLAG_NOT_ATTACKABLE_1 | UNIT_FLAG_NON_ATTACKABLE_2 | UNIT_FLAG_TAXI_FLIGHT | UNIT_FLAG_NOT_SELECTABLE);
+    uint32 mask = (UNIT_FLAG_SPAWNING | UNIT_FLAG_NOT_ATTACKABLE_1 | UNIT_FLAG_TAXI_FLIGHT | UNIT_FLAG_UNINTERACTIBLE);
+    // serverside only part start
+    if (ignoreUntargetable) // this ignore is present not in wotlk client - by default in mask
+        mask |= UNIT_FLAG_UNTARGETABLE;
+    // serverside only part end
     if (unit->HasFlag(UNIT_FIELD_FLAGS, mask))
         return false;
 
@@ -510,7 +515,7 @@ bool Unit::CanAssist(const Unit* unit, bool ignoreFlags) const
     // Original logic
 
     // We can't assist unselectable unit
-    if (unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE))
+    if (unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE))
         return false;
 
     // Check immunity flags
@@ -663,7 +668,7 @@ bool Unit::CanInteract(const Unit* unit) const
     // Original logic
 
     // Unit must be selectable
-    if (unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE))
+    if (unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE))
         return false;
 
     // Unit must have NPC flags so we can actually interact in some way
@@ -1220,11 +1225,11 @@ bool Unit::CanAttackSpell(Unit const* target, SpellEntry const* spellInfo, bool 
     if (spellInfo)
     {
         // inversealive is needed for some spells which need to be casted at dead targets (aoe)
-        if (!target->IsAlive() && !spellInfo->HasAttribute(SPELL_ATTR_EX2_CAN_TARGET_DEAD))
+        if (!target->IsAlive() && !spellInfo->HasAttribute(SPELL_ATTR_EX2_ALLOW_DEAD_TARGET))
             return false;
     }
 
-    if (CanAttackInCombat(target))
+    if (CanAttackInCombat(target, spellInfo && spellInfo->HasAttribute(SPELL_ATTR_EX6_CAN_TARGET_UNTARGETABLE)))
     {
         if (target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED))
         {
@@ -1280,7 +1285,7 @@ bool Unit::CanAttackSpell(Unit const* target, SpellEntry const* spellInfo, bool 
 /////////////////////////////////////////////////
 bool Unit::CanAssistSpell(Unit const* target, SpellEntry const* spellInfo) const
 {
-    return CanAssist(target, (spellInfo && spellInfo->HasAttribute(SPELL_ATTR_EX6_ASSIST_IGNORE_IMMUNE_FLAG)));
+    return CanAssist(target, (spellInfo && spellInfo->HasAttribute(SPELL_ATTR_EX6_CAN_ASSIST_IMMUNE_PC)));
 }
 
 /////////////////////////////////////////////////
@@ -1319,9 +1324,9 @@ bool Unit::CanAttackOnSight(Unit const* target) const
 /// This function is not intented to have client-side counterpart by original design.
 /// Typically used for combat checks for at war case
 /////////////////////////////////////////////////
-bool Unit::CanAttackInCombat(Unit const* target) const
+bool Unit::CanAttackInCombat(Unit const* target, bool ignoreUntargetable) const
 {
-    if (!CanAttack(target))
+    if (!CanAttack(target, ignoreUntargetable))
     {
         if (target->IsPlayerControlled()) // If this is not fine grained enough, incorporation into CanAttack or copypaste of that whole func will be necessary
         {

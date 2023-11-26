@@ -22,7 +22,7 @@
 #include "Common.h"
 #include "Globals/SharedDefines.h"
 #include "Maps/Map.h"
-#include "ByteBuffer.h"
+#include "Util/ByteBuffer.h"
 #include "Entities/ObjectGuid.h"
 
 // magic event-numbers
@@ -98,17 +98,6 @@ enum BattleGroundMarksCount
 {
     ITEM_WINNER_COUNT               = 3,
     ITEM_LOSER_COUNT                = 1
-};
-
-enum ArenaWorldStates
-{
-    WORLD_STATE_ARENA_COUNT_A       = 3601,
-    WORLD_STATE_ARENA_COUNT_H       = 3600,
-
-    WORLD_STATE_ARENA_MAIN_BE       = 2547,
-    WORLD_STATE_ARENA_MAIN_NA       = 2577,
-    WORLD_STATE_ARENA_MAIN_RL       = 3002,
-    WORLD_STATE_ARENA_MAIN          = 3610,
 };
 
 enum ArenaSpells : uint32
@@ -479,7 +468,7 @@ class BattleGround
 
         /* Packet Transfer */
         // method that should fill worldpacket with actual world states (not yet implemented for all battlegrounds!)
-        virtual void FillInitialWorldStates(WorldPacket& /*data*/, uint32& /*count*/);
+        virtual void FillInitialWorldStates(WorldPacket& /*data*/, uint32& /*count*/) {}
         void SendPacketToTeam(Team teamId, WorldPacket const& packet, Player* sender = nullptr, bool self = true);
         void SendPacketToAll(WorldPacket const& packet);
 
@@ -536,6 +525,9 @@ class BattleGround
         void SendYellToAll(int32 /*entry*/, uint32 /*language*/, Creature const* /*source*/);
         void SendYell2ToAll(int32 /*entry*/, uint32 /*language*/, Creature const* /*source*/, int32 /*arg1*/, int32 /*arg2*/);
 
+        void SendBcdToAll(int32 bcdEntry, ChatMsg msgtype, Creature const* source);
+        void SendBcdToTeam(int32 bcdEntry, ChatMsg msgtype, Creature const* source, Team team);
+
         // Handle raid groups
         Group* GetBgRaid(Team team) const { return m_bgRaids[GetTeamIndexByTeamId(team)]; }
         void SetBgRaid(Team /*team*/, Group* /*bgRaid*/);
@@ -572,7 +564,7 @@ class BattleGround
         virtual void HandleKillUnit(Creature* /*unit*/, Player* /*killer*/) {}
 
         // handle event sent from gameobjects
-        virtual bool HandleEvent(uint32 /*eventId*/, GameObject* /*go*/, Unit* /*invoker*/) { return false; }
+        virtual bool HandleEvent(uint32 /*eventId*/, Object* /*source*/, Object* /*target*/) { return false; }
 
         // Called when a creature is created
         virtual void HandleCreatureCreate(Creature* /*creature*/) {}
@@ -662,12 +654,6 @@ class BattleGround
         // function that start timed achievement
         void StartTimedAchievement(AchievementCriteriaTypes /*type*/, uint32 /*entry*/);
 
-        // Handle Team score for achievements
-        bool IsTeamScoreInRange(Team /*team*/, uint32 /*minScore*/, uint32 /*maxScore*/) const;
-
-        /* virtual score-array - get's used in bg-subclasses */
-        int32 m_teamScores[PVP_TEAM_COUNT];
-
         struct EventObjects
         {
             std::vector<uint32> gameobjects;
@@ -683,6 +669,10 @@ class BattleGround
         // door-events are automaticly added - but _ALL_ other must be in this vector
         std::map<uint8, uint8> m_activeEvents;
 
+        uint32 GetPlayerSkinRefLootId() const { return m_playerSkinReflootId; }
+        void SetPlayerSkinRefLootId(uint32 reflootId) { m_playerSkinReflootId = reflootId; }
+
+        virtual void AlterTeleportLocation(Player* player, ObjectGuid& transportGuid, float& x, float& y, float& z, float& ori) {}
     protected:
         // this method is called, when BG cannot spawn its own spirit guide, or something is wrong, It correctly ends BattleGround
         void EndNow();
@@ -773,6 +763,8 @@ class BattleGround
         float m_teamStartLocZ[PVP_TEAM_COUNT];
         float m_teamStartLocO[PVP_TEAM_COUNT];
         float m_startMaxDist;
+
+        uint32 m_playerSkinReflootId;
 };
 
 // helper functions for world state list fill

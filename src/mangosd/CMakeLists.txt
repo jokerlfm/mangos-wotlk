@@ -42,8 +42,8 @@ if(WIN32)
   if(MSVC)
     set(EXECUTABLE_SRCS
       ${EXECUTABLE_SRCS}
-      ${CMAKE_SOURCE_DIR}/src/shared/WheatyExceptionReport.cpp
-      ${CMAKE_SOURCE_DIR}/src/shared/WheatyExceptionReport.h
+      ${CMAKE_SOURCE_DIR}/src/shared/Platform/WheatyExceptionReport.cpp
+      ${CMAKE_SOURCE_DIR}/src/shared/Platform/WheatyExceptionReport.h
      )
   endif()
 endif()
@@ -56,6 +56,7 @@ target_link_libraries(${EXECUTABLE_NAME}
   shared
   game
   gsoap
+  g3dlite
 )
 
 if(WIN32)

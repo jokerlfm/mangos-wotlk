@@ -122,6 +122,71 @@ struct OpeningCapping : public SpellScript
     }
 };
 
+struct FlagAuraBg : public AuraScript, public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx == EFFECT_INDEX_1)
+        {
+            // for EOS caster is player, for WSG caster is GO
+            if (spell->m_spellInfo->Id == 34976)
+                spell->SetEventTarget(spell->GetUnitTarget());
+            else
+                spell->SetEventTarget(spell->GetAffectiveCasterObject());
+        }
+    }
+
+    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
+    {
+        // procs on taken spell - if acquired immune flag, remove it - maybe other conditions too
+        if (procData.victim && procData.victim->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE))
+            aura->GetTarget()->RemoveSpellAuraHolder(aura->GetHolder());
+        return SPELL_AURA_PROC_OK;
+    }
+};
+
+struct FlagClickBg : public SpellScript
+{
+    SpellCastResult OnCheckCast(Spell* spell, bool /*strict*/) const override
+    {
+        switch (spell->m_spellInfo->Id)
+        {
+            case 61266:                                         // Warsong Flag
+            case 61265:                                         // Silverwing Flag
+                return spell->GetTrueCaster()->GetMapId() == 489 && spell->GetTrueCaster()->GetMap()->IsBattleGround() ? SPELL_CAST_OK : SPELL_FAILED_REQUIRES_AREA;
+            case 34976:                                         // Netherstorm Flag
+                return spell->GetTrueCaster()->GetMapId() == 566 && spell->GetTrueCaster()->GetMap()->IsBattleGround() ? SPELL_CAST_OK : SPELL_FAILED_REQUIRES_AREA;
+        }
+        return SPELL_CAST_OK;
+    }
+
+    void OnEffectExecute(Spell* spell, SpellEffectIndex /*effIdx*/) const override
+    {
+        Unit* target = spell->GetUnitTarget();
+        uint32 spellId = 0;
+        uint32 eventId = 0;
+        switch (spell->m_spellInfo->Id)
+        {
+            case 61265: spellId = 23335; eventId = 8504; break; // Alliance Flag Pickup
+            case 61266: spellId = 23333; eventId = 8505; break; // Horde Flag Pickup
+        }
+
+        // flagstand and flagdrop share spells
+        if (spell->GetTrueCaster()->IsGameObject() && static_cast<GameObject*>(spell->GetTrueCaster())->GetGoType() == GAMEOBJECT_TYPE_FLAGDROP)
+        {
+            if (WorldObject* spawner = static_cast<GameObject*>(spell->GetTrueCaster())->GetSpawner())
+                if (spawner->IsPlayer() && target->IsPlayer())
+                    if (static_cast<Player*>(spawner)->GetTeam() != static_cast<Player*>(target)->GetTeam())
+                        return; // return of own flag already handled
+        }
+
+        // misusing original caster to pass along original flag GO - if in future conflicts, substitute it for something else
+        SpellCastResult result = target->CastSpell(target, spellId, TRIGGERED_IGNORE_GCD | TRIGGERED_HIDE_CAST_IN_COMBAT_LOG | TRIGGERED_IGNORE_CURRENT_CASTED_SPELL, nullptr, nullptr, spell->GetTrueCaster()->GetObjectGuid());
+        if (result == SPELL_CAST_OK) // wotlk+ done like this
+            StartEvents_Event(spell->GetTrueCaster()->GetMap(), eventId, target, spell->GetTrueCaster(), true);
+    }
+};
+
 struct ArenaPreparation : public AuraScript
 {
     void OnApply(Aura* aura, bool apply) const override
@@ -209,7 +274,7 @@ struct OutdoorPvpNotifyAI : public GameObjectAI
 {
     using GameObjectAI::GameObjectAI;
 
-    void OnUse(Unit* user, SpellEntry const* spellInfo) override
+    void OnUse(Unit* user, SpellEntry const* /*spellInfo*/) override
     {
         if (!user->IsPlayer())
             return;
@@ -243,7 +308,10 @@ struct spell_split_teleport_boat : public SpellScript
         Player* player = static_cast<Player*>(caster);
 
         // teleport uses local transport coords
-        player->TeleportTo(player->GetMapId(), 0.0f, 5.0f, 9.6f, 3.14f, 0, nullptr, transport);
+        if (spell->m_spellInfo->Id == 52365 || spell->m_spellInfo->Id == 53464)
+            player->TeleportTo(player->GetMapId(), -6.f, -3.f, 8.8f, 3.8f, 0, nullptr, transport);
+        else
+            player->TeleportTo(player->GetMapId(), 0.0f, 5.0f, 9.6f, 3.14f, 0, nullptr, transport);
     }
 };
 
@@ -382,6 +450,8 @@ void AddSC_battleground()
     pNewScript->RegisterSelf();
 
     RegisterSpellScript<OpeningCapping>("spell_opening_capping");
+    RegisterSpellScript<FlagAuraBg>("spell_flag_aura_bg");
+    RegisterSpellScript<FlagClickBg>("spell_flag_click_bg");
     RegisterSpellScript<ArenaPreparation>("spell_arena_preparation");
     RegisterSpellScript<InactiveBattleground>("spell_inactive");
     RegisterSpellScript<spell_battleground_banner_trigger>("spell_battleground_banner_trigger");

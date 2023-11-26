@@ -22,7 +22,7 @@
 #include "AI/BaseAI/PetAI.h"
 #include "AI/EventAI/CreatureEventAI.h"
 #include "Entities/ObjectGuid.h"
-#include "Timer.h"
+#include "Util/Timer.h"
 
 class Creature;
 class Spell;
@@ -45,10 +45,5 @@ class GuardianAI : public CreatureEventAI
         void OnUnsummon() override;
     protected:
         std::string GetAIName() override { return "GuardianAI"; }
-
-        void RelinquishFollowData();
-
-        float m_followAngle;
-        float m_followDist;
 };
 #endif

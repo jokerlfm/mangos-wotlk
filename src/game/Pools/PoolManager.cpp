@@ -19,7 +19,7 @@
 #include "Pools/PoolManager.h"
 #include "Globals/ObjectMgr.h"
 #include "Entities/ObjectGuid.h"
-#include "ProgressBar.h"
+#include "Util/ProgressBar.h"
 #include "Log.h"
 #include "Maps/MapPersistentStateMgr.h"
 #include "World/World.h"
@@ -676,21 +676,20 @@ struct PoolMapChecker
 
 void PoolManager::LoadFromDB()
 {
-    QueryResult* result = WorldDatabase.Query("SELECT MAX(entry) FROM pool_template");
-    if (!result)
+    auto queryResult = WorldDatabase.Query("SELECT MAX(entry) FROM pool_template");
+    if (!queryResult)
     {
         sLog.outString(">> Table pool_template is empty.");
         sLog.outString();
         return;
     }
-    Field* fields = result->Fetch();
+    Field* fields = queryResult->Fetch();
     max_pool_id = fields[0].GetUInt16();
-    delete result;
 
     mPoolTemplate.resize(max_pool_id + 1);
 
-    result = WorldDatabase.Query("SELECT entry, max_limit, description FROM pool_template");
-    if (!result)
+    queryResult = WorldDatabase.Query("SELECT entry, max_limit, description FROM pool_template");
+    if (!queryResult)
     {
         mPoolTemplate.clear();
         sLog.outString(">> Table pool_template is empty:");
@@ -700,11 +699,11 @@ void PoolManager::LoadFromDB()
 
     uint32 count = 0;
 
-    BarGoLink bar(result->GetRowCount());
+    BarGoLink bar(queryResult->GetRowCount());
     do
     {
         ++count;
-        fields = result->Fetch();
+        fields = queryResult->Fetch();
 
         bar.step();
 
@@ -715,11 +714,10 @@ void PoolManager::LoadFromDB()
         pPoolTemplate.description = fields[2].GetCppString();
         pPoolTemplate.AutoSpawn = true;          // will update and later data loading
     }
-    while (result->NextRow());
+    while (queryResult->NextRow());
 
     sLog.outString();
     sLog.outString(">> Loaded %u objects pools", count);
-    delete result;
 
     PoolMapChecker mapChecker(mPoolTemplate);
 
@@ -728,10 +726,10 @@ void PoolManager::LoadFromDB()
     mPoolCreatureGroups.resize(max_pool_id + 1);
     mCreatureSearchMap.clear();
     //                                   1     2           3
-    result = WorldDatabase.Query("SELECT guid, pool_entry, chance FROM pool_creature");
+    queryResult = WorldDatabase.Query("SELECT guid, pool_entry, chance FROM pool_creature");
 
     count = 0;
-    if (!result)
+    if (!queryResult)
     {
         BarGoLink bar2(1);
         bar2.step();
@@ -741,10 +739,10 @@ void PoolManager::LoadFromDB()
     }
     else
     {
-        BarGoLink bar2(result->GetRowCount());
+        BarGoLink bar2(queryResult->GetRowCount());
         do
         {
-            fields = result->Fetch();
+            fields = queryResult->Fetch();
 
             bar2.step();
 
@@ -783,16 +781,15 @@ void PoolManager::LoadFromDB()
             SearchPair p(guid, pool_id);
             mCreatureSearchMap.insert(p);
         }
-        while (result->NextRow());
+        while (queryResult->NextRow());
         sLog.outString();
         sLog.outString(">> Loaded %u creatures in pools from `pool_creature`", count);
-        delete result;
     }
 
-    result = WorldDatabase.Query("SELECT guid, pool_entry, chance, pool_creature_template.id FROM pool_creature_template LEFT JOIN creature ON creature.id = pool_creature_template.id");
+    queryResult = WorldDatabase.Query("SELECT guid, pool_entry, chance, pool_creature_template.id FROM pool_creature_template LEFT JOIN creature ON creature.id = pool_creature_template.id");
 
     count = 0;
-    if (!result)
+    if (!queryResult)
     {
         BarGoLink bar2(1);
         bar2.step();
@@ -802,10 +799,10 @@ void PoolManager::LoadFromDB()
     }
     else
     {
-        BarGoLink bar2(result->GetRowCount());
+        BarGoLink bar2(queryResult->GetRowCount());
         do
         {
-            fields = result->Fetch();
+            fields = queryResult->Fetch();
 
             bar2.step();
 
@@ -855,21 +852,20 @@ void PoolManager::LoadFromDB()
             SearchPair p(guid, pool_id);
             mCreatureSearchMap.insert(p);
         }
-        while (result->NextRow());
+        while (queryResult->NextRow());
         sLog.outString();
         sLog.outString(">> Loaded %u creatures in pools from `pool_creature_template`", count);
-        delete result;
     }
 
     // Gameobjects (guids and entries)
 
     mPoolGameobjectGroups.resize(max_pool_id + 1);
     mGameobjectSearchMap.clear();
-    //                                   1     2           3
-    result = WorldDatabase.Query("SELECT guid, pool_entry, chance FROM pool_gameobject");
+    //                                        1     2           3
+    queryResult = WorldDatabase.Query("SELECT guid, pool_entry, chance FROM pool_gameobject");
 
     count = 0;
-    if (!result)
+    if (!queryResult)
     {
         BarGoLink bar2(1);
         bar2.step();
@@ -879,10 +875,10 @@ void PoolManager::LoadFromDB()
     }
     else
     {
-        BarGoLink bar2(result->GetRowCount());
+        BarGoLink bar2(queryResult->GetRowCount());
         do
         {
-            fields = result->Fetch();
+            fields = queryResult->Fetch();
 
             bar2.step();
 
@@ -921,17 +917,16 @@ void PoolManager::LoadFromDB()
             SearchPair p(guid, pool_id);
             mGameobjectSearchMap.insert(p);
         }
-        while (result->NextRow());
+        while (queryResult->NextRow());
         sLog.outString();
         sLog.outString(">> Loaded %u gameobject in pools from `pool_gameobject`", count);
-        delete result;
     }
 
-    //                                   1     2           3
-    result = WorldDatabase.Query("SELECT guid, pool_entry, chance, pool_gameobject_template.id FROM pool_gameobject_template LEFT JOIN gameobject ON gameobject.id = pool_gameobject_template.id");
+    //                                        1     2           3
+    queryResult = WorldDatabase.Query("SELECT guid, pool_entry, chance, pool_gameobject_template.id FROM pool_gameobject_template LEFT JOIN gameobject ON gameobject.id = pool_gameobject_template.id");
 
     count = 0;
-    if (!result)
+    if (!queryResult)
     {
         BarGoLink bar2(1);
         bar2.step();
@@ -941,10 +936,10 @@ void PoolManager::LoadFromDB()
     }
     else
     {
-        BarGoLink bar2(result->GetRowCount());
+        BarGoLink bar2(queryResult->GetRowCount());
         do
         {
-            fields = result->Fetch();
+            fields = queryResult->Fetch();
 
             bar2.step();
 
@@ -994,19 +989,18 @@ void PoolManager::LoadFromDB()
             SearchPair p(guid, pool_id);
             mGameobjectSearchMap.insert(p);
         }
-        while (result->NextRow());
+        while (queryResult->NextRow());
         sLog.outString();
         sLog.outString(">> Loaded %u gameobject in pools from `pool_gameobject_template`", count);
-        delete result;
     }
 
     // Pool of pools
     mPoolPoolGroups.resize(max_pool_id + 1);
     //                                   1        2            3
-    result = WorldDatabase.Query("SELECT pool_id, mother_pool, chance FROM pool_pool");
+    queryResult = WorldDatabase.Query("SELECT pool_id, mother_pool, chance FROM pool_pool");
 
     count = 0;
-    if (!result)
+    if (!queryResult)
     {
         BarGoLink bar2(1);
         bar2.step();
@@ -1016,10 +1010,10 @@ void PoolManager::LoadFromDB()
     }
     else
     {
-        BarGoLink bar2(result->GetRowCount());
+        BarGoLink bar2(queryResult->GetRowCount());
         do
         {
-            fields = result->Fetch();
+            fields = queryResult->Fetch();
 
             bar2.step();
 
@@ -1062,7 +1056,7 @@ void PoolManager::LoadFromDB()
             // update top independent pool flag
             mPoolTemplate[child_pool_id].AutoSpawn = false;
         }
-        while (result->NextRow());
+        while (queryResult->NextRow());
 
         // Now check for circular reference
         for (uint16 i = 0; i < max_pool_id; ++i)
@@ -1102,7 +1096,6 @@ void PoolManager::LoadFromDB()
 
         sLog.outString();
         sLog.outString(">> Loaded %u pools in mother pools", count);
-        delete result;
     }
 
     // check chances integrity

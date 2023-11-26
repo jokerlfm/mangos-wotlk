@@ -27,7 +27,7 @@
 #include <algorithm>
 
 AbstractPathMovementGenerator::AbstractPathMovementGenerator(const Movement::PointsArray& path, float orientation, int32 offset/* = 0*/) :
-    m_pathIndex(offset), m_orientation(orientation), m_speedChanged(false), m_firstCycle(false), m_startPoint(0)
+    m_pathIndex(offset), m_orientation(orientation), m_firstCycle(false), m_startPoint(0), m_speedChanged(false)
 {
     for (size_t i = 0; i < path.size(); ++i)
         m_path[i] = { path[i].x, path[i].y, path[i].z, ((i + 1) == path.size() ? orientation : 0), 0, 0 };
@@ -37,7 +37,7 @@ AbstractPathMovementGenerator::AbstractPathMovementGenerator(const Movement::Poi
 }
 
 AbstractPathMovementGenerator::AbstractPathMovementGenerator(const WaypointPath* path, int32 offset/* = 0*/, bool cyclic/* = false*/, ObjectGuid guid /*= ObjectGuid()*/) :
-    m_pathIndex(offset), m_orientation(0), m_speedChanged(false), m_cyclic(cyclic), m_firstCycle(false), m_startPoint(0), m_guid(guid)
+    m_pathIndex(offset), m_orientation(0), m_cyclic(cyclic), m_firstCycle(false), m_startPoint(0), m_guid(guid), m_speedChanged(false)
 {
     if (!path)
         return;
@@ -202,7 +202,7 @@ void AbstractPathMovementGenerator::MovementInform(Unit& unit)
     if (node.script_id)
     {
         DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "Creature movement start script %u at point %u for %s.", node.script_id, index, unit.GetGuidStr().c_str());
-        unit.GetMap()->ScriptsStart(sCreatureMovementScripts, node.script_id, &unit, &unit);
+        unit.GetMap()->ScriptsStart(SCRIPT_TYPE_CREATURE_MOVEMENT, node.script_id, &unit, &unit);
     }
 
     // unit.SummonCreature(1, node.x, node.y, node.z, node.orientation, TEMPSPAWN_TIMED_DESPAWN, 5000);
@@ -281,6 +281,16 @@ bool FixedPathMovementGenerator::Move(Unit& unit) const
         init.SetWalk(!unit.hasUnitState(UNIT_STAT_RUNNING));
     if (m_flying)
         init.SetFly();
+    else
+    {
+        // non catmullrom
+        if (!unit.movespline->Finalized())
+            unit.UpdateSplinePosition(true);
+        Position pos = unit.GetPosition(unit.GetTransport());
+        init.Path()[0].x = pos.x; init.Path()[0].y = pos.y; init.Path()[0].z = pos.z;
+        if (!init.CheckBounds())
+            ERROR_DB_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "Path movement non-catmullrom pathId %u point %u for %s has invalid out of bounds spline. Likely meant to be split into several. (by script action or waittime)", unit.GetMotionMaster()->GetPathId(), m_pathIndex, unit.GetName());
+    }
     if (m_orientation != 0.f)
         init.SetFacing(m_orientation);
     if (m_speed != 0.f)
@@ -404,4 +414,68 @@ bool TaxiMovementGenerator::Resume(Unit& unit)
     }
 
     return Move(unit);
+}
+
+PathJumpGenerator::PathJumpGenerator(uint32 pathId, uint32 forcedMovement, float horizontalSpeed, float maxHeight, ObjectGuid guid)
+    : AbstractPathMovementGenerator(sWaypointMgr.GetPathFromOrigin(0, 0, pathId, PATH_FROM_WAYPOINT_PATH), 0, false), m_forcedMovement(forcedMovement), m_horizontalSpeed(horizontalSpeed), m_maxHeight(maxHeight)
+{
+}
+
+void PathJumpGenerator::Initialize(Unit& unit)
+{
+    unit.addUnitState(UNIT_STAT_ROAMING);
+
+    AbstractPathMovementGenerator::Initialize(unit);
+
+    if (m_spline.size() && Move(unit))
+    {
+        m_firstCycle = true;
+        m_startPoint = m_pathIndex;
+        unit.addUnitState(UNIT_STAT_ROAMING_MOVE);
+    }
+}
+
+void PathJumpGenerator::Finalize(Unit& unit)
+{
+    unit.clearUnitState(UNIT_STAT_ROAMING | UNIT_STAT_ROAMING_MOVE);
+    AbstractPathMovementGenerator::Finalize(unit);
+}
+
+void PathJumpGenerator::Interrupt(Unit& unit)
+{
+    unit.clearUnitState(UNIT_STAT_ROAMING | UNIT_STAT_ROAMING_MOVE);
+    AbstractPathMovementGenerator::Interrupt(unit);
+}
+
+void PathJumpGenerator::Reset(Unit& unit)
+{
+    unit.addUnitState(UNIT_STAT_ROAMING);
+    AbstractPathMovementGenerator::Reset(unit);
+}
+
+bool PathJumpGenerator::Move(Unit& unit) const
+{
+    Movement::MoveSplineInit init(unit);
+    init.MovebyPath(m_spline);
+    if (m_forcedMovement == FORCED_MOVEMENT_WALK)
+        init.SetWalk(true);
+    else if (m_forcedMovement == FORCED_MOVEMENT_RUN)
+        init.SetWalk(false);
+    else
+        init.SetWalk(!unit.hasUnitState(UNIT_STAT_RUNNING));
+
+    // non catmullrom
+    if (!unit.movespline->Finalized())
+        unit.UpdateSplinePosition(true);
+    Position pos = unit.GetPosition(unit.GetTransport());
+    init.Path()[0].x = pos.x; init.Path()[0].y = pos.y; init.Path()[0].z = pos.z;
+    if (!init.CheckBounds())
+        ERROR_DB_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "Path movement non-catmullrom pathId %u point %u for %s has invalid out of bounds spline. Likely meant to be split into several. (by script action or waittime)", unit.GetMotionMaster()->GetPathId(), m_pathIndex, unit.GetName());
+    if (m_orientation != 0.f)
+        init.SetFacing(m_orientation);
+    if (m_horizontalSpeed != 0.f)
+        init.SetVelocity(m_horizontalSpeed);
+    init.SetParabolic(m_maxHeight, init.Path().size() - 2);
+    init.SetFirstPointId(m_pathIndex);
+    return bool(init.Launch());
 }

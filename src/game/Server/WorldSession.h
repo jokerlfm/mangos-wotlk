@@ -33,6 +33,8 @@
 #include "Multithreading/Messager.h"
 #include "LFG/LFGDefines.h"
 
+#include <atomic>
+#include <map>
 #include <deque>
 #include <mutex>
 #include <memory>
@@ -94,6 +96,13 @@ enum ClientOSType
     CLIENT_OS_UNKNOWN,
     CLIENT_OS_WIN,
     CLIENT_OS_MAC
+};
+
+enum ClientPlatformType
+{
+    CLIENT_PLATFORM_UNKNOWN,
+    CLIENT_PLATFORM_X86,
+    CLIENT_PLATFORM_PPC
 };
 
 enum PartyOperation
@@ -375,8 +384,6 @@ class WorldSession
         void SendGMTicketResponseResolve(bool survey) const;
         void SendGMTicketResponse(GMTicket *ticket) const;
 
-        void SendAttackStop(Unit const* enemy) const;
-
         void SendBattleGroundList(ObjectGuid guid, BattleGroundTypeId bgTypeId) const;
 
         void SendTradeStatus(const TradeStatusInfo& status) const;
@@ -396,7 +403,7 @@ class WorldSession
         void SetAccountData(AccountDataType type, time_t time_, const std::string& data);
         void SendAccountDataTimes(uint32 mask);
         void LoadGlobalAccountData();
-        void LoadAccountData(QueryResult* result, uint32 mask);
+        void LoadAccountData(std::unique_ptr<QueryResult> queryResult, uint32 mask);
         void LoadTutorialsData();
         void SendTutorialsData();
         void SaveTutorialsData();
@@ -467,6 +474,8 @@ class WorldSession
         uint32 getDialogStatus(const Player* pPlayer, const Object* questgiver, uint32 defstatus) const;
         ClientOSType GetOS() const { return m_clientOS; }
         void SetOS(ClientOSType os) { m_clientOS = os; }
+        ClientPlatformType GetPlatform() const { return m_clientPlatform; }
+        void SetPlatform(ClientPlatformType platform) { m_clientPlatform = platform; }
         uint32 GetGameBuild() const { return m_gameBuild; }
         void SetGameBuild(uint32 version) { m_gameBuild = version; }
         uint32 GetAccountMaxLevel() const { return m_accountMaxLevel; }
@@ -1039,6 +1048,7 @@ class WorldSession
 
         // anticheat
         ClientOSType m_clientOS;
+        ClientPlatformType m_clientPlatform;
         uint32 m_gameBuild;
         uint32 m_accountMaxLevel;
         uint32 m_orderCounter;
@@ -1058,7 +1068,7 @@ class WorldSession
         bool m_playerRecentlyLogout;
         LocaleConstant m_sessionDbcLocale;
         int m_sessionDbLocaleIndex;
-        uint32 m_latency;
+        std::atomic<uint32> m_latency;
         uint32 m_clientTimeDelay;
         AccountData m_accountData[NUM_ACCOUNT_DATA_TYPES];
         uint32 m_Tutorials[8];

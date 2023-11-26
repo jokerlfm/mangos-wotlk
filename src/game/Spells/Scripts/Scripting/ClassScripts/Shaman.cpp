@@ -22,9 +22,10 @@
 #include "AI/BaseAI/TotemAI.h"
 #include "AI/ScriptDevAI/ScriptDevAIMgr.h"
 
+// 6495 - Sentry Totem
 struct SentryTotem : public SpellScript, public AuraScript
 {
-    void OnRadiusCalculate(Spell* spell, SpellEffectIndex effIdx, bool targetB, float& radius) const override
+    void OnRadiusCalculate(Spell* /*spell*/, SpellEffectIndex effIdx, bool targetB, float& radius) const override
     {
         if (!targetB && effIdx == EFFECT_INDEX_0)
             radius = 2.f;
@@ -88,6 +89,7 @@ struct SentryTotemAI : public TotemAI
     }
 };
 
+// 974 - Earth Shield
 struct EarthShield : public AuraScript
 {
     int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
@@ -99,6 +101,24 @@ struct EarthShield : public AuraScript
             value = target->SpellHealingBonusTaken(caster, data.spellProto, value, SPELL_DIRECT_DAMAGE);
         }
         return value;
+    }
+
+    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
+    {
+        procData.basepoints[0] = aura->GetAmount();
+        procData.triggerTarget = aura->GetTarget();
+        procData.triggeredSpellId = 379;
+        // Glyph of Earth Shield
+        if (Unit* caster = aura->GetCaster())
+        {
+            if (Aura* aur = caster->GetDummyAura(63279))
+            {
+                int32 aur_mod = aur->GetModifier()->m_amount;
+                procData.basepoints[0] = int32(procData.basepoints[0] * (aur_mod + 100.0f) / 100.0f);
+            }
+        }
+
+        return SPELL_AURA_PROC_OK;
     }
 };
 
@@ -176,6 +196,149 @@ struct AncestralAwakeningSearch : public SpellScript
     }
 };
 
+enum
+{
+    SPELL_STONECLAW_TOTEM_ABSORB = 55277,
+    SPELL_GLYPH_OF_STONECLAW_TOTEM = 63298,
+};
+
+// 5730 - Stoneclaw Totem
+struct StoneclawTotem : public SpellScript
+{
+    void OnSummon(Spell* spell, Creature* summon) const override
+    {
+        uint32 spellId = 0;
+        switch (spell->m_spellInfo->Id)
+        {
+            case 5730: spellId = 55328; break;
+            case 6390: spellId = 55329; break;
+            case 6391: spellId = 55330; break;
+            case 6392: spellId = 55332; break;
+            case 10427: spellId = 55333; break;
+            case 10428: spellId = 55335; break;
+            case 25525: spellId = 55278; break;
+            case 58580: spellId = 58589; break;
+            case 58581: spellId = 58590; break;
+            case 58582: spellId = 58591; break;
+        }
+        if (spellId)
+            summon->CastSpell(nullptr, spellId, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+// 55278, 55328, 55329, 55330, 55332, 55333, 55335, 58589, 58590, 58591 - Stoneclaw Totem
+struct StoneclawTotemAbsorb : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0 || !spell->GetUnitTarget())
+            return;
+
+        int32 shieldStrength = spell->GetDamage();
+
+        for (uint8 i = TOTEM_SLOT_FIRE; i <= TOTEM_SLOT_AIR; ++i)
+            if (Totem* totem = spell->GetUnitTarget()->GetTotem(TotemSlot(i)))
+                spell->GetCaster()->CastCustomSpell(totem, SPELL_STONECLAW_TOTEM_ABSORB, &shieldStrength, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
+
+        if (Aura* glyphAura = spell->GetUnitTarget()->GetAura(SPELL_GLYPH_OF_STONECLAW_TOTEM, EFFECT_INDEX_0)) // Glyph of Stoneclaw Totem
+        {
+            int32 playerShieldStrength = shieldStrength * glyphAura->GetAmount();
+            spell->GetCaster()->CastCustomSpell(spell->GetUnitTarget(), SPELL_STONECLAW_TOTEM_ABSORB, &playerShieldStrength, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
+        }
+    }
+};
+
+struct HeroismBloodlust : public SpellScript
+{
+    bool OnCheckTarget(const Spell* /*spell*/, Unit* target, SpellEffectIndex /*eff*/) const
+    {
+        if (!target || !target->IsAlive() || target->HasAura(57724) || target->HasAura(57723))
+            return false;
+        return true;
+    }
+};
+
+// 1535 - Fire Nova
+struct FireNovaShaman : public SpellScript
+{
+    SpellCastResult OnCheckCast(Spell* spell, bool /*strict*/) const override
+    {
+        // fire totems slot
+        if (!spell->GetCaster()->GetTotemGuid(TOTEM_SLOT_FIRE))
+            return SPELL_FAILED_TOTEMS;
+        return SPELL_CAST_OK;
+    }
+
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        // fire totems slot
+        Totem* totem = spell->GetCaster()->GetTotem(TOTEM_SLOT_FIRE);
+        if (!totem)
+            return;
+
+        uint32 triggered_spell_id;
+        switch (spell->m_spellInfo->Id)
+        {
+            case 1535:  triggered_spell_id = 8349;  break;
+            case 8498:  triggered_spell_id = 8502;  break;
+            case 8499:  triggered_spell_id = 8503;  break;
+            case 11314: triggered_spell_id = 11306; break;
+            case 11315: triggered_spell_id = 11307; break;
+            case 25546: triggered_spell_id = 25535; break;
+            case 25547: triggered_spell_id = 25537; break;
+            case 61649: triggered_spell_id = 61650; break;
+            case 61657: triggered_spell_id = 61654; break;
+            default: return;
+        }
+
+        totem->CastSpell(totem, triggered_spell_id, TRIGGERED_OLD_TRIGGERED, nullptr, nullptr, spell->GetCaster()->GetObjectGuid());
+
+        // Fire Nova Visual
+        totem->CastSpell(nullptr, 19823, TRIGGERED_OLD_TRIGGERED, nullptr, nullptr, spell->GetCaster()->GetObjectGuid());
+    }
+};
+
+// 51474 - Astral Shift
+struct AstralShiftShaman : public AuraScript
+{
+    void OnAbsorb(Aura* aura, int32& currentAbsorb, int32& remainingDamage, uint32& reflectedSpellId, int32& /*reflectDamage*/, bool& /*preventedDeath*/, bool& /*dropCharge*/, DamageEffectType /*damageType*/) const override
+    {
+        // while affected by Stun and Fear
+        if (aura->GetTarget()->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_STUNNED | UNIT_FLAG_FLEEING | UNIT_FLAG_SILENCED))
+            remainingDamage -= remainingDamage * currentAbsorb / 100;
+    }
+};
+
+// 51505 - Lava Burst
+struct LavaBurst : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (spell->GetUnitTarget()->GetAura(SPELL_AURA_PERIODIC_DAMAGE, SPELLFAMILY_SHAMAN, uint64(0x0000000010000000), 0, spell->GetCaster()->GetObjectGuid()))
+            spell->SetGuaranteedCrit();
+    }
+};
+
+// 55438 - Glyph of Lesser Healing Wave
+struct GlyphOfLesserHealingWave : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (aura->GetEffIndex() == EFFECT_INDEX_0)
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_HEALING_DONE, apply);
+    }
+
+    void OnDamageCalculate(Aura* aura, Unit* /*attacker*/, Unit* victim, int32& /*advertisedBenefit*/, float& totalMod) const override
+    {
+        // Earth Shield
+        if (victim->GetAura(SPELL_AURA_DUMMY, SPELLFAMILY_SHAMAN, uint64(0x0000040000000000), 0, aura->GetTarget()->GetObjectGuid()))
+            totalMod *= (aura->GetModifier()->m_amount + 100.0f) / 100.0f;
+    }
+};
+
 void LoadShamanScripts()
 {
     Script* pNewScript = new Script;
@@ -190,4 +353,11 @@ void LoadShamanScripts()
     RegisterSpellScript<LavaLash>("spell_lava_lash");
     RegisterSpellScript<AncestralAwakening>("spell_ancestral_awakening");
     RegisterSpellScript<AncestralAwakeningSearch>("spell_ancestral_awakening_search");
+    RegisterSpellScript<StoneclawTotem>("spell_stoneclaw_totem");
+    RegisterSpellScript<StoneclawTotemAbsorb>("spell_stoneclaw_totem_absorb");
+    RegisterSpellScript<HeroismBloodlust>("spell_heroism_bloodlust");
+    RegisterSpellScript<FireNovaShaman>("spell_fire_nova_shaman");
+    RegisterSpellScript<AstralShiftShaman>("spell_astral_shift_shaman");
+    RegisterSpellScript<LavaBurst>("spell_lava_burst");
+    RegisterSpellScript<GlyphOfLesserHealingWave>("spell_glyph_of_lesser_healing_wave");
 }

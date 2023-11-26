@@ -19,6 +19,7 @@
 #include "Spells/Scripts/SpellScript.h"
 #include "Spells/SpellMgr.h"
 
+// 11213 - Arcane Concentration
 struct ArcaneConcentration : public AuraScript
 {
     bool OnCheckProc(Aura* aura, ProcExecutionData& procData) const override
@@ -46,6 +47,77 @@ struct ArcaneConcentration : public AuraScript
     }
 };
 
+// 11170 - Shatter
+struct ShatterMage : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_CRIT_CHANCE, apply);
+    }
+
+    void OnCritChanceCalculate(Aura* aura, Unit const* target, float& chance, SpellEntry const* spellInfo) const override
+    {
+        switch (aura->GetModifier()->m_miscvalue)
+        {
+            // Shatter
+            case 849: if (target->isFrozen() || aura->GetTarget()->IsIgnoreUnitState(spellInfo, IGNORE_UNIT_TARGET_NON_FROZEN)) chance += 17.0f; break;
+            case 910: if (target->isFrozen() || aura->GetTarget()->IsIgnoreUnitState(spellInfo, IGNORE_UNIT_TARGET_NON_FROZEN)) chance += 34.0f; break;
+            case 911: if (target->isFrozen() || aura->GetTarget()->IsIgnoreUnitState(spellInfo, IGNORE_UNIT_TARGET_NON_FROZEN)) chance += 50.0f; break;
+            default:
+                break;
+        }
+    }
+};
+
+// 42208 - Blizzard
+struct Blizzard : public SpellScript
+{
+    void OnCast(Spell* spell) const override
+    {
+        if (spell->GetCaster()->HasOverrideScript(836)) // Improved Blizzard (Rank 1)
+            spell->AddPrecastSpell(12484);
+        if (spell->GetCaster()->HasOverrideScript(988)) // Improved Blizzard (Rank 2)
+            spell->AddPrecastSpell(12485);
+        if (spell->GetCaster()->HasOverrideScript(989)) // Improved Blizzard (Rank 3)
+            spell->AddPrecastSpell(12486);
+    }
+};
+
+// 31679 - Molten Fury
+struct MoltenFury : public AuraScript
+{
+    void OnDamageCalculate(Aura* aura, Unit* /*attacker*/, Unit* victim, int32& /*advertisedBenefit*/, float& totalMod) const override
+    {
+        if (victim->HasAuraState(AURA_STATE_HEALTHLESS_20_PERCENT))
+            totalMod *= (100.0f + aura->GetModifier()->m_amount) / 100.0f;
+    }
+};
+
+// 30455 - Ice Lance
+struct IceLance : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx != EFFECT_INDEX_0)
+            return;
+
+        Unit* target = spell->GetUnitTarget();
+        if (target->isFrozen() || spell->GetCaster()->IsIgnoreUnitState(spell->m_spellInfo, IGNORE_UNIT_TARGET_NON_FROZEN))
+        {
+            float multiplier = 3.0f;
+
+            // if target have higher level
+            if (target->GetLevel() > spell->GetCaster()->GetLevel())
+                // Glyph of Ice Lance
+                if (Aura* glyph = spell->GetCaster()->GetDummyAura(56377))
+                    multiplier = glyph->GetModifier()->m_amount;
+
+            spell->SetDamageDoneModifier(multiplier, EFFECT_INDEX_0);
+        }
+    }
+};
+
+// 12654 - Ignite
 struct MageIgnite : public AuraScript
 {
     // implemented this way because we do not support proccing in spellscript on empty aura slot
@@ -73,6 +145,7 @@ struct MageIgnite : public AuraScript
     }
 };
 
+// 44543, 44545 - Fingers of Frost
 struct FingersOfFrostProc : public AuraScript
 {
     bool OnCheckProc(Aura* aura, ProcExecutionData& /*data*/) const override
@@ -81,6 +154,7 @@ struct FingersOfFrostProc : public AuraScript
     }
 };
 
+// 44544 - Fingers of Frost
 struct FingersOfFrostIgnore : public SpellScript
 {
     void OnCast(Spell* spell) const override
@@ -89,6 +163,7 @@ struct FingersOfFrostIgnore : public SpellScript
     }
 };
 
+// 74396 - Fingers of Frost
 struct FingersOfFrostDummy : public AuraScript
 {
     void OnHolderInit(SpellAuraHolder* holder, WorldObject* /*caster*/) const override
@@ -109,6 +184,7 @@ struct FingersOfFrostDummy : public AuraScript
     }
 };
 
+// 44572 - Deep Freeze
 struct DeepFreezeImmunityState : public AuraScript
 {
     bool OnCheckProc(Aura* /*aura*/, ProcExecutionData& data) const override
@@ -132,13 +208,105 @@ struct Polymorph : public AuraScript
     }
 };
 
+// 6143 - Frost Ward, 543 - Fire Ward
+struct FrostWarding : public AuraScript
+{
+    void OnAbsorb(Aura* aura, int32& currentAbsorb, int32& remainingDamage, uint32& /*reflectedSpellId*/, int32& /*reflectDamage*/, bool& /*preventedDeath*/, bool& /*dropCharge*/, DamageEffectType /*damageType*/) const override
+    {
+        int chance = 0;
+        if (Aura* frostWarding = aura->GetTarget()->GetAura(11189, EFFECT_INDEX_0))
+            chance = frostWarding->GetSpellProto()->CalculateSimpleValue(EFFECT_INDEX_1);
+        if (Aura* frostWarding = aura->GetTarget()->GetAura(28332, EFFECT_INDEX_0))
+            chance = frostWarding->GetSpellProto()->CalculateSimpleValue(EFFECT_INDEX_1);
+        if (roll_chance_i(chance))
+        {
+            int32 amount = remainingDamage;
+            remainingDamage = 0;
+            currentAbsorb = 0;
+
+            // Frost Warding (mana regen)
+            aura->GetTarget()->CastCustomSpell(nullptr, 57776, &amount, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr, aura);
+        }
+    }
+};
+
+// 56369 - Glyph of Fire Blast
+struct GlyphOfFireBlast : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_CRIT_CHANCE, apply);
+    }
+
+    void OnCritChanceCalculate(Aura* aura, Unit const* target, float& chance, SpellEntry const* spellInfo) const override
+    {
+        if (target->IsStunned()) chance += aura->GetModifier()->m_amount;
+    }
+};
+
+// 29447 - Torment the Weak
+struct TormentTheWeak : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (aura->GetEffIndex() == EFFECT_INDEX_0)
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_DAMAGE_DONE, apply);
+    }
+
+    void OnDamageCalculate(Aura* aura, Unit* /*attacker*/, Unit* victim, int32& /*advertisedBenefit*/, float& totalMod) const override
+    {
+        if (victim->HasAuraType(SPELL_AURA_MOD_DECREASE_SPEED) || victim->HasAuraType(SPELL_AURA_HASTE_ALL))
+            totalMod *= (aura->GetModifier()->m_amount + 100.0f) / 100.0f;
+    }
+};
+
+// 116 - Frostbolt
+struct FrostboltMage : public SpellScript
+{
+    void OnInit(Spell* spell) const override
+    {
+        if (spell->GetCaster()->HasAura(56370)) // Glyph of Frostbolt
+            spell->SetEffectSkipMask((1 << EFFECT_INDEX_0));
+    }
+};
+
+// 133 - Fireball
+struct FireballMage : public SpellScript
+{
+    void OnInit(Spell* spell) const override
+    {
+        if (spell->GetCaster()->HasAura(56368)) // Glyph of Fireball
+            spell->SetEffectSkipMask((1 << EFFECT_INDEX_1));
+    }
+};
+
+// 11113 - Blast Wave
+struct BlastWaveMage : public SpellScript
+{
+    void OnInit(Spell* spell) const override
+    {
+        if (spell->GetCaster()->HasAura(62126)) // Glyph of Blast Wave
+            spell->SetEffectSkipMask((1 << EFFECT_INDEX_2));
+    }
+};
+
 void LoadMageScripts()
 {
     RegisterSpellScript<ArcaneConcentration>("spell_arcane_concentration");
+    RegisterSpellScript<ShatterMage>("spell_shatter_mage");
+    RegisterSpellScript<Blizzard>("spell_blizzard");
+    RegisterSpellScript<MoltenFury>("spell_molten_fury");
+    RegisterSpellScript<IceLance>("spell_ice_lance");
     RegisterSpellScript<MageIgnite>("spell_mage_ignite");
     RegisterSpellScript<FingersOfFrostProc>("spell_fingers_of_frost_proc");
     RegisterSpellScript<FingersOfFrostIgnore>("spell_fingers_of_frost_ignore");
     RegisterSpellScript<FingersOfFrostDummy>("spell_fingers_of_frost_dummy");
     RegisterSpellScript<DeepFreezeImmunityState>("spell_deep_freeze_immunity_state");
     RegisterSpellScript<Polymorph>("spell_polymorph");
+    RegisterSpellScript<FrostWarding>("spell_frost_warding");
+    RegisterSpellScript<GlyphOfFireBlast>("spell_glyph_of_fire_blast");
+    RegisterSpellScript<TormentTheWeak>("spell_torment_the_weak");
+    RegisterSpellScript<FrostboltMage>("spell_frostbolt_mage");
+    RegisterSpellScript<FireballMage>("spell_fireball_mage");
+    RegisterSpellScript<BlastWaveMage>("spell_blast_wave_mage");
 }

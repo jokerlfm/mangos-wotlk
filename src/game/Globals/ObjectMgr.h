@@ -39,11 +39,20 @@
 
 #include <map>
 #include <climits>
+#include <memory>
+#include <tuple>
 
 class Group;
 class ArenaTeam;
 class Item;
 class SQLStorage;
+class UnitConditionMgr;
+class CombatConditionMgr;
+class WorldStateExpressionMgr;
+
+struct UnitConditionEntry;
+struct CombatConditionEntry;
+struct WorldStateExpressionEntry;
 
 struct GameTele
 {
@@ -377,7 +386,7 @@ struct DungeonEncounter
     uint32 lastEncounterDungeon;
 };
 
-typedef std::multimap<uint32, DungeonEncounter const*> DungeonEncounterMap;
+typedef std::multimap<uint32, DungeonEncounter> DungeonEncounterMap;
 typedef std::pair<DungeonEncounterMap::const_iterator, DungeonEncounterMap::const_iterator> DungeonEncounterMapBounds;
 
 struct TaxiShortcutData
@@ -722,7 +731,6 @@ class ObjectMgr
         void LoadEquipmentTemplates();
         void LoadGameObjectLocales();
         void LoadGameObjects();
-        void LoadGameObjectAddon();
         void LoadGameObjectSpawnEntry();
         void LoadGameObjectTemplateAddons();
         void LoadItemPrototypes();
@@ -775,7 +783,7 @@ class ObjectMgr
         void LoadSpellTemplate();
         void CheckSpellCones();
 
-        void LoadCreatureTemplateSpells();
+        void LoadCreatureTemplateSpells(std::shared_ptr<CreatureSpellListContainer> container);
         void LoadCreatureCooldowns();
         void LoadCreatureImmunities();
         std::shared_ptr<CreatureSpellListContainer> LoadCreatureSpellLists();
@@ -799,6 +807,11 @@ class ObjectMgr
 
         void LoadBroadcastText();
         void LoadBroadcastTextLocales();
+
+        std::tuple<std::shared_ptr<std::map<int32, UnitConditionEntry>>, std::shared_ptr<std::map<int32, WorldStateExpressionEntry>>, std::shared_ptr<std::map<int32, CombatConditionEntry>>> LoadConditionsAndExpressions();
+        std::shared_ptr<std::map<int32, UnitConditionEntry>> GetUnitConditions();
+        std::shared_ptr<std::map<int32, WorldStateExpressionEntry>> GetWorldStateExpressions();
+        std::shared_ptr<std::map<int32, CombatConditionEntry>> GetCombatConditions();
 
         /// @param _map Map* of the map for which to load active entities. If nullptr active entities on continents are loaded
         void LoadActiveEntities(Map* _map);
@@ -1065,6 +1078,9 @@ class ObjectMgr
 
         // Check if a player meets condition conditionId
         bool IsConditionSatisfied(uint32 conditionId, WorldObject const* target, Map const* map, WorldObject const* source, ConditionSource conditionSourceType) const;
+        bool IsWorldStateExpressionSatisfied(int32 expressionId, Map const* map);
+        bool IsUnitConditionSatisfied(int32 conditionId, Unit const* source, Unit const* target);
+        bool IsCombatConditionSatisfied(int32 expressionId, Unit const* source, float range);
 
         GameTele const* GetGameTele(uint32 id) const
         {
@@ -1125,7 +1141,7 @@ class ObjectMgr
 
         void AddVendorItem(uint32 entry, uint32 item, uint32 maxcount, uint32 incrtime, uint32 extendedcost);
         bool RemoveVendorItem(uint32 entry, uint32 item);
-        bool IsVendorItemValid(bool isTemplate, char const* tableName, uint32 vendor_entry, uint32 item_id, uint32 maxcount, uint32 incrtime, uint32 ExtendedCost, uint16 conditionId, Player* pl = nullptr, std::set<uint32>* skip_vendors = nullptr) const;
+        bool IsVendorItemValid(bool isTemplate, char const* tableName, uint32 vendor_entry, uint32 item_id, uint32 maxcount, uint32 incrtime, uint32 ExtendedCost, uint16 conditionId, Player* pl = nullptr) const;
 
         SpellClickInfoMapBounds GetSpellClickInfoMapBounds(uint32 creature_id) const
         {
@@ -1221,7 +1237,7 @@ class ObjectMgr
             return { itrSpell->second.first, itrSpell->second.second };
         }
 
-        bool GetCreatureCooldown(uint32 entry, uint32 spellId, uint32 cooldown) const
+        bool GetCreatureCooldown(uint32 entry, uint32 spellId, uint32& cooldown) const
         {
             auto itrEntry = m_creatureCooldownMap.find(entry);
             if (itrEntry == m_creatureCooldownMap.end())
@@ -1254,8 +1270,7 @@ class ObjectMgr
 
         CreatureSpellList* GetCreatureSpellList(uint32 Id) const; // only for starttime checks - else use Map
         std::shared_ptr<CreatureSpellListContainer> GetCreatureSpellListContainer() { return m_spellListContainer; }
-
-        std::shared_ptr<SpawnGroupEntryContainer> GetSpawnGroupContainer() { return m_spawnGroupEntries; }
+        std::shared_ptr<SpawnGroupEntryContainer> GetSpawnGroupContainer() { return m_spawnGroupContainer; }
 
         bool HasWorldStateName(int32 Id) const;
         WorldStateName* GetWorldStateName(int32 Id);
@@ -1430,9 +1445,13 @@ class ObjectMgr
 
         std::shared_ptr<CreatureSpellListContainer> m_spellListContainer;
 
-        std::shared_ptr<SpawnGroupEntryContainer> m_spawnGroupEntries;
+        std::shared_ptr<SpawnGroupEntryContainer> m_spawnGroupContainer;
 
         std::map<int32, WorldStateName> m_worldStateNames;
+
+        std::unique_ptr<UnitConditionMgr> m_unitConditionMgr;
+        std::unique_ptr<WorldStateExpressionMgr> m_worldStateExpressionMgr;
+        std::unique_ptr<CombatConditionMgr> m_combatConditionMgr;
 
         std::unordered_map<uint32, AccessRequirement> m_accessRequirements;
 

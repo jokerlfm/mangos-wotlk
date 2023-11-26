@@ -56,8 +56,9 @@ enum
     PHASE_TRANSITION            = 3,
 
     // These points are a placeholder for the air phase movement. The dragon should do some circles around the area before landing again
-    POINT_ID_AIR                = 1,
-    POINT_ID_GROUND             = 2,
+    POINT_ID_AIR_MID            = 1,
+    POINT_ID_AIR_PHASE          = 2,
+    POINT_ID_GROUND             = 3,
 
     POINT_INTRO_END             = 11,
     POINT_LANDING_END           = 6,
@@ -115,7 +116,7 @@ struct boss_nightbaneAI : public CombatAI
         m_bCombatStarted            = false;
 
         SetCombatMovement(true);
-        m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+        m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
         m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
         m_creature->RemoveByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_MISC_FLAGS, UNIT_BYTE1_FLAG_FLY_ANIM);
         m_creature->SetByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_MISC_FLAGS, UNIT_BYTE1_FLAG_ALWAYS_STAND);
@@ -126,6 +127,7 @@ struct boss_nightbaneAI : public CombatAI
         m_creature->SetSupportThreatOnly(false);
         SetCombatScriptStatus(false);
         SetMeleeEnabled(true);
+        SetAIImmobilizedState(false);
 
         m_skeletons.clear();
     }
@@ -230,9 +232,13 @@ struct boss_nightbaneAI : public CombatAI
         {
             switch (pointId)
             {
-                case POINT_ID_AIR:
+                case POINT_ID_AIR_MID:
+                    m_creature->GetMotionMaster()->MovePoint(POINT_ID_AIR_PHASE, -11160.13f, -1870.683f, 97.73876f, FORCED_MOVEMENT_WALK);
+                    break;
+                case POINT_ID_AIR_PHASE:
                     m_phase = PHASE_AIR;
                     SetCombatScriptStatus(false);
+                    SetAIImmobilizedState(true);
                     HandlePhaseTransition();
                     break;
                 case POINT_ID_GROUND:
@@ -286,7 +292,7 @@ struct boss_nightbaneAI : public CombatAI
         if (chosenTrigger)
         {
             chosenTrigger->GetPosition(fX, fY, fZ);
-            m_creature->GetMotionMaster()->MovePointTOL(ground ? POINT_ID_GROUND : POINT_ID_AIR, fX, fY, fZ, !ground, FORCED_MOVEMENT_WALK);
+            m_creature->GetMotionMaster()->MovePointTOL(ground ? POINT_ID_GROUND : POINT_ID_AIR_MID, fX, fY, fZ, !ground, FORCED_MOVEMENT_WALK);
         }
     }
 
@@ -331,6 +337,7 @@ struct boss_nightbaneAI : public CombatAI
             case NIGHTBANE_PHASE_RESET:
             {
                 DoScriptText(urand(0, 1) ? SAY_LAND_PHASE_1 : SAY_LAND_PHASE_2, m_creature);
+                SetAIImmobilizedState(false);
                 m_creature->GetMotionMaster()->MovePath(1, PATH_FROM_ENTRY, FORCED_MOVEMENT_WALK);
                 m_phase = PHASE_TRANSITION;
                 SetCombatScriptStatus(true);
@@ -450,7 +457,7 @@ bool ProcessEventId_event_spell_summon_nightbane(uint32 /*eventId*/, Object* sou
                 instance->SetData(TYPE_NIGHTBANE, IN_PROGRESS);
 
                 // Sort of a hack, it is unclear how this really work but the values appear to be valid (see Onyxia, too)
-                nightbane->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+                nightbane->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
                 nightbane->SetStandState(UNIT_STAND_STATE_STAND);
                 nightbane->SetByteValue(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_MISC_FLAGS, UNIT_BYTE1_FLAG_FLY_ANIM);
                 nightbane->RemoveByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_MISC_FLAGS, UNIT_BYTE1_FLAG_ALWAYS_STAND);

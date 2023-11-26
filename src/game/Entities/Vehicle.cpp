@@ -40,10 +40,43 @@
 #include "Entities/Creature.h"
 #include "AI/BaseAI/CreatureAI.h"
 #include "Globals/ObjectMgr.h"
+#include "Models/M2Stores.h"
+#include "Server/DBCStores.h"
 #include "Server/SQLStorages.h"
 #include "Movement/MoveSplineInit.h"
 #include "Maps/MapManager.h"
 #include "Entities/Transports.h"
+
+constexpr uint8 attachmentLookup(const int32 attachmentID)
+{
+    switch (attachmentID)
+    {
+        case 0: return 20;
+        case 1: return 34;
+        case 2: return 19;
+        case 3: return 21;
+        case 4: return 22;
+        case 5: return 17;
+        case 6: return 23;
+        case 7: return 24;
+        case 8: return 25;
+        case 9: return 15;
+        case 10: return 16;
+        case 11: return 37;
+        case 12: return 38;
+        case 13: return 39;
+        case 14: return 40;
+        case 15: return 41;
+        case 16: return 42;
+        case 17: return 43;
+        case 18: return 44;
+        case 19: return 45;
+        case 20: return 46;
+        case 21: return 0;
+        default: return -1;
+    }
+    return -1; // unreachable
+}
 
 void ObjectMgr::LoadVehicleAccessory()
 {
@@ -263,14 +296,30 @@ void VehicleInfo::Board(Unit* passenger, uint8 seat)
 
     DEBUG_LOG("VehicleInfo::Board: Board passenger: %s to seat %u", passenger->GetGuidStr().c_str(), seat);
 
-    // Calculate passengers local position
-    float lx, ly, lz, lo;
-    CalculateBoardingPositionOf(passenger->GetPositionX(), passenger->GetPositionY(), passenger->GetPositionZ(), passenger->GetOrientation(), lx, ly, lz, lo);
-
     if (GenericTransport* transport = passenger->GetTransport())
         transport->RemovePassenger(passenger);
 
+    // Calculate passengers local position
+    float lx = 0.f, ly = 0.f, lz = 0.f, lo = 0.f;
+    auto* creatureDisplayInfo = sCreatureDisplayInfoStore.LookupEntry(static_cast<Creature*>(m_owner)->GetNativeDisplayId());
+    float scale = creatureDisplayInfo->scale;
+    scale *= sCreatureModelDataStore.LookupEntry(creatureDisplayInfo->ModelId)->Scale;
+    auto attachmentItr = sModelAttachmentStore.find(creatureDisplayInfo->ModelId);
+    if (attachmentItr != sModelAttachmentStore.end())
+        for (auto& attachment : attachmentItr->second)
+        {
+            if (attachment.id == attachmentLookup(seatEntry->m_attachmentID))
+            {
+                lx = (attachment.position.x + seatEntry->m_attachmentOffsetX) * scale;
+                ly = (attachment.position.y + seatEntry->m_attachmentOffsetY) * scale;
+                lz = (attachment.position.z + seatEntry->m_attachmentOffsetZ) * scale;
+                break;
+            }
+        }
+
     BoardPassenger(passenger, lx, ly, lz, lo, seat);        // Use TransportBase to store the passenger
+    if (auto* rootVehicle = static_cast<Unit*>(m_owner)->FindRootVehicle())
+        passenger->SetRootVehicle(rootVehicle->GetObjectGuid());
 
     // Set data for createobject packets
     passenger->m_movementInfo.AddMovementFlag(MOVEFLAG_ONTRANSPORT);
@@ -279,7 +328,7 @@ void VehicleInfo::Board(Unit* passenger, uint8 seat)
     if (passenger->GetTypeId() == TYPEID_PLAYER)
     {
         Player* pPlayer = (Player*)passenger;
-        pPlayer->RemovePet(PET_SAVE_AS_CURRENT);
+        pPlayer->UnsummonPetTemporaryIfAny();
 
         WorldPacket data(SMSG_ON_CANCEL_EXPECTED_RIDE_VEHICLE_AURA);
         pPlayer->GetSession()->SendPacket(data);
@@ -297,8 +346,8 @@ void VehicleInfo::Board(Unit* passenger, uint8 seat)
     }
 
     Movement::MoveSplineInit init(*passenger);
-    init.MoveTo(0.0f, 0.0f, 0.0f);                          // ToDo: Set correct local coords
-    init.SetFacing(0.0f);                                   // local orientation ? ToDo: Set proper orientation!
+    init.MoveTo(lx, ly, lz);                          // ToDo: Set correct local coords
+    init.SetFacing(lo);                                   // local orientation ? ToDo: Set proper orientation!
     init.SetBoardVehicle();
     init.Launch();
 
@@ -355,13 +404,31 @@ void VehicleInfo::SwitchSeat(Unit* passenger, uint8 seat)
     // Remove passenger modifications of the old seat
     RemoveSeatMods(passenger, seatEntry->m_flags);
 
+    float lx = 0.f, ly = 0.f, lz = 0.f, lo = 0.f;
+    auto* creatureDisplayInfo = sCreatureDisplayInfoStore.LookupEntry(static_cast<Creature*>(m_owner)->GetNativeDisplayId());
+    float scale = creatureDisplayInfo->scale;
+    scale *= sCreatureModelDataStore.LookupEntry(creatureDisplayInfo->ModelId)->Scale;
+    auto attachmentItr = sModelAttachmentStore.find(creatureDisplayInfo->ModelId);
+    if (attachmentItr != sModelAttachmentStore.end())
+        for (auto& attachment : attachmentItr->second)
+        {
+            if (attachment.id == attachmentLookup(seatEntry->m_attachmentID))
+            {
+                lx = (attachment.position.x + seatEntry->m_attachmentOffsetX) * scale;
+                ly = (attachment.position.y + seatEntry->m_attachmentOffsetY) * scale;
+                lz = (attachment.position.z + seatEntry->m_attachmentOffsetZ) * scale;
+                break;
+            }
+        }
+
     // Set to new seat
     itr->second->SetTransportSeat(seat);
+    itr->second->SetLocalPosition(lx, ly, lz, lo);
 
     Movement::MoveSplineInit init(*passenger);
-    init.MoveTo(0.0f, 0.0f, 0.0f);                          // ToDo: Set correct local coords
+    init.MoveTo(lx, ly, lz);                          // ToDo: Set correct local coords
     //if (oldorientation != neworientation) (?)
-    //init.SetFacing(0.0f);                                 // local orientation ? ToDo: Set proper orientation!
+    init.SetFacing(lo);                                 // local orientation ? ToDo: Set proper orientation!
     // It seems that Seat switching is sent without SplineFlag BoardVehicle
     init.Launch();
 
@@ -394,6 +461,7 @@ void VehicleInfo::UnBoard(Unit* passenger, bool changeVehicle)
     MANGOS_ASSERT(seatEntry);
 
     UnBoardPassenger(passenger);                            // Use TransportBase to remove the passenger from storage list
+    passenger->SetRootVehicle(ObjectGuid());
 
     // Remove passenger modifications
     RemoveSeatMods(passenger, seatEntry->m_flags);
@@ -423,7 +491,7 @@ void VehicleInfo::UnBoard(Unit* passenger, bool changeVehicle)
 
         Movement::MoveSplineInit init(*passenger);
 
-        Position exitPos = m_owner->GetPosition();
+        Position exitPos = m_owner->GetPosition(m_owner->GetTransport());
         exitPos.o = passenger->GetOrientation();
 
         if (VehicleSeatParameters const* params = sObjectMgr.GetVehicleSeatParameters(seatEntry->m_ID))
@@ -431,6 +499,7 @@ void VehicleInfo::UnBoard(Unit* passenger, bool changeVehicle)
             if (params->exitParamValue == SEAT_EXIT_PARAMS_OFFSET)
             {
                 exitPos.RelocateOffset(Position(params->exitParamX, params->exitParamY, params->exitParamZ, params->exitParamO));
+                m_owner->UpdateAllowedPositionZ(exitPos.x, exitPos.y, exitPos.z);
             }
             else if (params->exitParamValue == SEAT_EXIT_PARAMS_ABSOLUTE_POS)
             {
@@ -441,7 +510,7 @@ void VehicleInfo::UnBoard(Unit* passenger, bool changeVehicle)
             }
         }
 
-        init.MoveTo(exitPos.x, exitPos.y, exitPos.z);
+        init.MoveTo(exitPos.x, exitPos.y, exitPos.z, false, true);
         init.SetFacing(exitPos.o);
         init.SetExitVehicle();
         init.Launch();
@@ -649,7 +718,7 @@ void VehicleInfo::ApplySeatMods(Unit* passenger, uint32 seatFlags)
     Unit* pVehicle = (Unit*)m_owner;                        // Vehicles are alawys Unit
 
     if (seatFlags & SEAT_FLAG_NOT_SELECTABLE)
-        passenger->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+        passenger->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
 
     // ToDo: change passenger model id for SEAT_FLAG_HIDE_PASSENGER?
 
@@ -744,7 +813,7 @@ void VehicleInfo::RemoveSeatMods(Unit* passenger, uint32 seatFlags)
     Unit* pVehicle = (Unit*)m_owner;
 
     if (seatFlags & SEAT_FLAG_NOT_SELECTABLE)
-        passenger->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+        passenger->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
 
     // ToDo: reset passenger model id for SEAT_FLAG_HIDE_PASSENGER?
 

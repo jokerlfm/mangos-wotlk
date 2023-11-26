@@ -24,7 +24,7 @@
 #include "Spells/SpellMgr.h"
 #include "Maps/Map.h"
 
-HostileRefManager::HostileRefManager(Unit* owner) : iOwner(owner), m_redirectionMod(0.0f)
+HostileRefManager::HostileRefManager(Unit* owner) : iOwner(owner)
 {
 }
 
@@ -41,6 +41,9 @@ HostileRefManager::~HostileRefManager()
 void HostileRefManager::threatAssist(Unit* victim, float threat, SpellEntry const* threatSpell, bool singleTarget, bool ignoreTimer)
 {
     if (threatSpell->HasAttribute(SPELL_ATTR_EX2_NO_INITIAL_THREAT) || threatSpell->HasAttribute(SPELL_ATTR_EX_NO_THREAT) || !getOwner()->CanEnterCombat() || !victim->CanEnterCombat())
+        return;
+
+    if (threatSpell->HasAttribute(SPELL_ATTR_EX4_NO_HELPFUL_THREAT))
         return;
 
     HostileReference* ref = getFirst();
@@ -187,6 +190,25 @@ void HostileRefManager::deleteReference(Unit* victim)
     }
 }
 
+void HostileRefManager::SetThreatRedirection(ObjectGuid guid, uint32 pct, uint32 spellId)
+{
+    m_redirectionData.emplace(spellId, RedirectionData(pct, guid));
+}
+
+void HostileRefManager::ResetThreatRedirection(uint32 spellId)
+{
+    m_redirectionData.erase(spellId);
+}
+
+Unit* HostileRefManager::GetThreatRedirectionTarget(uint32 spellId) const
+{
+    auto itr = m_redirectionData.find(spellId);
+    if (itr == m_redirectionData.end())
+        return nullptr;
+
+    return iOwner->GetMap()->GetUnit(itr->second.target);
+}
+
 //=================================================
 // set state for one reference, defined by Unit
 
@@ -203,11 +225,6 @@ void HostileRefManager::setOnlineOfflineState(Unit* victim, bool isOnline)
         }
         ref = nextRef;
     }
-}
-
-Unit* HostileRefManager::GetThreatRedirectionTarget() const
-{
-    return m_redirectionTargetGuid ? iOwner->GetMap()->GetUnit(m_redirectionTargetGuid) : nullptr;
 }
 
 HostileReference* HostileRefManager::getFirst()

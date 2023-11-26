@@ -18,7 +18,7 @@
 
 #include "Entities/Object.h"
 #include "Globals/SharedDefines.h"
-#include "WorldPacket.h"
+#include "Server/WorldPacket.h"
 #include "Server/Opcodes.h"
 #include "Log.h"
 #include "World/World.h"
@@ -32,7 +32,7 @@
 #include "Entities/UpdateData.h"
 #include "Entities/Transports.h"
 #include "UpdateMask.h"
-#include "Util.h"
+#include "Util/Util.h"
 #include "Grids/CellImpl.h"
 #include "Grids/GridNotifiers.h"
 #include "Grids/GridNotifiersImpl.h"
@@ -46,8 +46,9 @@
 #include "Loot/LootMgr.h"
 #include "Spells/SpellMgr.h"
 #include "MotionGenerators/PathFinder.h"
+#include "Movement/MoveSpline.h"
 
-Object::Object(): m_updateFlag(0), m_itsNewObject(false)
+Object::Object(): m_updateFlag(0), m_itsNewObject(false), m_dbGuid(0)
 {
     m_objectTypeId      = TYPEID_OBJECT;
     m_objectType        = TYPEMASK_OBJECT;
@@ -90,12 +91,14 @@ void Object::_InitValues()
     m_objectUpdated = false;
 }
 
-void Object::_Create(uint32 guidlow, uint32 entry, HighGuid guidhigh)
+void Object::_Create(uint32 dbGuid, uint32 guidlow, uint32 entry, HighGuid guidhigh)
 {
     if (!m_uint32Values)
         _InitValues();
 
     ObjectGuid guid = ObjectGuid(guidhigh, entry, guidlow);
+    m_dbGuid = dbGuid;
+
     SetGuidValue(OBJECT_FIELD_GUID, guid);
     SetUInt32Value(OBJECT_FIELD_TYPE, m_objectType);
     m_PackGUID.Set(guid);
@@ -296,7 +299,15 @@ void Object::BuildMovementUpdate(ByteBuffer* data, uint16 updateFlags) const
             const_cast<Unit*>(unit)->m_movementInfo.RemoveMovementFlag(MOVEFLAG_ONTRANSPORT);
 
         // Write movement info
-        *data << unit->m_movementInfo;
+        // TODO: Move boarding and unboarding and root enable/disable to movement generator
+        if ((unit->m_movementInfo.GetMovementFlags() & MOVEFLAG_SPLINE_ENABLED) && unit->movespline->IsBoarding())
+        {
+            MovementInfo info = unit->m_movementInfo;
+            info.RemoveMovementFlag(MOVEFLAG_ROOT);
+            *data << info;
+        }
+        else
+            *data << unit->m_movementInfo;
 
         // Unit speeds
         *data << float(unit->GetSpeed(MOVE_WALK));
@@ -622,7 +633,7 @@ void Object::BuildValuesUpdate(uint8 updatetype, ByteBuffer* data, UpdateMask* u
                     if (target->IsGameMaster())
                     {
                         // Gamemasters should be always able to select units - remove not selectable flag:
-                        value &= ~UNIT_FLAG_NOT_SELECTABLE;
+                        value &= ~UNIT_FLAG_UNINTERACTIBLE;
                     }
 
                     // Client bug workaround: Fix for missing chat channels when resuming taxi flight on login
@@ -1278,11 +1289,51 @@ void Object::ForceValuesUpdateAtIndex(uint16 index)
     }
 }
 
+void WorldObject::SetStringId(uint32 stringId, bool apply)
+{
+    if (apply)
+        m_stringIds.insert(stringId);
+    else
+        m_stringIds.erase(stringId);
+
+    if (IsInWorld())
+    {
+        if (apply)
+            GetMap()->AddStringIdObject(stringId, this);
+        else
+            GetMap()->RemoveStringIdObject(stringId, this);
+    }
+}
+
+void WorldObject::AddStringId(std::string& stringId)
+{
+    uint32 stringIdId = GetMap()->GetMapDataContainer().GetStringId(stringId);
+    if (stringIdId)
+        SetStringId(stringIdId, true);
+}
+
+void WorldObject::RemoveStringId(std::string& stringId)
+{
+    uint32 stringIdId = GetMap()->GetMapDataContainer().GetStringId(stringId);
+    if (stringIdId)
+        SetStringId(stringIdId, false);
+}
+
+bool WorldObject::HasStringId(std::string& stringId) const
+{
+    return HasStringId(GetMap()->GetMapDataContainer().GetStringId(stringId));
+}
+
+bool WorldObject::HasStringId(uint32 stringId) const
+{
+    return m_stringIds.find(stringId) != m_stringIds.end();
+}
+
 WorldObject::WorldObject() :
-    m_transportInfo(nullptr), m_isOnEventNotified(false),
-    m_currMap(nullptr), m_mapId(0),
-    m_InstanceId(0), m_phaseMask(PHASEMASK_NORMAL), m_isActiveObject(false), m_visibilityData(this),
-    m_debugFlags(0), m_transport(nullptr), m_destLocCounter(0), m_castCounter(0)
+    m_transport(nullptr), m_transportInfo(nullptr), m_isOnEventNotified(false),
+    m_visibilityData(this), m_currMap(nullptr),
+    m_mapId(0), m_InstanceId(0), m_phaseMask(PHASEMASK_NORMAL),
+    m_isActiveObject(false), m_debugFlags(0), m_destLocCounter(0), m_castCounter(0)
 {
 }
 
@@ -1304,7 +1355,7 @@ void WorldObject::Update(const uint32 diff)
 
 void WorldObject::_Create(uint32 guidlow, HighGuid guidhigh, uint32 phaseMask)
 {
-    Object::_Create(guidlow, 0, guidhigh);
+    Object::_Create(guidlow, guidlow, 0, guidhigh);
     m_phaseMask = phaseMask;
 }
 
@@ -1345,6 +1396,11 @@ uint32 WorldObject::GetZoneId() const
 uint32 WorldObject::GetAreaId() const
 {
     return GetTerrain()->GetAreaId(m_position.x, m_position.y, m_position.z);
+}
+
+AreaNameInfo WorldObject::GetAreaName(LocaleConstant locale) const
+{
+    return GetTerrain()->GetAreaName(m_position.x, m_position.y, m_position.z, locale);
 }
 
 void WorldObject::GetZoneAndAreaId(uint32& zoneid, uint32& areaid) const
@@ -1415,10 +1471,11 @@ float WorldObject::GetDistance(float x, float y, float z, DistanceCalculation di
     }
 }
 
-float WorldObject::GetDistance2d(float x, float y, DistanceCalculation distcalc) const
+float WorldObject::GetDistance2d(float x, float y, DistanceCalculation distcalc, bool transport) const
 {
-    float dx = GetPositionX() - x;
-    float dy = GetPositionY() - y;
+    Position const& pos = GetPosition(transport ? GetTransport() : nullptr);
+    float dx = pos.x - x;
+    float dy = pos.y - y;
     float dist = dx * dx + dy * dy;
 
     switch (distcalc)
@@ -1781,12 +1838,15 @@ void WorldObject::MovePositionToFirstCollision(Position& pos, float dist, float 
         }
         UpdateAllowedPositionZ(dest.x, dest.y, dest.z);
         path.calculate(src, dest, false, true);
-        if (path.getPathType())
+        if ((path.getPathType() & PATHFIND_NOPATH) == 0)
         {
             G3D::Vector3 result = path.getPath().back();
             destX = result.x;
             destY = result.y;
             destZ = result.z;
+            // no collision detected - reset height
+            if (dest.z == result.z)
+                AdjustZForCollision(destX, destY, destZ, halfHeight);
             if (transport) // transport produces offset, but we need global pos
                 transport->CalculatePassengerPosition(destX, destY, destZ);
         }
@@ -2075,16 +2135,28 @@ void WorldObject::AddToWorld()
     if (m_isOnEventNotified)
         m_currMap->AddToOnEventNotified(this);
 
+    if (!m_stringIds.empty())
+        for (uint32 stringId : m_stringIds)
+            m_currMap->AddStringIdObject(stringId, this);
+
     Object::AddToWorld();
 }
 
 void WorldObject::RemoveFromWorld()
 {
-    if (m_isOnEventNotified)
-        m_currMap->RemoveFromOnEventNotified(this);
     if (!IsPlayer()) // players have their own logic due to cross map transports
         if (GenericTransport* transport = GetTransport())
             transport->RemovePassenger(this);
+
+    if (IsInWorld())
+    {
+        if (m_isOnEventNotified)
+            m_currMap->RemoveFromOnEventNotified(this);
+
+        if (!m_stringIds.empty())
+            for (uint32 stringId : m_stringIds)
+                m_currMap->RemoveStringIdObject(stringId, this);
+    }
 
     Object::RemoveFromWorld();
 }
@@ -2145,8 +2217,8 @@ Creature* WorldObject::SummonCreature(TempSpawnSettings settings, Map* map, uint
         float dist = settings.forcedOnTop ? 0.0f : CONTACT_DISTANCE;
         pos = CreatureCreatePos(settings.spawner, settings.spawner->GetOrientation(), dist, settings.ori);
     }
-
-    if (!creature->Create(map->GenerateLocalLowGuid(cinfo->GetHighGuid()), pos, cinfo))
+    uint32 lowGuid = map->GenerateLocalLowGuid(cinfo->GetHighGuid());
+    if (!creature->Create(lowGuid, lowGuid, pos, cinfo))
     {
         delete creature;
         return nullptr;
@@ -2202,8 +2274,8 @@ Creature* WorldObject::SummonCreature(TempSpawnSettings settings, Map* map, uint
                 creature->SetPower(POWER_MANA, templateData->curMana);
             if (templateData->modelId > 0)
                 creature->SetDisplayId(templateData->modelId);
-            if (templateData->equipmentId)
-                creature->LoadEquipment(templateData->equipmentId == -1 ? 0 : templateData->equipmentId, true);
+            if (templateData->equipmentId != -1)
+                creature->LoadEquipment(templateData->equipmentId, true);
             if (templateData->curHealth > 1)
                 creature->SetHealth(templateData->curHealth);
             if (templateData->curMana > 0)
@@ -2213,6 +2285,8 @@ Creature* WorldObject::SummonCreature(TempSpawnSettings settings, Map* map, uint
             if (templateData->IsHovering())
                 creature->SetHover(true);
             relayId = templateData->relayId;
+            if (templateData->stringId)
+                creature->SetStringId(templateData->stringId, true);
         }
     }
 
@@ -2232,7 +2306,7 @@ Creature* WorldObject::SummonCreature(TempSpawnSettings settings, Map* map, uint
     creature->Summon(settings.spawnType, settings.despawnTime);                  // Also initializes the AI and MMGen
 
     if (relayId)
-        map->ScriptsStart(sRelayScripts, relayId, creature, settings.dbscriptTarget);
+        map->ScriptsStart(SCRIPT_TYPE_RELAY, relayId, creature, settings.dbscriptTarget);
 
     if (settings.corpseDespawnTime)
         creature->SetCorpseDelay(settings.corpseDespawnTime);
@@ -2265,7 +2339,7 @@ GameObject* WorldObject::SpawnGameObject(uint32 dbGuid, Map* map, uint32 forcedE
         return nullptr;
 
     GameObject* gameobject = GameObject::CreateGameObject(forcedEntry ? forcedEntry : data->id);
-    if (!gameobject->LoadFromDB(dbGuid, map, map->GenerateLocalLowGuid(HIGHGUID_GAMEOBJECT), forcedEntry, transport))
+    if (!gameobject->LoadFromDB(dbGuid, map, 0, forcedEntry, transport))
     {
         delete gameobject;
         return nullptr;
@@ -2284,19 +2358,12 @@ Creature* WorldObject::SpawnCreature(uint32 dbGuid, Map* map, uint32 forcedEntry
 
     uint32 entry = forcedEntry ? forcedEntry : data->id;
 
-    CreatureInfo const* cinfo = ObjectMgr::GetCreatureTemplate(entry);
-    if (!cinfo)
-    {
-        sLog.outErrorDb("Creature (Entry: %u) not found in table `creature_template`, can't load. ", entry);
-        return nullptr;
-    }
-
-    if ((data->spawnMask && !map->CanSpawn(TYPEID_UNIT, dbGuid)))
+    if (data->spawnMask && !map->CanSpawn(TYPEID_UNIT, dbGuid))
         return nullptr;
 
     Creature* creature = new Creature;
     // DEBUG_LOG("Spawning creature %u",*itr);
-    if (!creature->LoadFromDB(dbGuid, map, map->GenerateLocalLowGuid(cinfo->GetHighGuid()), forcedEntry, transport))
+    if (!creature->LoadFromDB(dbGuid, map, 0, forcedEntry, transport))
     {
         delete creature;
         return nullptr;
@@ -2715,11 +2782,12 @@ TimePoint WorldObject::GetGCD(SpellEntry const* spellEntry) const
     return GetMap()->GetCurrentClockTime();
 }
 
-void WorldObject::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* /*itemProto = nullptr*/, bool /*permanent = false*/, uint32 forcedDuration /*= 0*/)
+void WorldObject::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* /*itemProto = nullptr*/, bool /*permanent = false*/, uint32 forcedDuration /*= 0*/, bool ignoreCat /*= false*/)
 {
     uint32 recTimeDuration = forcedDuration ? forcedDuration : spellEntry.RecoveryTime;
-    if (recTimeDuration || spellEntry.CategoryRecoveryTime)
-        m_cooldownMap.AddCooldown(GetMap()->GetCurrentClockTime(), spellEntry.Id, recTimeDuration, spellEntry.Category, spellEntry.CategoryRecoveryTime);
+    uint32 catTimeDuration = ignoreCat ? 0 : spellEntry.CategoryRecoveryTime;
+    if (recTimeDuration || catTimeDuration)
+        m_cooldownMap.AddCooldown(GetMap()->GetCurrentClockTime(), spellEntry.Id, recTimeDuration, spellEntry.Category, catTimeDuration);
 }
 
 void WorldObject::UpdateCooldowns(TimePoint const& now)
@@ -3132,7 +3200,7 @@ int32 WorldObject::CalculateSpellEffectValue(Unit const* target, SpellEntry cons
         }
     }
 
-    if (unitCaster && spellProto->HasAttribute(SPELL_ATTR_LEVEL_DAMAGE_CALCULATION) && spellProto->spellLevel)
+    if (unitCaster && spellProto->HasAttribute(SPELL_ATTR_SCALES_WITH_CREATURE_LEVEL) && spellProto->spellLevel)
     {
         // TODO: Drastically beter than before, but still needs some additional aura scaling research
         bool damage = false;
@@ -3201,6 +3269,15 @@ float Position::GetDistance(Position const& other) const
 
     float dz = GetPositionZ() - other.GetPositionZ();
     distsq += dz * dz;
+
+    return distsq;
+}
+
+float Position::GetDistance2d(Position const& other) const
+{
+    float dx = GetPositionX() - other.GetPositionX();
+    float dy = GetPositionY() - other.GetPositionY();
+    float distsq = dx * dx + dy * dy;
 
     return distsq;
 }

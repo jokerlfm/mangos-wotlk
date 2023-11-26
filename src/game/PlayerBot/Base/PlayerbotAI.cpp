@@ -19,11 +19,11 @@
 #include <stdarg.h>
 #include "Common.h"
 #include "Log.h"
-#include "WorldPacket.h"
+#include "Server/WorldPacket.h"
 #include "Database/DatabaseEnv.h"
 #include "PlayerbotAI.h"
 #include "PlayerbotMgr.h"
-#include "ProgressBar.h"
+#include "Util/ProgressBar.h"
 
 #include "../../AuctionHouse/AuctionHouseMgr.h"
 #include "../../Chat/Chat.h"
@@ -177,7 +177,7 @@ bool PlayerbotAI::CanReachWithSpellAttack(Unit* target)
             continue;
 
         // ignore non-ranged spells
-        if (!spellInfo->HasAttribute(SPELL_ATTR_RANGED))
+        if (!spellInfo->HasAttribute(SPELL_ATTR_USES_RANGED_SLOT))
             continue;
 
         float maxrange = itr->second;
@@ -2302,67 +2302,72 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
             WorldPacket p(packet); // (8+1+4+1+1+4+4+4+4+4+1)
             ObjectGuid guid;
             uint8 loot_type;
-            uint32 gold;
-            uint8 items;
 
             p >> guid;      // 8 corpse guid
             p >> loot_type; // 1 loot type
-            p >> gold;      // 4 gold
-            p >> items;     // 1 items count
 
-            if (gold > 0)
+            if (loot_type != 0)
             {
-                WorldPacket* const packet = new WorldPacket(CMSG_LOOT_MONEY, 0);
-                m_bot->GetSession()->QueuePacket(std::move(std::unique_ptr<WorldPacket>(packet)));
-            }
+                uint32 gold;
+                uint8 items;
 
-            for (uint8 i = 0; i < items; ++i)
-            {
-                uint32 itemid;
-                uint32 itemcount;
-                uint8 lootslot_type;
-                uint8 itemindex;
+                p >> gold;      // 4 gold
+                p >> items;     // 1 items count
 
-                p >> itemindex;         // 1 counter
-                p >> itemid;            // 4 itemid
-                p >> itemcount;         // 4 item stack count
-                p.read_skip<uint32>();  // 4 item model
-                p.read_skip<uint32>();  // 4 randomSuffix
-                p.read_skip<uint32>();  // 4 randomPropertyId
-                p >> lootslot_type;     // 1 LootSlotType
-
-                ItemPrototype const *pProto = ObjectMgr::GetItemPrototype(itemid);
-                if (!pProto)
-                    continue;
-
-                if (lootslot_type != LOOT_SLOT_NORMAL && lootslot_type != LOOT_SLOT_OWNER)
-                    continue;
-
-                // skinning or collect loot flag = just auto loot everything for getting object
-                // corpse = run checks
-                if (loot_type == LOOT_SKINNING || HasCollectFlag(COLLECT_FLAG_LOOT) ||
-                        (loot_type == LOOT_CORPSE && (IsInQuestItemList(itemid) || IsItemUseful(itemid))))
+                if (gold > 0)
                 {
-                    ItemPosCountVec dest;
-                    if (m_bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, itemid, itemcount) == EQUIP_ERR_INVENTORY_FULL)
+                    WorldPacket* const packet = new WorldPacket(CMSG_LOOT_MONEY, 0);
+                    m_bot->GetSession()->QueuePacket(std::unique_ptr<WorldPacket>(packet));
+                }
+
+                for (uint8 i = 0; i < items; ++i)
+                {
+                    uint32 itemid;
+                    uint32 itemcount;
+                    uint8 lootslot_type;
+                    uint8 itemindex;
+
+                    p >> itemindex;         // 1 counter
+                    p >> itemid;            // 4 itemid
+                    p >> itemcount;         // 4 item stack count
+                    p.read_skip<uint32>();  // 4 item model
+                    p.read_skip<uint32>();  // 4 randomSuffix
+                    p.read_skip<uint32>();  // 4 randomPropertyId
+                    p >> lootslot_type;     // 1 LootSlotType
+
+                    ItemPrototype const *pProto = ObjectMgr::GetItemPrototype(itemid);
+                    if (!pProto)
+                        continue;
+
+                    if (lootslot_type != LOOT_SLOT_NORMAL && lootslot_type != LOOT_SLOT_OWNER)
+                        continue;
+
+                    // skinning or collect loot flag = just auto loot everything for getting object
+                    // corpse = run checks
+                    if (loot_type == LOOT_SKINNING || HasCollectFlag(COLLECT_FLAG_LOOT) ||
+                            (loot_type == LOOT_CORPSE && (IsInQuestItemList(itemid) || IsItemUseful(itemid))))
+                    {
+                        ItemPosCountVec dest;
+                        if (m_bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, itemid, itemcount) == EQUIP_ERR_INVENTORY_FULL)
+                        {
+                            if (m_debugWhisper)
+                                TellMaster("I can't take %; my inventory is full.", pProto->Name1);
+                            m_inventory_full = true;
+                            continue;
+                        }
+
+                        if (m_debugWhisper)
+                            TellMaster("Store loot item %s", pProto->Name1);
+
+                        WorldPacket* const packet = new WorldPacket(CMSG_AUTOSTORE_LOOT_ITEM, 1);
+                        *packet << itemindex;
+                        m_bot->GetSession()->QueuePacket(std::unique_ptr<WorldPacket>(packet));
+                    }
+                    else
                     {
                         if (m_debugWhisper)
-                            TellMaster("I can't take %; my inventory is full.", pProto->Name1);
-                        m_inventory_full = true;
-                        continue;
+                            TellMaster("Skipping loot item %s", pProto->Name1);
                     }
-
-                    if (m_debugWhisper)
-                        TellMaster("Store loot item %s", pProto->Name1);
-
-                    WorldPacket* const packet = new WorldPacket(CMSG_AUTOSTORE_LOOT_ITEM, 1);
-                    *packet << itemindex;
-                    m_bot->GetSession()->QueuePacket(std::move(std::unique_ptr<WorldPacket>(packet)));
-                }
-                else
-                {
-                    if (m_debugWhisper)
-                        TellMaster("Skipping loot item %s", pProto->Name1);
                 }
             }
 
@@ -2373,7 +2378,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
             m_lootCurrent = ObjectGuid();
             WorldPacket* const packet = new WorldPacket(CMSG_LOOT_RELEASE, 8);
             *packet << guid;
-            m_bot->GetSession()->QueuePacket(std::move(std::unique_ptr<WorldPacket>(packet)));
+            m_bot->GetSession()->QueuePacket(std::unique_ptr<WorldPacket>(packet));
 
             return;
         }
@@ -2555,18 +2560,18 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
                 p->appendPackGUID(m_bot->GetObjectGuid());
                 *p << counter;
                 *p << (uint32) time(0); // time - not currently used
-                m_bot->GetSession()->QueuePacket(std::move(std::unique_ptr<WorldPacket>(p)));
+                m_bot->GetSession()->QueuePacket(std::unique_ptr<WorldPacket>(p));
 
                 // send movement info using received movement packet, pops in location
                 WorldPacket* const p2 = new WorldPacket(MSG_MOVE_HEARTBEAT, 64);
                 p2->appendPackGUID(m_bot->GetObjectGuid());
                 *p2 << mi;
-                m_bot->GetSession()->QueuePacket(std::move(std::unique_ptr<WorldPacket>(p2)));
+                m_bot->GetSession()->QueuePacket(std::unique_ptr<WorldPacket>(p2));
 
                 WorldPacket* const p3 = new WorldPacket(MSG_MOVE_FALL_LAND, 64);
                 p3->appendPackGUID(m_bot->GetObjectGuid());
                 *p3 << mi;
-                m_bot->GetSession()->QueuePacket(std::move(std::unique_ptr<WorldPacket>(p3)));
+                m_bot->GetSession()->QueuePacket(std::unique_ptr<WorldPacket>(p3));
 
                 // resume normal state if was loading
                 if (m_botState == BOTSTATE_LOADING)
@@ -2592,10 +2597,10 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
             {
                 // simulate client canceling trade before worldport
                 WorldPacket* const pt1 = new WorldPacket(CMSG_CANCEL_TRADE);
-                m_bot->GetSession()->QueuePacket(std::move(std::unique_ptr<WorldPacket>(pt1)));
+                m_bot->GetSession()->QueuePacket(std::unique_ptr<WorldPacket>(pt1));
 
                 WorldPacket* const p = new WorldPacket(MSG_MOVE_WORLDPORT_ACK);
-                m_bot->GetSession()->QueuePacket(std::move(std::unique_ptr<WorldPacket>(p)));
+                m_bot->GetSession()->QueuePacket(std::unique_ptr<WorldPacket>(p));
                 SetState(BOTSTATE_NORMAL);
             }
             return;
@@ -2736,8 +2741,7 @@ Item* PlayerbotAI::FindMount(uint32 matchingRidingSkill) const
             const SpellEntry* const spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
             if (spellInfo)
             {
-                Spell* spell = new Spell(m_bot, spellInfo, false);
-                if (spell && spell->CheckCast(false) != SPELL_CAST_OK)
+                if (Spell(m_bot, spellInfo, false).CheckCast(false) != SPELL_CAST_OK)
                     continue;
             }
 
@@ -2776,8 +2780,7 @@ Item* PlayerbotAI::FindMount(uint32 matchingRidingSkill) const
                     const SpellEntry* const spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
                     if (spellInfo)
                     {
-                        Spell* spell = new Spell(m_bot, spellInfo, false);
-                        if (spell && spell->CheckCast(false) != SPELL_CAST_OK)
+                        if (Spell(m_bot, spellInfo, false).CheckCast(false) != SPELL_CAST_OK)
                             continue;
                     }
 
@@ -3719,18 +3722,17 @@ void PlayerbotAI::SetQuestNeedItems()
                 continue;
 
             // TODO: find faster way to handle this look up instead of using SQL lookup for each item
-            QueryResult* result;
             // determine if GOs are needed
-            result = WorldDatabase.PQuery("SELECT entry FROM gameobject_template WHERE questitem1='%u' "
+            auto queryResult = WorldDatabase.PQuery("SELECT entry FROM gameobject_template WHERE questitem1='%u' "
                                           "OR questitem2='%u' OR questitem3='%u' OR questitem4='%u' OR questitem5='%u' OR questitem6='%u'",
                                           qInfo->ReqItemId[i], qInfo->ReqItemId[i], qInfo->ReqItemId[i], qInfo->ReqItemId[i],
                                           qInfo->ReqItemId[i], qInfo->ReqItemId[i]);
 
-            if (result)
+            if (queryResult)
             {
                 do
                 {
-                    Field* fields = result->Fetch();
+                    Field* fields = queryResult->Fetch();
                     uint32 entry = fields[0].GetUInt32();
 
                     GameObjectInfo const* gInfo = ObjectMgr::GetGameObjectInfo(entry);
@@ -3745,9 +3747,7 @@ void PlayerbotAI::SetQuestNeedItems()
                         m_collectObjects.unique();
                     }
                 }
-                while (result->NextRow());
-
-                delete result;
+                while (queryResult->NextRow());
             }
         }
     }
@@ -4344,7 +4344,7 @@ bool PlayerbotAI::IsRegenerating()
         if (spell->Category == 59 || spell->Category == 11)
             return true;
         // Specific drinking / eating after patch 2.0.1, especially conjured goods
-        if(spell->HasAttribute(SPELL_ATTR_CASTABLE_WHILE_SITTING))
+        if(spell->HasAttribute(SPELL_ATTR_ALLOW_WHILE_SITTING))
         {
             for (uint32 i = EFFECT_INDEX_0; i < MAX_EFFECT_INDEX; ++i)
             {
@@ -4554,9 +4554,9 @@ Unit* PlayerbotAI::FindAttacker(ATTACKERINFOTYPE ait, Unit* victim)
 */
 void PlayerbotAI::BotDataRestore()
 {
-    QueryResult* result = CharacterDatabase.PQuery("SELECT combat_delay,autoequip FROM playerbot_saved_data WHERE guid = '%u'", m_bot->GetGUIDLow());
+    auto queryResult = CharacterDatabase.PQuery("SELECT combat_delay,autoequip FROM playerbot_saved_data WHERE guid = '%u'", m_bot->GetGUIDLow());
 
-    if (!result)
+    if (!queryResult)
     {
         sLog.outString();
         sLog.outString(">> [BotDataRestore()] Loaded `playerbot_saved_data`, found no match for guid %u.", m_bot->GetGUIDLow());
@@ -4565,10 +4565,9 @@ void PlayerbotAI::BotDataRestore()
     }
     else
     {
-        Field* fields = result->Fetch();
+        Field* fields = queryResult->Fetch();
         m_DelayAttack = fields[0].GetUInt8();
         m_AutoEquipToggle = fields[1].GetBool();
-        delete result;
     }
 }
 
@@ -4579,9 +4578,9 @@ void PlayerbotAI::BotDataRestore()
 */
 void PlayerbotAI::CombatOrderRestore()
 {
-    QueryResult* result = CharacterDatabase.PQuery("SELECT combat_order,primary_target,secondary_target,pname,sname,combat_delay,auto_follow FROM playerbot_saved_data WHERE guid = '%u'", m_bot->GetGUIDLow());
+    auto queryResult = CharacterDatabase.PQuery("SELECT combat_order,primary_target,secondary_target,pname,sname,combat_delay,auto_follow FROM playerbot_saved_data WHERE guid = '%u'", m_bot->GetGUIDLow());
 
-    if (!result)
+    if (!queryResult)
     {
         sLog.outString();
         sLog.outString(">> [CombatOrderRestore()] Loaded `playerbot_saved_data`, found no match for guid %u.", m_bot->GetGUIDLow());
@@ -4589,7 +4588,7 @@ void PlayerbotAI::CombatOrderRestore()
         return;
     }
 
-    Field* fields = result->Fetch();
+    Field* fields = queryResult->Fetch();
     CombatOrderType combatOrders = (CombatOrderType)fields[0].GetUInt32();
     ObjectGuid PrimtargetGUID = ObjectGuid(fields[1].GetUInt64());
     ObjectGuid SectargetGUID = ObjectGuid(fields[2].GetUInt64());
@@ -4599,7 +4598,6 @@ void PlayerbotAI::CombatOrderRestore()
     m_FollowAutoGo = fields[6].GetUInt8();
     gPrimtarget = ObjectAccessor::GetUnit(*m_bot->GetMap()->GetWorldObject(PrimtargetGUID), PrimtargetGUID);
     gSectarget = ObjectAccessor::GetUnit(*m_bot->GetMap()->GetWorldObject(SectargetGUID), SectargetGUID);
-    delete result;
 
     //Unit* target = nullptr;
     //ObjectGuid NoTargetGUID = m_bot->GetObjectGuid();
@@ -5386,7 +5384,7 @@ void PlayerbotAI::SendWhisper(const std::string& text, Player& player) const
     *packet << uint32(LANG_UNIVERSAL);
     *packet << player.GetName();
     *packet << text;
-    m_bot->GetSession()->QueuePacket(std::move(std::unique_ptr<WorldPacket>(packet))); // queue the packet to get around race condition
+    m_bot->GetSession()->QueuePacket(std::unique_ptr<WorldPacket>(packet)); // queue the packet to get around race condition
 }
 
 bool PlayerbotAI::canObeyCommandFrom(const Player& player) const
@@ -5422,24 +5420,20 @@ SpellCastResult PlayerbotAI::CheckBotCast(const SpellEntry* sInfo)
         return SPELL_FAILED_ERROR;
 
     // check DoLoot() spells before casting
-    Spell* tmp_spell = new Spell(m_bot, sInfo, false);
-    if (tmp_spell)
-    {
-        if (m_lootCurrent.IsCreature())
-        {
-            if (Creature* obj = m_bot->GetMap()->GetCreature(m_lootCurrent))
-                tmp_spell->m_targets.setUnitTarget(obj);
-        }
-        else if (m_lootCurrent.IsGameObject())
-        {
-            if (GameObject* obj = m_bot->GetMap()->GetGameObject(m_lootCurrent))
-                tmp_spell->m_targets.setGOTarget(obj);
-        }
+    Spell tmp_spell(m_bot, sInfo, false);
 
-        // DEBUG_LOG("CheckBotCast SpellCastResult res(%u)", res);
-        return tmp_spell->CheckCast(false);
+    if (m_lootCurrent.IsCreature())
+    {
+        if (Creature* obj = m_bot->GetMap()->GetCreature(m_lootCurrent))
+            tmp_spell.m_targets.setUnitTarget(obj);
     }
-    return SPELL_FAILED_ERROR;
+    else if (m_lootCurrent.IsGameObject())
+    {
+        if (GameObject* obj = m_bot->GetMap()->GetGameObject(m_lootCurrent))
+           tmp_spell.m_targets.setGOTarget(obj);
+    }
+
+    return tmp_spell.CheckCast(false);
 }
 
 SpellCastResult PlayerbotAI::CastSpell(const char* args)
@@ -5482,8 +5476,7 @@ SpellCastResult PlayerbotAI::CastSpell(uint32 spellId)
 
     // Power check
     // We use Spell::CheckPower() instead of UnitAI::CanCastSpell() because bots are players and have more requirements than mere units
-    Spell* tmp_spell = new Spell(m_bot, pSpellInfo, false);
-    SpellCastResult res = tmp_spell->CheckPower(true);
+    SpellCastResult res = Spell(m_bot, pSpellInfo, false).CheckPower(true); //Find out if it really should be strict
     if (res != SPELL_CAST_OK)
         return res;
 
@@ -6227,12 +6220,11 @@ void PlayerbotAI::extractMailIds(const std::string& text, std::list<uint32>& mai
 * return x  -> return the talentspec_id of the first talentspec that errors out
 */
 
-// TODO: the way this is built is just begging for a memory leak (by adding a return case and forgetting to delete result)
 uint32 PlayerbotAI::TalentSpecDBContainsError()
 {
-    QueryResult* result = CharacterDatabase.Query("SELECT * FROM playerbot_talentspec ORDER BY class ASC");
+    auto queryResult = CharacterDatabase.Query("SELECT * FROM playerbot_talentspec ORDER BY class ASC");
 
-    if (!result)
+    if (!queryResult)
     {
         // Do you really need a progress bar? No, but all the other kids jumped off the bridge too...
         BarGoLink bar(1);
@@ -6245,7 +6237,7 @@ uint32 PlayerbotAI::TalentSpecDBContainsError()
         return 0;   // Because, well, no specs means none contain errors...
     }
 
-    BarGoLink bar(result->GetRowCount());
+    BarGoLink bar(queryResult->GetRowCount());
 
     do
     {
@@ -6258,7 +6250,7 @@ uint32 PlayerbotAI::TalentSpecDBContainsError()
         4 to 74        talent_10 to 71
         75 to 80        major_glyph_15, 30, 80, minor_glyph_15, 50, 70
         */
-        Field* fields = result->Fetch();
+        Field* fields = queryResult->Fetch();
 
         uint32 ts_id = fields[0].GetUInt32();
         if (!ts_id)    // Nice bit of paranoia: ts_id is a non-zero NOT NULL AUTO_INCREMENT value
@@ -6270,7 +6262,6 @@ uint32 PlayerbotAI::TalentSpecDBContainsError()
         {
         TellMaster("TalentSpec ID: %u does not have a name.", ts_id);
 
-        delete result;
         return ts_id;
         }
         */
@@ -6281,7 +6272,6 @@ uint32 PlayerbotAI::TalentSpecDBContainsError()
         {
             TellMaster("TalentSpec: %u. \"%s\" contains an invalid class: %i.", ts_id, ts_name.c_str(), ts_class);
 
-            delete result;
             return ts_id;    // invalid class
         }
 
@@ -6301,7 +6291,6 @@ uint32 PlayerbotAI::TalentSpecDBContainsError()
                     {
                         TellMaster("TalentSpec: %u. \"%s\" contains an empty talent for level: %u while a talent for level: %u exists.", ts_id, ts_name.c_str(), (i + 10), (j + 10));
 
-                        delete result;
                         return ts_id;
                     }
                 }
@@ -6311,7 +6300,6 @@ uint32 PlayerbotAI::TalentSpecDBContainsError()
             {
                 TellMaster("TalentSpec: %u. \"%s\" (class: %i) contains an invalid talent for level %u: %u", ts_id, ts_name.c_str(), ts_class, (i + 10), fields[fieldLoc].GetUInt16());
 
-                delete result;
                 return ts_id;    // invalid talent
             }
         }
@@ -6324,7 +6312,6 @@ uint32 PlayerbotAI::TalentSpecDBContainsError()
                 if (!ValidateGlyph(fields[i].GetUInt16(), ts_class))
                     TellMaster("In fact, according to our records, it's no glyph at all");
 
-                delete result;
                 return ts_id;
             }
         }
@@ -6336,22 +6323,20 @@ uint32 PlayerbotAI::TalentSpecDBContainsError()
                 if (!ValidateGlyph(fields[i].GetUInt16(), ts_class))
                     TellMaster("In fact, according to our records, it's no glyph at all");
 
-                delete result;
                 return ts_id;
             }
         }
     }
-    while (result->NextRow());
+    while (queryResult->NextRow());
 
-    delete result;
     return 0;
 }
 
 uint32 PlayerbotAI::GetTalentSpecsAmount()
 {
-    QueryResult* result = CharacterDatabase.Query("SELECT COUNT(*) FROM playerbot_talentspec");
+    auto queryResult = CharacterDatabase.Query("SELECT COUNT(*) FROM playerbot_talentspec");
 
-    if (!result)
+    if (!queryResult)
     {
         sLog.outString();
         sLog.outString(">> Loaded `playerbot_talentspec`, table is empty.");
@@ -6359,19 +6344,18 @@ uint32 PlayerbotAI::GetTalentSpecsAmount()
         return 0;
     }
 
-    Field* fields = result->Fetch();
+    Field* fields = queryResult->Fetch();
 
     uint32 count = fields[0].GetUInt32();
 
-    delete result;
     return count;
 }
 
 uint32 PlayerbotAI::GetTalentSpecsAmount(long specClass)
 {
-    QueryResult* result = CharacterDatabase.PQuery("SELECT COUNT(*) FROM playerbot_talentspec WHERE class = '%li'", specClass);
+    auto queryResult = CharacterDatabase.PQuery("SELECT COUNT(*) FROM playerbot_talentspec WHERE class = '%li'", specClass);
 
-    if (!result)
+    if (!queryResult)
     {
         sLog.outString();
         sLog.outString(">> Loaded `playerbot_talentspec`, found no talentspecs for class %li.", specClass);
@@ -6379,11 +6363,10 @@ uint32 PlayerbotAI::GetTalentSpecsAmount(long specClass)
         return 0;
     }
 
-    Field* fields = result->Fetch();
+    Field* fields = queryResult->Fetch();
 
     uint32 count = fields[0].GetUInt32();
 
-    delete result;
     return count;
 }
 
@@ -6397,9 +6380,9 @@ std::list<TalentSpec> PlayerbotAI::GetTalentSpecs(long specClass)
     TalentSpec ts;
     std::list<TalentSpec> tsList;
 
-    QueryResult* result = CharacterDatabase.PQuery("SELECT * FROM playerbot_talentspec WHERE class = %li ORDER BY talentspec_id ASC", specClass);
+    auto queryResult = CharacterDatabase.PQuery("SELECT * FROM playerbot_talentspec WHERE class = %li ORDER BY talentspec_id ASC", specClass);
 
-    if (!result)
+    if (!queryResult)
     {
         sLog.outString();
         sLog.outString(">> Loaded `playerbot_talentspec`, found no talentspecs for class %li.", specClass);
@@ -6416,7 +6399,7 @@ std::list<TalentSpec> PlayerbotAI::GetTalentSpecs(long specClass)
         4 to 74        talent_10 to 71
         75 to 80        major_glyph_15, 30, 80, minor_glyph_15, 50, 70
         */
-        Field* fields = result->Fetch();
+        Field* fields = queryResult->Fetch();
 
         /* ts_id = fields[0].GetUInt32(); // not used
         if (!ts_id)    // Nice bit of paranoia: ts_id is an AUTO_INCREMENT value
@@ -6452,9 +6435,8 @@ std::list<TalentSpec> PlayerbotAI::GetTalentSpecs(long specClass)
 
         tsList.push_back(ts);
     }
-    while (result->NextRow());
+    while (queryResult->NextRow());
 
-    delete result;
     return tsList;
 }
 
@@ -6478,14 +6460,13 @@ TalentSpec PlayerbotAI::GetTalentSpec(long specClass, long choice)
     // Weed out invalid choice - ts has been zero'd out anyway
     if (0 >= choice || (long) GetTalentSpecsAmount(specClass) < choice) return ts;
 
-    QueryResult* result = CharacterDatabase.PQuery("SELECT * FROM playerbot_talentspec WHERE class = %li ORDER BY talentspec_id ASC", specClass);
+    auto queryResult = CharacterDatabase.PQuery("SELECT * FROM playerbot_talentspec WHERE class = %li ORDER BY talentspec_id ASC", specClass);
 
-    if (!result)
+    if (!queryResult)
     {
         sLog.outString();
         sLog.outString(">> Loaded `playerbot_talentspec`, found no talentspecs for class %li.", specClass);
 
-        delete result;
         return ts; // empty
     }
 
@@ -6502,7 +6483,7 @@ TalentSpec PlayerbotAI::GetTalentSpec(long specClass, long choice)
             4 to 74    talent_10 to 71
             75 to 80    major_glyph_15, 30, 80, minor_glyph_15, 50, 70
             */
-            Field* fields = result->Fetch();
+            Field* fields = queryResult->Fetch();
 
             /* ts_id = fields[0].GetUInt32(); // not used
             if (!ts_id)    // Nice bit of paranoia: ts_id is an AUTO_INCREMENT value
@@ -6518,7 +6499,6 @@ TalentSpec PlayerbotAI::GetTalentSpec(long specClass, long choice)
 
                 ts.specName = "";
                 ts.specClass = 0;
-                delete result;
                 return ts;
             }
 
@@ -6539,15 +6519,13 @@ TalentSpec PlayerbotAI::GetTalentSpec(long specClass, long choice)
                 ts.glyphIdMajor[i] = fields[i + 78].GetUInt16();
             }
 
-            delete result;
             return ts;
         }
 
         // TODO: okay, this won't bog down the system, but it's still a waste. Figure out a better way.
-        result->NextRow();
+        queryResult->NextRow();
     }
 
-    delete result;
     return ts;
 }
 
@@ -8376,14 +8354,14 @@ void PlayerbotAI::Repair(const uint32 itemid, Creature* rCreature)
 
 bool PlayerbotAI::RemoveAuction(const uint32 auctionid)
 {
-    QueryResult* result = CharacterDatabase.PQuery(
+    auto queryResult = CharacterDatabase.PQuery(
                               "SELECT houseid,itemguid,item_template,itemowner,buyoutprice,time,buyguid,lastbid,startbid,deposit FROM auction WHERE id = '%u'", auctionid);
 
     AuctionEntry* auction;
 
-    if (result)
+    if (queryResult)
     {
-        Field* fields = result->Fetch();
+        Field* fields = queryResult->Fetch();
 
         auction = new AuctionEntry;
         auction->Id = auctionid;
@@ -8407,7 +8385,6 @@ bool PlayerbotAI::RemoveAuction(const uint32 auctionid)
             auction->DeleteFromDB();
             sLog.outError("Auction %u has not a existing item : %u, deleted", auction->Id, auction->itemGuidLow);
             delete auction;
-            delete result;
             return false;
         }
 
@@ -8428,7 +8405,6 @@ bool PlayerbotAI::RemoveAuction(const uint32 auctionid)
         auction->DeleteFromDB();
 
         delete auction;
-        delete result;
     }
     return true;
 }
@@ -8623,14 +8599,14 @@ void PlayerbotAI::ListAuctions()
 {
     std::ostringstream report;
 
-    QueryResult* result = CharacterDatabase.PQuery(
+    auto queryResult = CharacterDatabase.PQuery(
                               "SELECT id,itemguid,item_template,time,buyguid,lastbid FROM auction WHERE itemowner = '%u'", m_bot->GetObjectGuid().GetCounter());
-    if (result)
+    if (queryResult)
     {
         report << "My active auctions are: \n";
         do
         {
-            Field* fields = result->Fetch();
+            Field* fields = queryResult->Fetch();
 
             uint32 Id = fields[0].GetUInt32();
             uint32 itemGuidLow = fields[1].GetUInt32();
@@ -8672,9 +8648,8 @@ void PlayerbotAI::ListAuctions()
                     report << " ends: " << aTm->tm_hour << "|cff0070dd|hH|h|r " << aTm->tm_min << "|cff0070dd|hmin|h|r";
             }
         }
-        while (result->NextRow());
+        while (queryResult->NextRow());
 
-        delete result;
         TellMaster(report.str().c_str());
     }
 }
@@ -9240,15 +9215,24 @@ void PlayerbotAI::HandleCommand(const std::string& text, Player& fromPlayer)
         else
         {
             // TODO: make this only in response to direct whispers (chatting in party chat can in fact be between humans)
-            std::string msg = "What is [";
-            std::string textsub;
-            if (text.length() > 10)
-                textsub = text.substr(0, 10) + "...";
-            else
-                textsub = text;
-            msg += textsub.c_str();
-            msg += "]? For a list of commands, ask for 'help'.";
-            SendWhisper(msg, fromPlayer);
+            const std::string msg = "What is '%s'? For a list of commands, ask for 'help'.";
+            const size_t msglength = (msg.length() - 2);
+            const size_t limit = (255 - msglength);
+
+            std::string echo = text;
+            if (echo.length() > limit)
+            {
+                utf8limit(echo, (limit - 3));
+                echo += "...";
+            }
+
+            const size_t length = (msglength + echo.length());
+
+            std::string reply;
+            reply.reserve(length);
+            std::snprintf(reply.data(), reply.capacity(), msg.c_str(), echo.c_str());
+
+            SendWhisper(reply, fromPlayer);
             m_bot->HandleEmoteCommand(EMOTE_ONESHOT_TALK);
         }
     }
@@ -9345,11 +9329,9 @@ void PlayerbotAI::_HandleCommandOrders(std::string& text, Player& fromPlayer)
             return;
         }
 
-        QueryResult* resultlvl = CharacterDatabase.PQuery("SELECT guid FROM playerbot_saved_data WHERE guid = '%u'", m_bot->GetObjectGuid().GetCounter());
+        auto resultlvl = CharacterDatabase.PQuery("SELECT guid FROM playerbot_saved_data WHERE guid = '%u'", m_bot->GetObjectGuid().GetCounter());
         if (!resultlvl)
             CharacterDatabase.DirectPExecute("INSERT INTO playerbot_saved_data (guid,combat_order,primary_target,secondary_target,pname,sname,combat_delay,auto_follow,autoequip) VALUES ('%u',0,0,0,'','',0,0,false)", m_bot->GetObjectGuid().GetCounter());
-        else
-            delete resultlvl;
 
         size_t protect = text.find("protect");
         size_t assist = text.find("assist");
@@ -11035,8 +11017,8 @@ void PlayerbotAI::_HandleCommandQuest(std::string& text, Player& fromPlayer)
 
             // Compare quest entry from [Quest Link] with quest ids listed DB table
             // if found the quest is autocompleted
-            QueryResult* result = CharacterDatabase.PQuery("SELECT * FROM playerbot_quest_data WHERE autocomplete='%u'", entry);
-            if (!result)
+            auto queryResult = CharacterDatabase.PQuery("SELECT * FROM playerbot_quest_data WHERE autocomplete='%u'", entry);
+            if (!queryResult)
             {
                 MakeQuestLink(pQuest, msg);
                 msg << " can't be autocompleted\n";
@@ -11119,7 +11101,6 @@ void PlayerbotAI::_HandleCommandQuest(std::string& text, Player& fromPlayer)
                     MakeQuestLink(pQuest, msg);
                     msg << "\n";
                 }
-                delete result;
             }
         }
         ch.SendSysMessage(msg.str().c_str());
@@ -11453,7 +11434,6 @@ void PlayerbotAI::_HandleCommandSurvey(std::string& /*text*/, Player& fromPlayer
 {
     uint32 count = 0;
     std::ostringstream detectout;
-    QueryResult* result;
     GameEventMgr::ActiveEvents const& activeEventsList = sGameEventMgr.GetActiveEventList();
     std::ostringstream eventFilter;
     eventFilter << " AND (event IS NULL ";
@@ -11475,16 +11455,16 @@ void PlayerbotAI::_HandleCommandSurvey(std::string& /*text*/, Player& fromPlayer
     else
         eventFilter << ")";
 
-    result = WorldDatabase.PQuery("SELECT gameobject.guid, id, position_x, position_y, position_z, map, "
-                                  "(POW(position_x - %f, 2) + POW(position_y - %f, 2) + POW(position_z - %f, 2)) AS order_ FROM gameobject "
-                                  "LEFT OUTER JOIN game_event_gameobject on gameobject.guid=game_event_gameobject.guid WHERE map = '%i' %s ORDER BY order_ ASC LIMIT 10",
-                                  m_bot->GetPositionX(), m_bot->GetPositionY(), m_bot->GetPositionZ(), m_bot->GetMapId(), eventFilter.str().c_str());
+    auto queryResult = WorldDatabase.PQuery("SELECT gameobject.guid, id, position_x, position_y, position_z, map, "
+                                            "(POW(position_x - %f, 2) + POW(position_y - %f, 2) + POW(position_z - %f, 2)) AS order_ FROM gameobject "
+                                            "LEFT OUTER JOIN game_event_gameobject on gameobject.guid=game_event_gameobject.guid WHERE map = '%i' %s ORDER BY order_ ASC LIMIT 10",
+                                            m_bot->GetPositionX(), m_bot->GetPositionY(), m_bot->GetPositionZ(), m_bot->GetMapId(), eventFilter.str().c_str());
 
-    if (result)
+    if (queryResult)
     {
         do
         {
-            Field* fields = result->Fetch();
+            Field* fields = queryResult->Fetch();
             uint32 guid = fields[0].GetUInt32();
             uint32 entry = fields[1].GetUInt32();
 
@@ -11498,9 +11478,8 @@ void PlayerbotAI::_HandleCommandSurvey(std::string& /*text*/, Player& fromPlayer
             detectout << "|cFFFFFF00|Hfound:" << guid << ":" << entry  << ":" <<  "|h[" << go->GetGOInfo()->name << "]|h|r";
             ++count;
         }
-        while (result->NextRow());
+        while (queryResult->NextRow());
 
-        delete result;
     }
     SendWhisper(detectout.str().c_str(), fromPlayer);
 }
@@ -11919,11 +11898,11 @@ void PlayerbotAI::_HandleCommandGM(std::string& text, Player& fromPlayer)
             }
 
             //check whether entry is already in database
-            QueryResult* result = CharacterDatabase.PQuery("SELECT * FROM playerbot_quest_data WHERE autocomplete='%u'", entry);
+            auto queryResult = CharacterDatabase.PQuery("SELECT * FROM playerbot_quest_data WHERE autocomplete='%u'", entry);
 
             if (add != std::string::npos)
             {
-                if (!result)
+                if (!queryResult)
                 {
                     // add new entry
                     out << "adding quest ";
@@ -11936,20 +11915,18 @@ void PlayerbotAI::_HandleCommandGM(std::string& text, Player& fromPlayer)
                     // entry found in table
                     MakeQuestLink(pQuest, out);
                     out << " already in table\n";
-                    delete result;
                     continue;
                 }
             }
             else if (del != std::string::npos)
             {
-                if (result)
+                if (queryResult)
                 {
                     // delete entry
                     out << "deleting ";
                     MakeQuestLink(pQuest, out);
                     out << " from table\n";
                     CharacterDatabase.DirectPExecute("DELETE FROM playerbot_quest_data WHERE autocomplete='%u'", entry);
-                    delete result;
                 }
                 else
                 {

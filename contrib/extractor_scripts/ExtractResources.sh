@@ -13,7 +13,7 @@
 ## Expected param 1 to be 'a' for all, else ask some questions
 ## optionally param 1 or param 2 is the path to game client
 
-PREFIX="$(dirname $0)"
+PREFIX="$(dirname "$0")"
 
 ## Normal log file (if not overwritten by second param)
 LOG_FILE="MaNGOSExtractor.log"
@@ -25,11 +25,48 @@ DETAIL_LOG_FILE="MaNGOSExtractor_detailed.log"
 USE_AD="0"
 USE_VMAPS="0"
 USE_MMAPS="0"
+USE_MODELS="0"
 USE_MMAPS_OFFMESH="0"
 USE_MMAPS_DELAY=""
 AD_RES=""
 VMAP_RES=""
 NUM_THREAD=""
+
+if [ "$1" != "a" ] && [ "x$1" != "x" ]
+then
+  CLIENT_PATH="$1"
+  OUTPUT_PATH="$2"
+elif [ "x$2" != "x" ]
+then
+  CLIENT_PATH="$2"
+  OUTPUT_PATH="$3"
+fi
+
+if [ "x${CLIENT_PATH}" != "x" ]
+then
+  if [ ! -d "${CLIENT_PATH}/Data" ]
+  then
+    echo "Data folder not found in provided client path [${CLIENT_PATH}]. Plese provide a correct client path."
+    exit 1
+  fi
+else
+  if [ ! -d "$(pwd)/Data" ]
+  then
+    echo "Data folder not found. Make sure you have copied the script to the client folder and the 'Data' folder has the correct case."
+    exit 1
+  fi
+fi
+
+if [ "x${OUTPUT_PATH}" != "x" ]
+then
+  if [ ! -d "${OUTPUT_PATH}" ]
+  then
+    echo "Provided OUTPUT_PATH=${OUTPUT_PATH} does not exist, please create it before"
+    exit 1
+  fi
+  LOG_FILE="${OUTPUT_PATH:-.}/${LOG_FILE}"
+  DETAIL_LOG_FILE="${OUTPUT_PATH:-.}/${DETAIL_LOG_FILE}"
+fi
 
 if [ "$1" = "a" ]
 then
@@ -37,6 +74,7 @@ then
   USE_AD="1"
   USE_VMAPS="1"
   USE_MMAPS="1"
+  USE_MODELS="1"
   USE_MMAPS_DELAY="no"
 else
   ## do some questioning!
@@ -50,11 +88,17 @@ else
     USE_AD="1"
     USE_VMAPS="1"
     USE_MMAPS="1"
+    USE_MODELS="1"
   else
     echo
     echo "Should dbc and maps be extracted? (y/n)"
     read line
     if [ "$line" = "y" ]; then USE_AD="1"; fi
+
+    echo
+    echo "Should creature model data be extracted? (y/n)"
+    read line
+    if [ "$line" = "y" ]; then USE_MODELS="1"; fi
 
     echo
     echo "Should vmaps be extracted? (y/n)"
@@ -80,16 +124,6 @@ else
   fi
 fi
 
-if [ "$1" != "a" ] && [ "x$1" != "x" ] && [ -d "$1" ]
-then
-  CLIENT_PATH="$1"
-  OUTPUT_PATH="$2"
-elif [ "x$2" != "x" ] && [ -d "$2" ]
-then
-  CLIENT_PATH="$2"
-  OUTPUT_PATH=$3
-fi
-
 if [ "x$CLIENT_PATH" != "x" ]
 then
   AD_OPT_RES="-i $CLIENT_PATH"
@@ -106,19 +140,25 @@ fi
 if [ "$USE_MMAPS_OFFMESH" = "1" ]
 then
   echo "Only extracting offmesh tiles"
-  $PREFIX/MoveMapGen.sh offmesh "$OUTPUT_PATH" $LOG_FILE $DETAIL_LOG_FILE
+  "$PREFIX"/MoveMapGen.sh offmesh "$OUTPUT_PATH" "$LOG_FILE" "$DETAIL_LOG_FILE"
   exit 0
 fi
 
 ## MMap Extraction specific
-if [ "$USE_MMAPS" = "1" ]
+if [ "$1" = "a" ]
+then
+  NUM_THREAD="all"
+  USE_MMAPS_DELAY=""
+elif [ "$USE_MMAPS" = "1" ]
 then
   ## Obtain number of processes
   echo "How many CPU threads should be used for extracting mmaps? (leave empty to use all available threads)"
   read line
   echo
-  if [[ ! -z $line ]]; then
-    if [[ $line =~ ^[1-9+]$ ]]; then
+  # check string is there
+  if [ -n "$line" ]; then
+    # and a number greater 0
+    if [ "$(expr "$line" : "^[1-9][0-9]*$")" -gt 0 ]; then
       NUM_THREAD=$line
     else
       echo "Only numbers are allowed!"
@@ -142,9 +182,12 @@ then
 fi
 
 ## Check if user want to do high resolution extraction of maps
-if [ "$USE_AD" = "1" ]; then
+if [ "$1" = "a" ]
+then
+  AD_RES=""
+elif [ "$USE_AD" = "1" ]; then
   echo
-  echo "Would you like the extraction of maps to be high-resolution? (y/n)"
+  echo "Would you like the extraction of maps to be high-resolution? [y/N]"
   read line
   if [ "$line" = "y" ]; then
     AD_RES="-f 0"
@@ -154,9 +197,12 @@ if [ "$USE_AD" = "1" ]; then
 fi
 
 ## Check if user want to do high resolution extraction of vmaps
-if [ "$USE_VMAPS" = "1" ]; then
+if [ "$1" = "a" ]
+then
+  VMAP_RES=""
+elif [ "$USE_VMAPS" = "1" ]; then
   echo
-  echo "Would you like the extraction of vmaps to be high-resolution? (y/n)"
+  echo "Would you like the extraction of vmaps to be high-resolution? [y/N]"
   read line
   if [ "$line" = "y" ]; then
     VMAP_RES="-l"
@@ -164,6 +210,7 @@ if [ "$USE_VMAPS" = "1" ]; then
     VMAP_RES=""
   fi
 fi
+
 ## Give some status
 echo
 echo "Current Settings:"
@@ -184,38 +231,58 @@ then
   read line
 fi
 
-echo "$(date): Start extracting dataz for MaNGOS" | tee $LOG_FILE
+echo "$(date): Start extracting dataz for MaNGOS" | tee "$LOG_FILE"
 
 ## Handle log messages
 if [ "$USE_AD" = "1" ];
 then
-  echo "DBC and map files will be extracted" | tee -a $LOG_FILE
+  echo "DBC and map files will be extracted" | tee -a "$LOG_FILE"
 else
-  echo "DBC and map files won't be extracted!" | tee -a $LOG_FILE
+  echo "DBC and map files won't be extracted!" | tee -a "$LOG_FILE"
+fi
+if [ "$USE_MODELS" = "1" ];
+then
+  echo "Creature model files will be extracted" | tee -a $LOG_FILE
+else
+  echo "Creature model files won't be extracted!" | tee -a $LOG_FILE
 fi
 if [ "$USE_VMAPS" = "1" ]
 then
-  echo "Vmaps will be extracted" | tee -a $LOG_FILE
+  echo "Vmaps will be extracted" | tee -a "$LOG_FILE"
 else
-  echo "Vmaps won't be extracted!" | tee -a $LOG_FILE
+  echo "Vmaps won't be extracted!" | tee -a "$LOG_FILE"
 fi
 if [ "$USE_MMAPS" = "1" ]
 then
-  echo "Mmaps will be extracted using $NUM_THREAD CPU threads" | tee -a $LOG_FILE
+  echo "Mmaps will be extracted using $NUM_THREAD CPU threads" | tee -a "$LOG_FILE"
 else
-  echo "Mmaps files won't be extracted!" | tee -a $LOG_FILE
+  echo "Mmaps files won't be extracted!" | tee -a "$LOG_FILE"
 fi
-echo | tee -a $LOG_FILE
+echo | tee -a "$LOG_FILE"
 
-echo "$(date): Start extracting MaNGOS data: DBCs/maps $USE_AD, vmaps $USE_VMAPS, mmaps $USE_MMAPS using $NUM_THREAD CPU threads" | tee $DETAIL_LOG_FILE
+echo "$(date): Start extracting MaNGOS data: DBCs/maps $USE_AD, Models $USE_MODELS, vmaps $USE_VMAPS, mmaps $USE_MMAPS using $NUM_THREAD CPU threads" | tee $DETAIL_LOG_FILE
 echo | tee -a $DETAIL_LOG_FILE
 
 ## Extract dbcs and maps
 if [ "$USE_AD" = "1" ]
 then
- echo "$(date): Start extraction of DBCs and map files..." | tee -a $LOG_FILE
- $PREFIX/ad $AD_RES $AD_OPT_RES | tee -a $DETAIL_LOG_FILE
- echo "$(date): Extracting of DBCs and map files finished" | tee -a $LOG_FILE
+ echo "$(date): Start extraction of DBCs and map files..." | tee -a "$LOG_FILE"
+ "$PREFIX"/ad $AD_RES $AD_OPT_RES | tee -a "$DETAIL_LOG_FILE"
+ echo "$(date): Extracting of DBCs and map files finished" | tee -a "$LOG_FILE"
+ echo | tee -a "$LOG_FILE"
+ echo | tee -a "$DETAIL_LOG_FILE"
+fi
+
+## Extract creature models
+if [ "$USE_MODELS" = "1" ] && [ "$USE_AD" = "0" ]
+then
+ if [ ! -d "${OUTPUT_PATH:-.}/vmaps" ]
+ then
+   mkdir "${OUTPUT_PATH:-.}/vmaps"
+ fi
+ echo "$(date): Start extraction of model files..." | tee -a $LOG_FILE
+ $PREFIX/ad -e 8 | tee -a $DETAIL_LOG_FILE
+ echo "$(date): Extracting of model files finished" | tee -a $LOG_FILE
  echo | tee -a $LOG_FILE
  echo | tee -a $DETAIL_LOG_FILE
 fi
@@ -223,16 +290,36 @@ fi
 ## Extract vmaps
 if [ "$USE_VMAPS" = "1" ]
 then
-  echo "$(date): Start extraction of vmaps..." | tee -a $LOG_FILE
-  $PREFIX/vmap_extractor $VMAP_RES $VMAP_OPT_RES | tee -a $DETAIL_LOG_FILE
-  echo "$(date): Extracting of vmaps finished" | tee -a $LOG_FILE
-  mkdir ${OUTPUT_PATH:-.}/vmaps
-  echo "$(date): Start assembling of vmaps..." | tee -a $LOG_FILE
-  $PREFIX/vmap_assembler ${OUTPUT_PATH:-.}/Buildings ${OUTPUT_PATH:-.}/vmaps | tee -a $DETAIL_LOG_FILE
-  echo "$(date): Assembling of vmaps finished" | tee -a $LOG_FILE
+  # We need to save the exit code for vmap_extractor and vmap_assembler so it doesn't get swallowed by tee. For this we create a temporary file.
+  file=$(mktemp)
+  echo "$(date): Start extraction of vmaps..." | tee -a "$LOG_FILE"
+  # We group command and echo to file so we can save the exit code ($?) before execution of tee overwrites it.
+  { "$PREFIX"/vmap_extractor $VMAP_RES $VMAP_OPT_RES; echo $? > "$file"; } | tee -a "$DETAIL_LOG_FILE"
+  exit_code=$(cat "$file")
+  if [ "$exit_code" -ne "0" ]; then
+    echo "$(date): Extraction of vmaps failed with errors. Aborting extraction. See the log file for more details."
+    rm "$file"
+    exit "$exit_code"
+  fi
+  echo "$(date): Extracting of vmaps finished" | tee -a "$LOG_FILE"
+  if [ ! -d "${OUTPUT_PATH:-.}/vmaps" ]
+  then
+    mkdir "${OUTPUT_PATH:-.}/vmaps"
+  fi
+  echo "$(date): Start assembling of vmaps..." | tee -a "$LOG_FILE"
+  # We group command and echo to file so we can save the exit code ($?) before execution of tee overwrites it.
+  { "$PREFIX"/vmap_assembler "${OUTPUT_PATH:-.}/Buildings" "${OUTPUT_PATH:-.}/vmaps"; echo $? > "$file"; } | tee -a "$DETAIL_LOG_FILE"
+  exit_code=$(cat "$file")
+  if [ "$exit_code" -ne "0" ]; then
+    echo "$(date): Assembling of vmaps failed with errors. Aborting extraction. See the log file for more details."
+    rm "$file"
+    exit "$exit_code"
+  fi
+  rm "$file"
+  echo "$(date): Assembling of vmaps finished" | tee -a "$LOG_FILE"
 
-  echo | tee -a $LOG_FILE
-  echo | tee -a $DETAIL_LOG_FILE
+  echo | tee -a "$LOG_FILE"
+  echo | tee -a "$DETAIL_LOG_FILE"
 fi
 
 ## Extract mmaps
@@ -241,7 +328,7 @@ then
   if [ "$USE_MMAPS_DELAY" != "" ]; then
     echo "Extracting of MMaps is set to be started delayed by $USE_MMAPS_DELAY"
     echo "Current time: $(date)"
-    sleep $USE_MMAPS_DELAY
+    sleep "$USE_MMAPS_DELAY"
   fi
-  sh MoveMapGen.sh "maps" "$OUTPUT_PATH" $LOG_FILE $DETAIL_LOG_FILE $NUM_THREAD
+  sh MoveMapGen.sh "maps" "$OUTPUT_PATH" "$LOG_FILE" "$DETAIL_LOG_FILE" "$NUM_THREAD"
 fi

@@ -18,7 +18,7 @@
 
 #include "Common.h"
 #include "Globals/SharedDefines.h"
-#include "WorldPacket.h"
+#include "Server/WorldPacket.h"
 #include "Server/Opcodes.h"
 #include "Log.h"
 #include "Entities/Player.h"
@@ -835,7 +835,7 @@ void WorldSession::HandleBattlemasterJoinArena(WorldPacket& recv_data)
             // set arena rated type to show correct minimap arena icon
             bg->SetRated(isRated != 0);
 
-            GroupQueueInfo* ginfo = bgQueue.AddGroup(_player, group, bgTypeId, bracketEntry, arenatype, isRated != 0, false, arenaRating, ateamId);
+            GroupQueueInfo* ginfo = bgQueue.AddGroup(_player, group, bgTypeId, bracketEntry, arenatype, isRated != 0, false, 0, arenaRating, ateamId);
             avgTime = bgQueue.GetAverageQueueWaitTime(ginfo, bracketEntry->GetBracketId());
         }
 
@@ -868,7 +868,7 @@ void WorldSession::HandleBattlemasterJoinArena(WorldPacket& recv_data)
     }
     else
     {
-        GroupQueueInfo* ginfo = bgQueue.AddGroup(_player, nullptr, bgTypeId, bracketEntry, arenatype, isRated != 0, false, arenaRating, ateamId);
+        GroupQueueInfo* ginfo = bgQueue.AddGroup(_player, nullptr, bgTypeId, bracketEntry, arenatype, isRated != 0, false, 0, arenaRating, ateamId);
         uint32 avgTime = bgQueue.GetAverageQueueWaitTime(ginfo, bracketEntry->GetBracketId());
         uint32 queueSlot = _player->AddBattleGroundQueueId(bgQueueTypeId);
 

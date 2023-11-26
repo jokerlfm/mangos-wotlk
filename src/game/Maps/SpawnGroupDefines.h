@@ -82,6 +82,7 @@ enum CreatureGroupEvent : uint32
     CREATURE_GROUP_EVENT_EVADE,
     CREATURE_GROUP_EVENT_HOME,
     CREATURE_GROUP_EVENT_RESPAWN,
+    CREATURE_GROUP_EVENT_MEMBER_DIED,
 };
 
 struct SpawnGroupEntry
@@ -91,7 +92,9 @@ struct SpawnGroupEntry
     SpawnGroupType Type;
     uint32 MaxCount; // Maximum active alive entities spawned in world
     int32 WorldStateCondition; // Worldstate value when set to 1 enables spawning of given group and 0 disables spawning
+    int32 WorldStateExpression; // Exclusive with condition
     uint32 Flags;
+    uint32 StringId;
     bool Active;
     bool EnabledByDefault;
     bool HasChancedSpawns;
@@ -141,13 +144,14 @@ enum SpawGroupFormationOptions : uint32
 
 struct FormationEntry
 {
-    uint32 GroupId;
-    SpawnGroupFormationType Type;
-    uint32 MovementID;
-    uint32 MovementType;
-    float Spread;
-    uint32 Options;
-    std::string Comment;
+    uint32 GroupId                  = 0;
+    SpawnGroupFormationType Type    = SPAWN_GROUP_FORMATION_TYPE_RANDOM;
+    uint32 MovementIdOrWander       = 0;      
+    uint32 MovementType             = 0;
+    float Spread                    = 3.0f;
+    uint32 Options                  = 0;
+    std::string Comment             = "No comment";
+    bool IsDynamic                  = false;
 };
 
 struct SpawnGroupEntryContainer

@@ -20,9 +20,10 @@
 #include "Spells/SpellAuras.h"
 #include "Spells/SpellMgr.h"
 
+// 20271 - Judgement
 struct spell_judgement : public SpellScript
 {
-    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    void OnEffectExecute(Spell* spell, SpellEffectIndex /*effIdx*/) const override
     {
         Unit* unitTarget = spell->GetUnitTarget();
         if (!unitTarget || !unitTarget->IsAlive())
@@ -81,15 +82,16 @@ struct spell_judgement : public SpellScript
         if (caster->HasAura(37188)) // improved judgement
             caster->CastSpell(nullptr, 43838, TRIGGERED_OLD_TRIGGERED);
 
-        if (caster->HasAura(40470)) // spell_paladin_tier_6_trinket
+        if (caster->HasAura(40470)) // PaladinTier6Trinket
             if (roll_chance_f(50.f))
                 caster->CastSpell(unitTarget, 40472, TRIGGERED_OLD_TRIGGERED);
     }
 };
 
-struct spell_paladin_tier_6_trinket : public AuraScript
+// 40470 - Paladin Tier 6 Trinket
+struct PaladinTier6Trinket : public AuraScript
 {
-    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
+    SpellAuraProcResult OnProc(Aura* /*aura*/, ProcExecutionData& procData) const override
     {
         if (!procData.spellInfo)
             return SPELL_AURA_PROC_FAILED;
@@ -118,12 +120,13 @@ struct IncreasedHolyLightHealing : public AuraScript
         aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_HEALING_DONE, apply);
     }
 
-    void OnDamageCalculate(Aura* aura, Unit* /*victim*/, int32& advertisedBenefit, float& /*totalMod*/) const override
+    void OnDamageCalculate(Aura* aura, Unit* /*attacker*/, Unit* /*victim*/, int32& advertisedBenefit, float& /*totalMod*/) const override
     {
         advertisedBenefit += aura->GetModifier()->m_amount;
     }
 };
 
+// 31789 - Righteous Defense
 struct RighteousDefense : public SpellScript
 {
     bool OnCheckTarget(const Spell* /*spell*/, Unit* target, SpellEffectIndex /*eff*/) const override
@@ -239,15 +242,94 @@ struct JudgementsOfTheWiseEnergize : public SpellScript
     }
 };
 
+struct ArdentDefender : public AuraScript
+{
+    void OnAbsorb(Aura* aura, int32& currentAbsorb, int32& remainingDamage, uint32& /*reflectedSpellId*/, int32& /*reflectDamage*/, bool& preventedDeath, bool& /*dropCharge*/, DamageEffectType /*damageType*/) const override
+    {
+        currentAbsorb = 0;
+        Player* player = dynamic_cast<Player*>(aura->GetCaster());
+        if (!player)
+            return;
+        if (int32(player->GetHealth()) - remainingDamage > (player->GetMaxHealth() * 0.35))
+            return;
+        int32 reduction = 0;
+        int32 healMod = 0;
+        if (Aura* aur = aura->GetHolder()->GetAuraByEffectIndex(EFFECT_INDEX_0))
+            reduction = aur->GetBasePoints();
+        if (Aura* aur = aura->GetHolder()->GetAuraByEffectIndex(EFFECT_INDEX_1))
+            healMod = aur->GetBasePoints();
+        remainingDamage *= (100 - reduction) / 100.f;
+        if (int32(player->GetHealth()) - remainingDamage > 0 || player->HasAura(66233))
+            return;
+        float defenseFactor = std::min(140u, (player->GetDefenseSkillValue() - player->GetLevel() * 5)) / 140.f;
+        defenseFactor = std::max(0.f, defenseFactor);
+        healMod *= defenseFactor;
+        healMod = player->GetMaxHealth() * (healMod / 100.f);
+        remainingDamage = 0;
+        preventedDeath = true;
+        player->CastCustomSpell(nullptr, 66235, &healMod, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
+        player->CastSpell(nullptr, 66233, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+// 58597 - Sacred Shield
+struct SacredShieldCrit : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (aura->GetEffIndex() == EFFECT_INDEX_1)
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_CRIT_CHANCE, apply);
+    }
+
+    void OnCritChanceCalculate(Aura* aura, Unit const* target, float& chance, SpellEntry const* /*spellInfo*/) const override
+    {
+        if (aura->GetCasterGuid() == target->GetObjectGuid()) chance += aura->GetModifier()->m_amount; // Weakened Soul
+    }
+};
+
+// 879 - Exorcism
+struct ExorcismPaladin : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (spell->GetUnitTarget()->GetCreatureTypeMask() & CREATURE_TYPEMASK_DEMON_OR_UNDEAD)
+            spell->SetGuaranteedCrit();
+    }
+};
+
+// 20911 - Blessing of Sanctuary, 25899 - Greater Blessing of Sanctuary
+struct BlessingOfSanctuary : public AuraScript
+{
+    void OnAuraInit(Aura* aura) const override
+    {
+        aura->SetAffectOverriden();
+    }
+
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_MELEE_DAMAGE_TAKEN, apply);
+        aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_DAMAGE_TAKEN, apply);
+    }
+
+    void OnDamageCalculate(Aura* aura, Unit* /*attacker*/, Unit* /*victim*/, int32& /*advertisedBenefit*/, float& totalMod) const override
+    {
+        totalMod *= (aura->GetModifier()->m_amount + 100.0f) / 100.0f; // all damage
+    }
+};
+
 void LoadPaladinScripts()
 {
     RegisterSpellScript<IncreasedHolyLightHealing>("spell_increased_holy_light_healing");
     RegisterSpellScript<spell_judgement>("spell_judgement");
     RegisterSpellScript<RighteousDefense>("spell_righteous_defense");
-    RegisterSpellScript<spell_paladin_tier_6_trinket>("spell_paladin_tier_6_trinket");
+    RegisterSpellScript<PaladinTier6Trinket>("spell_paladin_tier_6_trinket");
     RegisterSpellScript<DivineStorm>("spell_divine_storm");
     RegisterSpellScript<DivineStormHeal>("spell_divine_storm_heal");
     RegisterSpellScript<DivineStormCooldown>("spell_divine_storm_cooldown");
     RegisterSpellScript<JudgementsOfTheWise>("spell_judgements_of_the_wise");
     RegisterSpellScript<JudgementsOfTheWiseEnergize>("spell_judgements_of_the_wise_energize");
+    RegisterSpellScript<ArdentDefender>("spell_ardent_defender");
+    RegisterSpellScript<ArdentDefender>("spell_sacred_shield_crit");
+    RegisterSpellScript<ExorcismPaladin>("spell_exorcism_paladin");
+    RegisterSpellScript<BlessingOfSanctuary>("spell_blessing_of_sanctuary");
 }

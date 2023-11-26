@@ -20,6 +20,7 @@
 #include "Spells/SpellAuras.h"
 #include "Spells/SpellMgr.h"
 
+// 27827 - Spirit of Redemption
 struct SpiritOfRedemptionHeal : public SpellScript
 {
     void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
@@ -29,6 +30,7 @@ struct SpiritOfRedemptionHeal : public SpellScript
     }
 };
 
+// 10060 - Power Infusion
 struct PowerInfusion : public SpellScript
 {
     SpellCastResult OnCheckCast(Spell* spell, bool/* strict*/) const override
@@ -43,11 +45,19 @@ struct PowerInfusion : public SpellScript
     }
 };
 
+// 32379 - Shadow Word: Death
 struct ShadowWordDeath : public SpellScript
 {
     void OnHit(Spell* spell, SpellMissInfo /*missInfo*/) const override
     {
-        int32 swdDamage = spell->GetTotalTargetDamage();
+        // ignores absorb - has to respect stuff like mitigation and partial resist
+        int32 swdDamage = spell->GetTotalTargetDamage() + spell->GetTotalTargetAbsorb();
+        if (Aura* painAndSuffering = spell->GetCaster()->GetAura(47580, EFFECT_INDEX_1))
+            swdDamage *= (painAndSuffering->GetModifier()->m_amount + 100.0f) / 100.0f;
+        if (Aura* painAndSuffering = spell->GetCaster()->GetAura(47581, EFFECT_INDEX_1))
+            swdDamage *= (painAndSuffering->GetModifier()->m_amount + 100.0f) / 100.0f;
+        if (Aura* painAndSuffering = spell->GetCaster()->GetAura(47582, EFFECT_INDEX_1))
+            swdDamage *= (painAndSuffering->GetModifier()->m_amount + 100.0f) / 100.0f;
         spell->GetCaster()->CastCustomSpell(nullptr, 32409, &swdDamage, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
     }
 };
@@ -57,6 +67,7 @@ enum
     MANA_LEECH_PASSIVE = 28305,
 };
 
+// 34433 - Shadowfiend
 struct Shadowfiend : public SpellScript
 {
     void OnSummon(Spell* spell, Creature* summon) const override
@@ -66,6 +77,7 @@ struct Shadowfiend : public SpellScript
     }
 };
 
+// 33076 - Prayer of Mending
 struct PrayerOfMending : public SpellScript
 {
     // not needed in wotlk
@@ -103,12 +115,39 @@ enum
     SPELL_PAIN_SUPPRESSION_THREAT_REDUCTION = 44416,
 };
 
+// 33206 - Pain Suppression
 struct PainSuppression : public AuraScript
 {
     void OnApply(Aura* aura, bool apply) const override
     {
         if (apply)
             aura->GetTarget()->CastSpell(aura->GetTarget(), SPELL_PAIN_SUPPRESSION_THREAT_REDUCTION, TRIGGERED_OLD_TRIGGERED, nullptr, aura, aura->GetCasterGuid());
+    }
+};
+
+// 17 - Power Word: Shield
+struct PowerWordShieldPriest : public AuraScript
+{
+    void OnAbsorb(Aura* aura, int32& currentAbsorb, int32& remainingDamage, uint32& reflectedSpellId, int32& reflectDamage, bool& /*preventedDeath*/, bool& /*dropCharge*/, DamageEffectType /*damageType*/) const override
+    {
+        Unit* caster = aura->GetTarget();
+        Unit::AuraList const& vOverRideCS = caster->GetAurasByType(SPELL_AURA_OVERRIDE_CLASS_SCRIPTS);
+        for (auto k : vOverRideCS) // 33201 - Reflective Shield
+        {
+            switch (k->GetModifier()->m_miscvalue)
+            {
+                case 5065:                      // Rank 1
+                case 5064:                      // Rank 2
+                {
+                    if (remainingDamage >= currentAbsorb)
+                        reflectDamage = k->GetModifier()->m_amount * currentAbsorb / 100;
+                    else
+                        reflectDamage = k->GetModifier()->m_amount * remainingDamage / 100;
+                    reflectedSpellId = 33619;
+                } break;
+                default: break;
+            }
+        }
     }
 };
 
@@ -272,24 +311,9 @@ struct GlyphOfLightwell : public AuraScript
         aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_HEALING_DONE, apply);
     }
 
-    void OnDamageCalculate(Aura* aura, Unit* /*victim*/, int32& advertisedBenefit, float& totalMod) const override
+    void OnDamageCalculate(Aura* aura, Unit* /*attacker*/, Unit* /*victim*/, int32& advertisedBenefit, float& totalMod) const override
     {
         advertisedBenefit += aura->GetModifier()->m_amount / 3; // ticks 3 times
-    }
-};
-
-struct GlyphOfShadowWordDeath : public AuraScript
-{
-    void OnApply(Aura* aura, bool apply) const override
-    {
-        if (aura->GetEffIndex() == EFFECT_INDEX_0)
-            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_DAMAGE_DONE, apply);
-    }
-
-    void OnDamageCalculate(Aura* aura, Unit* victim, int32& advertisedBenefit, float& totalMod) const override
-    {
-        if (victim->GetHealthPercent() <= 35.f)
-            totalMod *= (float(100 + aura->GetModifier()->m_amount) / 100);
     }
 };
 
@@ -311,6 +335,143 @@ struct ShadowAffinityDots : public AuraScript
     }
 };
 
+// 47788 - Guardian Spirit
+struct GuardianSpiritPriest : public AuraScript
+{
+    void OnAbsorb(Aura* aura, int32& /*currentAbsorb*/, int32& /*remainingDamage*/, uint32& /*reflectedSpellId*/, int32& /*reflectDamage*/, bool& preventedDeath, bool& /*dropCharge*/, DamageEffectType /*damageType*/) const override
+    {
+        preventedDeath = true;
+    }
+
+    void OnAuraDeathPrevention(Aura* aura, int32& remainingDamage) const override
+    {
+        int32 healAmount = aura->GetTarget()->GetMaxHealth() * aura->GetModifier()->m_amount / 100;
+        aura->GetTarget()->CastCustomSpell(nullptr, 48153, &healAmount, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
+        aura->GetTarget()->RemoveAurasDueToSpell(aura->GetSpellProto()->Id);
+        remainingDamage = 0;
+    }
+};
+
+// 57470 - Renewed Hope
+struct RenewedHope : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (aura->GetEffIndex() == EFFECT_INDEX_0)
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_CRIT_CHANCE, apply);
+    }
+
+    void OnCritChanceCalculate(Aura* aura, Unit const* target, float& chance, SpellEntry const* spellInfo) const override
+    {
+        if (target->HasAura(6788)) chance += aura->GetModifier()->m_amount; // Weakened Soul
+    }
+
+    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
+    {
+        procData.cooldown = aura->GetSpellProto()->CalculateSimpleValue(EFFECT_INDEX_2);
+        return SPELL_AURA_PROC_OK;
+    }
+};
+
+// 63944 - RenewedHope
+struct RenewedHopeDamageTaken : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_MELEE_DAMAGE_TAKEN, apply);
+        aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_DAMAGE_TAKEN, apply);
+    }
+
+    void OnDamageCalculate(Aura* aura, Unit* /*attacker*/, Unit* /*victim*/, int32& /*advertisedBenefit*/, float& totalMod) const override
+    {
+        totalMod *= (aura->GetAmount() + 100) / 100;
+    }
+};
+
+// 63504 - Improved Flash Heal
+struct ImprovedFlashHeal : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (aura->GetEffIndex() == EFFECT_INDEX_0)
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_CRIT_CHANCE, apply);
+    }
+
+    void OnCritChanceCalculate(Aura* aura, Unit const* target, float& chance, SpellEntry const* spellInfo) const override
+    {
+        if (target->GetHealthPercent() <= 50.f) chance += aura->GetModifier()->m_amount;
+    }
+};
+
+// 47573 - TwistedFaith
+struct TwistedFaith : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (aura->GetEffIndex() == EFFECT_INDEX_1)
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_DAMAGE_DONE, apply);
+    }
+
+    void OnDamageCalculate(Aura* aura, Unit* /*attacker*/, Unit* victim, int32& /*advertisedBenefit*/, float& totalMod) const override
+    {
+        // Shadow Word: Pain
+        if (victim->GetAura(SPELL_AURA_PERIODIC_DAMAGE, SPELLFAMILY_PRIEST, uint64(0x0000000000008000), 0, aura->GetTarget()->GetObjectGuid()))
+            totalMod *= (aura->GetModifier()->m_amount + 100.0f) / 100.0f;
+    }
+};
+
+// 55682 - Glyph of Shadow Word: Death
+struct GlyphOfShadowWordDeath : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (aura->GetEffIndex() == EFFECT_INDEX_0)
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_DAMAGE_DONE, apply);
+    }
+
+    void OnDamageCalculate(Aura* aura, Unit* /*attacker*/, Unit* victim, int32& /*advertisedBenefit*/, float& totalMod) const override
+    {
+        SpellAuraHolder* holder = aura->GetHolder();
+        Aura const* hpPct = holder->GetAuraByEffectIndex(EFFECT_INDEX_0);
+        Aura const* dmPct = holder->GetAuraByEffectIndex(EFFECT_INDEX_1);
+        if (hpPct && dmPct && victim->GetHealth() * 100 <= victim->GetMaxHealth() * hpPct->GetModifier()->m_amount)
+            totalMod *= (dmPct->GetModifier()->m_amount + 100.0f) / 100.0f;
+    }
+};
+
+// 47558 - Test of Faith
+struct TestOfFaith : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (aura->GetEffIndex() == EFFECT_INDEX_0)
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_HEALING_DONE, apply);
+    }
+
+    void OnDamageCalculate(Aura* aura, Unit* /*attacker*/, Unit* victim, int32& /*advertisedBenefit*/, float& totalMod) const override
+    {
+        if (victim->GetHealth() < victim->GetMaxHealth() / 2)
+            totalMod *= (aura->GetModifier()->m_amount + 100.0f) / 100.0f;
+    }
+};
+
+// 55692 - Glyph of Smite
+struct GlyphOfSmite : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (aura->GetEffIndex() == EFFECT_INDEX_1)
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_DAMAGE_DONE, apply);
+    }
+
+    void OnDamageCalculate(Aura* aura, Unit* /*attacker*/, Unit* victim, int32& /*advertisedBenefit*/, float& totalMod) const override
+    {
+        // Shadow Word: Pain
+        if (victim->GetAura(SPELL_AURA_PERIODIC_DAMAGE, SPELLFAMILY_PRIEST, uint64(0x00100000)))
+            totalMod *= (aura->GetModifier()->m_amount + 100.0f) / 100.0f;
+    }
+};
+
 void LoadPriestScripts()
 {
     RegisterSpellScript<PowerInfusion>("spell_power_infusion");
@@ -319,6 +480,7 @@ void LoadPriestScripts()
     RegisterSpellScript<PrayerOfMending>("spell_prayer_of_mending");
     RegisterSpellScript<PainSuppression>("spell_pain_suppression");
     RegisterSpellScript<Shadowfiend>("spell_shadowfiend");
+    RegisterSpellScript<PowerWordShieldPriest>("spell_power_word_shield_priest");
     RegisterSpellScript<DivineHymn>("spell_divine_hymn");
     RegisterSpellScript<HymnOfHope>("spell_hymn_of_hope");
     RegisterSpellScript<CircleOfHealing>("spell_circle_of_healing");
@@ -326,6 +488,13 @@ void LoadPriestScripts()
     RegisterSpellScript<LightwellRenew>("spell_lightwell_renew");
     RegisterSpellScript<LightwellRelay>("spell_lightwell_relay");
     RegisterSpellScript<GlyphOfLightwell>("spell_glyph_of_lightwell");
-    RegisterSpellScript<GlyphOfShadowWordDeath>("spell_glyph_of_shadow_word_death");
     RegisterSpellScript<ShadowAffinityDots>("spell_shadow_affinity_dots");
+    RegisterSpellScript<GuardianSpiritPriest>("spell_guardian_spirit_priest");
+    RegisterSpellScript<RenewedHope>("spell_renewed_hope");
+    RegisterSpellScript<RenewedHopeDamageTaken>("spell_renewed_hope_damage_taken");
+    RegisterSpellScript<ImprovedFlashHeal>("spell_improved_flash_heal");
+    RegisterSpellScript<TwistedFaith>("spell_twisted_faith");
+    RegisterSpellScript<GlyphOfShadowWordDeath>("spell_glyph_of_shadow_word_death");
+    RegisterSpellScript<TestOfFaith>("spell_test_of_faith");
+    RegisterSpellScript<GlyphOfSmite>("spell_glyph_of_smite");
 }

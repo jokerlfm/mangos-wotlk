@@ -23,7 +23,7 @@
 #include "Tools/Language.h"
 #include "Database/DatabaseEnv.h"
 #include "Database/DatabaseImpl.h"
-#include "WorldPacket.h"
+#include "Server/WorldPacket.h"
 #include "Server/Opcodes.h"
 #include "Log.h"
 #include "Entities/Player.h"
@@ -788,7 +788,6 @@ void WorldSession::HandleAreaTriggerOpcode(WorldPacket& recv_data)
 
     if (at->conditionId && !sObjectMgr.IsConditionSatisfied(at->conditionId, player, player->GetMap(), nullptr, CONDITION_FROM_AREATRIGGER_TELEPORT))
     {
-        /*TODO player->GetSession()->SendAreaTriggerMessage("%s", "YOU SHALL NOT PASS!");*/
         return;
     }
 
@@ -1030,7 +1029,7 @@ void WorldSession::HandleInspectHonorStatsOpcode(WorldPacket& recv_data)
     data << uint32(player->GetUInt32Value(PLAYER_FIELD_KILLS));
     data << uint32(player->GetUInt32Value(PLAYER_FIELD_TODAY_CONTRIBUTION));
     data << uint32(player->GetUInt32Value(PLAYER_FIELD_YESTERDAY_CONTRIBUTION));
-    data << uint32(player->GetUInt32Value(PLAYER_FIELD_LIFETIME_HONORBALE_KILLS));
+    data << uint32(player->GetUInt32Value(PLAYER_FIELD_LIFETIME_HONORABLE_KILLS));
     SendPacket(data);
 }
 
@@ -1100,14 +1099,14 @@ void WorldSession::HandleWhoisOpcode(WorldPacket& recv_data)
 
     uint32 accid = plr->GetSession()->GetAccountId();
 
-    QueryResult* result = LoginDatabase.PQuery("SELECT username,email,ip FROM account a JOIN account_logons b ON(a.id=b.accountId) WHERE a.id=%u ORDER BY loginTime DESC LIMIT 1", accid);
-    if (!result)
+    auto queryResult = LoginDatabase.PQuery("SELECT username,email,ip FROM account a JOIN account_logons b ON(a.id=b.accountId) WHERE a.id=%u ORDER BY loginTime DESC LIMIT 1", accid);
+    if (!queryResult)
     {
         SendNotification(LANG_ACCOUNT_FOR_PLAYER_NOT_FOUND, charname.c_str());
         return;
     }
 
-    Field* fields = result->Fetch();
+    Field* fields = queryResult->Fetch();
     std::string acc = fields[0].GetCppString();
     if (acc.empty())
         acc = "Unknown";
@@ -1123,8 +1122,6 @@ void WorldSession::HandleWhoisOpcode(WorldPacket& recv_data)
     WorldPacket data(SMSG_WHOIS, msg.size() + 1);
     data << msg;
     _player->GetSession()->SendPacket(data);
-
-    delete result;
 
     DEBUG_LOG("Received whois command from player %s for character %s", GetPlayer()->GetName(), charname.c_str());
 }
@@ -1444,7 +1441,7 @@ void WorldSession::HandleChangePlayerDifficulty(WorldPacket& recv_data)
     result << uint8(isHeroic);
     group->BroadcastPacketInMap(_player, result);
 
-    map->ChangeMapDifficulty(difficulty); // blizzard likely doesnt do this in-place        
+    map->ChangeMapDifficulty(difficulty); // B likely doesnt do this in-place
 
     result = WorldPacket(SMSG_CHANGE_PLAYER_DIFFICULTY_RESULT);
     result << uint32(RESULT_COMPLETE);

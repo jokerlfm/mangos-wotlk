@@ -17,7 +17,7 @@
  */
 
 #include "Common.h"
-#include "WorldPacket.h"
+#include "Server/WorldPacket.h"
 #include "Server/WorldSession.h"
 #include "Server/Opcodes.h"
 #include "Log.h"
@@ -145,6 +145,17 @@ void WorldSession::HandleMoveWorldportAckOpcode()
         map = sMapMgr.CreateMap(loc.mapid, GetPlayer());
 
     GetPlayer()->SetMap(map);
+
+    // must be in wotlk before AlterTeleportLocation - TODO: Refactor BG entering so that BG script can alter transport movement info on bg enter and
+    // change phase mask without interrupt flag removing it
+    // SOTA must already send player inside bg on ship and in already correct phase mask else player falls through the ship on SOTA entry when attacker
+    _player->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_ENTER_WORLD);
+
+    if (_player->InBattleGround())
+        if (BattleGround* bg = _player->GetBattleGround())
+            if (_player->IsInvitedForBattleGroundInstance(_player->GetBattleGroundId()))
+                bg->AlterTeleportLocation(GetPlayer(), GetPlayer()->m_teleportTransport, loc.coord_x, loc.coord_y, loc.coord_z, loc.orientation);
+
     bool found = true;
     if (GetPlayer()->m_teleportTransport)
     {
@@ -228,8 +239,6 @@ void WorldSession::HandleMoveWorldportAckOpcode()
             if (!mInstance->mountAllowed)
                 _player->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
         }
-
-        _player->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_ENTER_WORLD);
 
         // honorless target
         if (GetPlayer()->pvpInfo.inPvPEnforcedArea)
@@ -341,6 +350,12 @@ void WorldSession::HandleMovementOpcodes(WorldPacket& recv_data)
     }
 
     if (!ProcessMovementInfo(movementInfo, mover, plMover, recv_data))
+        return;
+
+    // CMSG opcode has no handler in client, should not be sent to others.
+    // It is sent by client when you jump and hit something on the way up,
+    // thus stopping upward movement and causing you to descend sooner.
+    if (opcode == CMSG_MOVE_FALL_RESET)
         return;
 
     WorldPacket data(opcode, recv_data.size());
@@ -770,8 +785,12 @@ bool WorldSession::ProcessMovementInfo(MovementInfo& movementInfo, Unit* mover, 
     if (!VerifyMovementInfo(movementInfo, mover, recv_data.GetOpcode() == CMSG_FORCE_MOVE_UNROOT_ACK))
         return false;
 
+    // TODO: if root becomes problem during spline again - recheck sniffs
     if (!mover->movespline->Finalized())
-        return false;
+    {
+        if (!mover->movespline->IsBoarding() || (recv_data.GetOpcode() != CMSG_FORCE_MOVE_UNROOT_ACK && recv_data.GetOpcode() != CMSG_FORCE_MOVE_ROOT_ACK))
+			return false;
+    }
 
     // fall damage generation (ignore in flight case that can be triggered also at lags in moment teleportation to another map).
     if (recv_data.GetOpcode() == MSG_MOVE_FALL_LAND && plMover && !plMover->IsTaxiFlying())
@@ -782,7 +801,7 @@ bool WorldSession::ProcessMovementInfo(MovementInfo& movementInfo, Unit* mover, 
 
     if (movementInfo.GetMovementFlags() & MOVEFLAG_MASK_MOVING_OR_TURN)
     {
-        if (mover->IsSitState())
+        if (mover->IsStandUpOnMovementState())
             mover->SetStandState(UNIT_STAND_STATE_STAND);
         mover->HandleEmoteState(0);
     }
