@@ -101,11 +101,7 @@ WorldSession::WorldSession(uint32 id, WorldSocket* sock, AccountTypes sec, uint8
     m_sessionDbcLocale(sWorld.GetAvailableDbcLocale(locale)), m_sessionDbLocaleIndex(sObjectMgr.GetStorageLocaleIndexFor(locale)),
     m_latency(0), m_clientTimeDelay(0), m_tutorialState(TUTORIALDATA_UNCHANGED), m_sessionState(WORLD_SESSION_STATE_CREATED),
     m_timeSyncClockDeltaQueue(6), m_timeSyncClockDelta(0), m_pendingTimeSyncRequests(), m_timeSyncNextCounter(0), m_timeSyncTimer(0),
-    m_requestSocket(nullptr), m_recruitingFriendId(recruitingFriend), m_isRecruiter(isARecruiter) 
-{
-    // lfm ninger 
-    isNinger = false;
-}
+    m_requestSocket(nullptr), m_recruitingFriendId(recruitingFriend), m_isRecruiter(isARecruiter) {}
 
 /// WorldSession destructor
 WorldSession::~WorldSession()
@@ -191,12 +187,7 @@ void WorldSession::SetPlayer(Player* plr, uint32 playerGuid)
     _player = plr;
     if (plr)
         m_GUIDLow = playerGuid;
-
-    // lfm ninger 
-    if (!isNinger)
-    {
-        m_anticheat->NewPlayer();
-    }
+    m_anticheat->NewPlayer();
 }
 
 void WorldSession::SetExpansion(uint8 expansion)
@@ -220,13 +211,6 @@ void WorldSession::SendPacket(WorldPacket const& packet) const
             GetPlayer()->GetPlayerbotMgr()->HandleMasterOutgoingPacket(packet);
     }
 #endif
-
-    // lfm ninger    
-    if (isNinger)
-    {        
-        sNingerManager->HandleNingerPacket(this, packet);
-        return;
-    }
 
     if (!m_Socket || m_Socket->IsClosed())
         return;
@@ -368,31 +352,6 @@ void WorldSession::ProcessByteBufferException(WorldPacket const& packet)
 bool WorldSession::Update(uint32 /*diff*/)
 {
     GetMessager().Execute(this);
-
-    // lfm ninger    
-    if (isNinger)
-    {        
-        if (_player)
-        {
-            if (_player->strategyMap.size() > 0)
-            {
-                if (_player->IsBeingTeleportedNear())
-                {
-                    WorldPacket pkt(MSG_MOVE_TELEPORT_ACK, 20);
-                    pkt << _player->GetPackGUID();
-                    pkt << uint32(0); // flags
-                    pkt << uint32(0); // time
-                    HandleMoveTeleportAckOpcode(pkt);
-                }
-                else if (_player->IsBeingTeleportedFar())
-                {
-                    HandleMoveWorldportAckOpcode();
-                }
-            }
-        }
-
-        return true;
-    }
 
     std::deque<std::unique_ptr<WorldPacket>> recvQueueCopy;
     {

@@ -1822,10 +1822,6 @@ void WorldObject::MovePositionToFirstCollision(Position& pos, float dist, float 
     GenericTransport* transport = GetTransport();
 
     float halfHeight = GetCollisionHeight();
-
-    // lfm halfHeight is unseless ?
-    halfHeight = 0.0f;
-
     if (IsUnit())
     {
         PathFinder path(static_cast<Unit*>(this));

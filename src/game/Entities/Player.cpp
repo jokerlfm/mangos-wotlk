@@ -696,16 +696,9 @@ Player::Player(WorldSession* session): Unit(), m_taxiTracker(*this), m_mover(thi
     m_isDebuggingAreaTriggers = false;
 
     m_fishingSteps = 0;
-    fishingDelay = 0;
 
-    // lfm ninger 
-    groupRole = GroupRole::GroupRole_DPS;
-    activeStrategyIndex = 0;
-    strategyMap.clear();
-    ningerAction = nullptr;    
-    teleportTargetGuid = 0;
-    teleportDelay = 0;
-    reviveDelay = 0;
+    // lfm auto fishing 
+    fishingDelay = 0;
 }
 
 Player::~Player()
@@ -1559,7 +1552,7 @@ void Player::Update(const uint32 diff)
             QuestStatusData& q_status = mQuestStatus[*iter];
             if (q_status.m_timer <= diff)
             {
-                uint32 quest_id = *iter;
+                uint32 quest_id  = *iter;
                 ++iter;                                     // Current iter will be removed in FailQuest
                 FailQuest(quest_id);
             }
@@ -1635,13 +1628,8 @@ void Player::Update(const uint32 diff)
     if (IsAlive())
     {
         m_regenTimer += diff;
-
-        // lfm regen
-        Regenerate(POWER_ENERGY, diff);        
         if (m_regenTimer >= REGEN_TIME_FULL)
-        {
             RegenerateAll(m_regenTimer / 100 * 100);
-        }
     }
 
     if (m_deathState == JUST_DIED)
@@ -1702,7 +1690,7 @@ void Player::Update(const uint32 diff)
     }
 
     // Not auto-free ghost from body in instances; also check for resurrection prevention
-    if (m_deathTimer > 0 && !GetMap()->Instanceable() && !HasAuraType(SPELL_AURA_PREVENT_RESURRECTION) && !IsGhouled())
+    if (m_deathTimer > 0  && !GetMap()->Instanceable() && !HasAuraType(SPELL_AURA_PREVENT_RESURRECTION) && !IsGhouled())
     {
         if (diff >= m_deathTimer)
         {
@@ -1750,72 +1738,6 @@ void Player::Update(const uint32 diff)
         }
     }
 
-    // lfm ninger
-    if (m_session->isNinger)
-    {
-        if (strategyMap.size() > 0)
-        {
-            if (strategyMap[activeStrategyIndex])
-            {
-                if (strategyMap[activeStrategyIndex]->initialized)
-                {
-                    strategyMap[activeStrategyIndex]->Update(diff);
-                }
-            }
-        }
-    }
-
-    if (teleportDelay > 0)
-    {
-        teleportDelay -= diff;
-        if (teleportDelay <= 0)
-        {
-            teleportDelay = 0;
-            if (IsBeingTeleported())
-            {
-                teleportDelay = 1000;
-            }
-            else
-            {
-                ObjectGuid playerGuid = ObjectGuid(HighGuid::HIGHGUID_PLAYER, teleportTargetGuid);
-                if (Player* teleportTarget = ObjectAccessor::FindPlayer(playerGuid))
-                {
-                    TeleportTo(teleportTarget->GetMapId(), teleportTarget->GetPositionX(), teleportTarget->GetPositionY(), teleportTarget->GetPositionZ(), teleportTarget->GetOrientation());
-                    ClearInCombat();
-                    SetSelectionGuid(ObjectGuid());
-                    SetTargetGuid(ObjectGuid());
-                    if (IsAlive())
-                    {
-                        GetMotionMaster()->Clear();
-                        if (getStandState() != UnitStandStateType::UNIT_STAND_STATE_STAND)
-                        {
-                            SetStandState(UnitStandStateType::UNIT_STAND_STATE_STAND);
-                        }
-                        Say("Arrived", Language::LANG_UNIVERSAL);
-                    }
-                    else
-                    {
-                        Say("I will revive in 5 seconds", Language::LANG_UNIVERSAL);
-                        reviveDelay = 5000;
-                    }
-                }
-            }
-        }
-    }
-
-    if (reviveDelay > 0)
-    {
-        reviveDelay -= diff;
-        if (reviveDelay <= 0)
-        {
-            reviveDelay = 0;
-            ResurrectPlayer(0.1f);
-            ClearInCombat();
-            SetSelectionGuid(ObjectGuid());
-            SetTargetGuid(ObjectGuid());
-            GetMotionMaster()->Clear();
-        }
-    }
 }
 
 void Player::Heartbeat()
@@ -2160,22 +2082,18 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
     if (at)
     {
         uint32 miscRequirement = 0;
-        // lfm heroic dungeon teleport 
-        if (mEntry->Instanceable())
+        AreaLockStatus lockStatus = GetAreaTriggerLockStatus(at, GetDifficulty(mEntry->IsRaid()), miscRequirement);
+        if (lockStatus != AREA_LOCKSTATUS_OK)
         {
-            AreaLockStatus lockStatus = GetAreaTriggerLockStatus(at, GetDifficulty(mEntry->IsRaid()), miscRequirement);
-            if (lockStatus != AREA_LOCKSTATUS_OK)
-            {
-                // Teleport not requested by area-trigger
-                // TODO - Assume a player with expansion 0 travels from BootyBay to Ratched, and he is attempted to be teleported to outlands
-                //        then he will repop near BootyBay instead of normally continuing his journey
-                // This code is probably added to catch passengers on ships to northrend who shouldn't go there
-                if (lockStatus == AREA_LOCKSTATUS_INSUFFICIENT_EXPANSION && !assignedAreaTrigger && GetTransport())
-                    RepopAtGraveyard();                         // Teleport to near graveyard if on transport, looks blizz like :)
+            // Teleport not requested by area-trigger
+            // TODO - Assume a player with expansion 0 travels from BootyBay to Ratched, and he is attempted to be teleported to outlands
+            //        then he will repop near BootyBay instead of normally continuing his journey
+            // This code is probably added to catch passengers on ships to northrend who shouldn't go there
+            if (lockStatus == AREA_LOCKSTATUS_INSUFFICIENT_EXPANSION && !assignedAreaTrigger && GetTransport())
+                RepopAtGraveyard();                         // Teleport to near graveyard if on transport, looks blizz like :)
 
-                SendTransferAbortedByLockStatus(mEntry, lockStatus, miscRequirement);
-                return false;
-            }
+            SendTransferAbortedByLockStatus(mEntry, lockStatus, miscRequirement);
+            return false;
         }
     }
 
@@ -2491,11 +2409,7 @@ void Player::RemoveFromWorld()
     ///- The player should only be removed when logging out
     if (IsInWorld())
     {
-        // lfm ninger 
-        if (!GetSession()->isNinger)
-        {
-            GetSession()->GetAnticheat()->LeaveWorld();
-        }
+        GetSession()->GetAnticheat()->LeaveWorld();
         GetCamera().ResetView();
     }
 
@@ -2544,8 +2458,7 @@ void Player::RegenerateAll(uint32 diff)
         }
     }
 
-    // lfm regen energy
-    //Regenerate(POWER_ENERGY, diff);
+    Regenerate(POWER_ENERGY, diff);
 
     Regenerate(POWER_MANA, diff);
 
@@ -2593,9 +2506,8 @@ void Player::Regenerate(Powers power, uint32 diff)
         }   break;
         case POWER_ENERGY:                                  // Regenerate energy
         {
-            // lfm new energy 
-            //addvalue += 0.01f * m_regenTimer * sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_ENERGY);
-            addvalue += 0.01f * diff * sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_ENERGY);
+            float EnergyRate = sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_ENERGY);
+            addvalue = uint32(float(diff) / 100) * EnergyRate * m_energyRegenRate;
             break;
         }
         case POWER_RUNIC_POWER:
@@ -2677,8 +2589,8 @@ void Player::RegenerateHealth(uint32 diff)
 
     if (addvalue < 0)
         addvalue = 0;
-    
-    ModifyHealth(int32(addvalue * float(diff) / 1000));    
+
+    ModifyHealth(int32(addvalue * float(diff) / 1000));
 }
 
 Creature* Player::GetNPCIfCanInteractWith(ObjectGuid guid, uint32 npcflagmask)
@@ -7222,9 +7134,7 @@ void Player::RewardReputation(Quest const* pQuest)
         // No diplomacy mod are applied to the final value (flat). Note the formula (finalValue = DBvalue/100)
         if (pQuest->RewRepValue[i])
         {
-            // lfm rep should not be divided by 100 
-            //int32 rep = CalculateReputationGain(REPUTATION_SOURCE_QUEST, pQuest->RewRepValue[i] / 100, pQuest->RewMaxRepValue[i], pQuest->RewRepFaction[i], GetQuestLevelForPlayer(pQuest), true);
-            int32 rep = CalculateReputationGain(REPUTATION_SOURCE_QUEST, pQuest->RewRepValue[i], pQuest->RewMaxRepValue[i], pQuest->RewRepFaction[i], GetQuestLevelForPlayer(pQuest), true);
+            int32 rep = CalculateReputationGain(REPUTATION_SOURCE_QUEST, pQuest->RewRepValue[i] / 100, pQuest->RewMaxRepValue[i], pQuest->RewRepFaction[i], GetQuestLevelForPlayer(pQuest), true);
 
             if (FactionEntry const* factionEntry = sFactionStore.LookupEntry(pQuest->RewRepFaction[i]))
                 GetReputationMgr().ModifyReputation(factionEntry, rep);
@@ -17794,10 +17704,7 @@ void Player::_LoadTalents(std::unique_ptr<QueryResult> queryResult)
             }
 
             if (m_activeSpec == spec)
-            {
-                // lfm load talents should add lower rank spells
-                addSpell(talentInfo->RankID[currentRank], true, false, true, false);
-            }
+                addSpell(talentInfo->RankID[currentRank], true, false, false, false);
             else
             {
                 PlayerTalent talent;
@@ -24312,25 +24219,10 @@ void Player::ActivateSpec(uint8 specNum)
         if (PlayerTalent const* cur_talent = GetKnownTalentById(tempIter->first))
         {
             if (cur_talent->currentRank != talent.currentRank)
-                learnSpell(talentSpellId, true);
+                learnSpell(talentSpellId, false);
         }
         else
-            learnSpell(talentSpellId, true);
-
-        // lfm learn disabled spells due to talents
-        for (PlayerSpellMap::const_iterator iter = GetSpellMap().begin(); iter != GetSpellMap().end(); ++iter)
-        {
-            if (iter->second.disabled)
-            {
-                if (SpellChainNode const* chain_node = sSpellMgr.GetSpellChainNode(iter->first))
-                {
-                    if(HasSpell(chain_node->first))
-                    {
-                        learnSpell(iter->first, true);
-                    }
-                }
-            }
-        }
+            learnSpell(talentSpellId, false);
 
         // sync states - original state is changed in addSpell that learnSpell calls
         PlayerTalentMap::iterator specIter = m_talents[m_activeSpec].find(tempIter->first);
@@ -24784,19 +24676,15 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, Difficult
         return AREA_LOCKSTATUS_OK;
 
     // Level Requirements
-    // lfm no map diff will not check level 
-    if (mapDiff)
+    if (GetLevel() < at->requiredLevel && !sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_LEVEL))
     {
-        if (GetLevel() < at->requiredLevel && !sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_LEVEL))
-        {
-            miscRequirement = mapDiff->Id;
-            return AREA_LOCKSTATUS_TOO_LOW_LEVEL;
-        }
-        if (!isRegularTargetMap && !sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_LEVEL) && GetLevel() < uint32(maxLevelForExpansion[mapEntry->Expansion()]))
-        {
-            miscRequirement = mapDiff->Id;
-            return AREA_LOCKSTATUS_TOO_LOW_LEVEL;
-        }
+        miscRequirement = mapDiff->Id;
+        return AREA_LOCKSTATUS_TOO_LOW_LEVEL;
+    }
+    if (!isRegularTargetMap && !sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_LEVEL) && GetLevel() < uint32(maxLevelForExpansion[mapEntry->Expansion()]))
+    {
+        miscRequirement = mapDiff->Id;
+        return AREA_LOCKSTATUS_TOO_LOW_LEVEL;
     }
 
     // Raid Requirements
@@ -24820,17 +24708,6 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, Difficult
         return AREA_LOCKSTATUS_MISSING_ITEM;
     }
     // Heroic item requirements
-    // lfm ninger enter dungeon
-    if (at->heroicKey > 0)
-    {
-        if (GetSession()->isNinger)
-        {
-            if (!HasItemCount(at->heroicKey, 1))
-            {
-                StoreNewItemInBestSlots(at->heroicKey, 1);
-            }
-        }
-    }
     if (!isRegularTargetMap && at->heroicKey)
     {
         if (!HasItemCount(at->heroicKey, 1) && (!at->heroicKey2 || !HasItemCount(at->heroicKey2, 1)))
@@ -24846,33 +24723,6 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, Difficult
     }
 
     // Quest Requirements
-    // lfm ninger enter dungeon
-    if (at->requiredQuest > 0)
-    {
-        if (GetSession()->isNinger)
-        {
-            if (GetQuestRewardStatus(at->requiredQuest)!= QuestStatus::QUEST_STATUS_COMPLETE)
-            {
-                if (Quest const* qInfo = sObjectMgr.GetQuestTemplate(at->requiredQuest))
-                {
-                    RewardQuest(qInfo, 0, this, false);
-                }
-            }
-        }
-    }
-    if (at->requiredQuestHeroic > 0)
-    {
-        if (GetSession()->isNinger)
-        {
-            if (GetQuestRewardStatus(at->requiredQuestHeroic) != QuestStatus::QUEST_STATUS_COMPLETE)
-            {
-                if (Quest const* qInfo = sObjectMgr.GetQuestTemplate(at->requiredQuestHeroic))
-                {
-                    RewardQuest(qInfo, 0, this, false);
-                }
-            }
-        }
-    }
     if (isRegularTargetMap && at->requiredQuest && !GetQuestRewardStatus(at->requiredQuest))
     {
         miscRequirement = at->requiredQuest;

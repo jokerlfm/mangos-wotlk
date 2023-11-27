@@ -2699,82 +2699,34 @@ enum
     SPELL_PHASE_DISRUPTOR = 35734,
 };
 
-// lfm void conduit
-//struct npc_void_conduitAI : public Scripted_NoMovementAI
-//{
-//    npc_void_conduitAI(Creature* pCreature) : Scripted_NoMovementAI(pCreature) { Reset(); }
-//
-//    uint32 m_uiEvadeTimer;
-//
-//    void Reset() override
-//    {
-//        m_uiEvadeTimer = 0;
-//    }
-//
-//    void SpellHit(Unit* /*pCaster*/, const SpellEntry* pSpell) override
-//    {
-//        if (pSpell->Id == SPELL_PHASE_DISRUPTOR)
-//            m_uiEvadeTimer = 10000; // custom combat timer, to simulate proper leashing of this mob
-//    }
-//
-//    void MoveInLineOfSight(Unit*) override {}
-//
-//    void UpdateAI(const uint32 uiDiff) override
-//    {
-//        if (m_uiEvadeTimer)
-//        {
-//            if (m_uiEvadeTimer <= uiDiff)
-//                EnterEvadeMode(); // calls reset
-//            else
-//                m_uiEvadeTimer -= uiDiff;
-//        }
-//    }
-//};
 struct npc_void_conduitAI : public Scripted_NoMovementAI
 {
-    npc_void_conduitAI(Creature* pCreature) : Scripted_NoMovementAI(pCreature) 
-    {
-        Reset(); 
-    }
+    npc_void_conduitAI(Creature* pCreature) : Scripted_NoMovementAI(pCreature) { Reset(); }
+
+    uint32 m_uiEvadeTimer;
 
     void Reset() override
     {
-        m_creature->SetHealthPercent(100.0f);        
-        m_creature->SetImmuneToNPC(false);
-        m_creature->SetImmuneToPlayer(false);
-        m_creature->SetCanEnterCombat(false);
+        m_uiEvadeTimer = 0;
     }
 
-    void Aggro(Unit* /*who*/) override 
+    void SpellHit(Unit* /*pCaster*/, const SpellEntry* pSpell) override
     {
-
-    }
-
-    void JustDied(Unit* /*killer*/) override
-    {
-        DoCastSpellIfCan(nullptr, 35763);
-        if (Creature* dim = GetClosestCreatureWithEntry(m_creature, 19554, 200.0f, false))
-        {
-            if (const BroadcastText* btext = sObjectMgr.GetBroadcastText(18602))
-            {
-                dim->MonsterYell(btext->GetText(0).c_str(), Language::LANG_UNIVERSAL);
-            }
-        }
-    }
-
-    void SpellHit(Unit* pCaster, const SpellEntry* pSpell) override
-    {
-        //if (pSpell->Id == SPELL_PHASE_DISRUPTOR)
-        //{
-        // 
-        //}
+        if (pSpell->Id == SPELL_PHASE_DISRUPTOR)
+            m_uiEvadeTimer = 10000; // custom combat timer, to simulate proper leashing of this mob
     }
 
     void MoveInLineOfSight(Unit*) override {}
 
     void UpdateAI(const uint32 uiDiff) override
     {
-
+        if (m_uiEvadeTimer)
+        {
+            if (m_uiEvadeTimer <= uiDiff)
+                EnterEvadeMode(); // calls reset
+            else
+                m_uiEvadeTimer -= uiDiff;
+        }
     }
 };
 

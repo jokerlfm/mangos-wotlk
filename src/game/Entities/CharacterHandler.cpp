@@ -191,10 +191,7 @@ void WorldSession::HandleCharEnum(QueryResult* result)
 
     data.put<uint8>(0, num);
 
-    if (!isNinger)
-    {
-        m_anticheat->SendCharEnum(std::move(data));
-    }    
+    m_anticheat->SendCharEnum(std::move(data));
 }
 
 void WorldSession::HandleCharEnumOpcode(WorldPacket& /*recv_data*/)

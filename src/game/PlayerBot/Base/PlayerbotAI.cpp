@@ -2240,9 +2240,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
                 return;
 
             if (pSpellInfo->AuraInterruptFlags & AURA_INTERRUPT_FLAG_STANDING_CANCELS)
-            {
                 return;
-            }
 
             SetIgnoreUpdateTime((msTime / 1000) + 1);
 

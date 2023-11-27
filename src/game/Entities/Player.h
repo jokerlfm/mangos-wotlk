@@ -46,12 +46,6 @@
 #include <functional>
 #include <vector>
 
-// lfm ninger 
-#include "Ninger/NingerStrategies/NingerStrategy_Base.h"
-#include "Ninger/NingerActions/NingerAction_Base.h"
-class NingerStrategy_Base;
-class NingerAction_Base;
-
 struct Mail;
 class Channel;
 class DynamicObject;
@@ -1079,15 +1073,6 @@ class Player : public Unit
 
         // lfm auto fish
         int fishingDelay;
-
-        // lfm ninger 
-        uint32 groupRole;
-        uint32 activeStrategyIndex;
-        std::unordered_map<uint32, NingerStrategy_Base*> strategyMap;
-        NingerAction_Base* ningerAction;        
-        uint32 teleportTargetGuid;
-        int teleportDelay;
-        int reviveDelay;
 
         void CleanupsBeforeDelete() override;
 

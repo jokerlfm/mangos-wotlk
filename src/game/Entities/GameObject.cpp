@@ -45,9 +45,6 @@
 #include <G3D/Quat.h>
 #include "Entities/Transports.h"
 
-// lfm minger 
-#include "MingerManager.h"
-
 bool QuaternionData::isUnit() const
 {
     return fabs(x * x + y * y + z * z + w * w - 1.0f) < 1e-5f;
@@ -390,6 +387,7 @@ void GameObject::Update(const uint32 diff)
         }
         case GO_READY:
         {
+
             // lfm auto fish
             if (GetGoType() == GAMEOBJECT_TYPE_FISHINGNODE)
             {
@@ -921,19 +919,6 @@ bool GameObject::LoadFromDB(uint32 dbGuid, Map* map, uint32 newGuid, uint32 forc
     float y = data->posY;
     float z = data->posZ;
     float ang = data->orientation;
-
-    // lfm spawn checking 
-    if (sMingerManager->IsHerb(entry))
-    {
-        Position pos;
-        pos.x = x;
-        pos.y = y;
-        pos.z = z;
-        if (!sMingerManager->AddHerb(dbGuid, map->GetId(), pos, VISIBILITY_DISTANCE_NORMAL))
-        {
-            return false;
-        }
-    }
 
     if (transport)
         transport->CalculatePassengerPosition(x, y, z, &ang);
@@ -1777,10 +1762,6 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                     if (!zone_skill)
                         zone_skill = sObjectMgr.GetFishingBaseSkillLevel(zone);
 
-                    // provide error, no fishable zone or area should be 0
-                    if (!zone_skill)
-                        sLog.outErrorDb("Fishable areaId %u are not properly defined in `skill_fishing_base_level`.", subzone);
-
                     // lfm zone fishing skill will be higher 
                     if (zone_skill < 25)
                     {
@@ -1790,14 +1771,20 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                     {
                         zone_skill = 50;
                     }
-                    //else
-                    //{
-                    //    zone_skill = zone_skill + 50;
-                    //}
+
+                    // provide error, no fishable zone or area should be 0
+                    if (!zone_skill)
+                        sLog.outErrorDb("Fishable areaId %u are not properly defined in `skill_fishing_base_level`.", subzone);
 
                     int32 skill = player->GetSkillValue(SKILL_FISHING);
                     int32 chance = skill - zone_skill + 5;
                     int32 roll = irand(1, 100);
+
+                    DEBUG_LOG("Fishing check (skill: %i zone min skill: %i chance %i roll: %i", skill, zone_skill, chance, roll);
+
+                    // normal chance
+                    bool success = skill >= zone_skill && chance >= roll;
+                    GameObject* fishingHole = nullptr;
 
                     // lfm fish chance will not be lower
                     if (skill < zone_skill)
@@ -1813,20 +1800,11 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                         }
                         chance = (skill + 10 - zone_skill) * 100 / maxRootRate;
                     }
-                    if (chance > 95)
+                    if (chance > 75)
                     {
-                        chance = 95;
+                        chance = 75;
                     }
-
-                    DEBUG_LOG("Fishing check (skill: %i zone min skill: %i chance %i roll: %i", skill, zone_skill, chance, roll);
-
-                    // normal chance
-                    bool success = skill >= zone_skill && chance >= roll;
-
-                    // lfm fishing chance 
                     success = chance >= roll;
-
-                    GameObject* fishingHole = nullptr;
 
                     // overwrite fail in case fishhole if allowed (after 3.3.0)
                     if (!success)
@@ -1868,7 +1846,8 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                             m_loot->AutoStore(player);
                             m_loot->Release(player);
                             player->FinishSpell(CURRENT_CHANNELED_SPELL);
-                            player->fishingDelay = urand(500, 1000);                            
+                            player->fishingDelay = urand(500, 1000);
+
                         }
                     }
                     else
@@ -1892,6 +1871,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                     break;
                 }
             }
+
+            player->FinishSpell(CURRENT_CHANNELED_SPELL);
+            return;
         }
         case GAMEOBJECT_TYPE_SUMMONING_RITUAL:              // 18
         {
@@ -2054,7 +2036,6 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
             player->fishingDelay = urand(500, 1000);
 
             player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_FISH_IN_GAMEOBJECT, GetGOInfo()->id);
-
             return;
         }
         case GAMEOBJECT_TYPE_FLAGDROP:                      // 26

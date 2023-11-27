@@ -468,7 +468,7 @@ enum
     SPELL_SIMON_BUTTON_PRESSED      = 39999,
     SPELL_GOOD_PRESS                = 40063,
     SPELL_BAD_PRESS                 = 41241,            // single player punishment
-    SPELL_SIMON_GROUP_REWARD        = 41952,            // group reward
+    SPELL_SIMON_GROUP_REWARD        = 41952,            // group punishment
 
     // quest rewards
     SPELL_APEXIS_VIBRATIONS         = 40310,            // quest complete spell
@@ -683,10 +683,9 @@ struct npc_simon_game_bunnyAI : public ScriptedAI
     // Cleanup event - called when event fails
     void DoCleanupGame()
     {
-        // lfm only summon apexis guard on complete 
-        //if (m_bIsLargeEvent)
-        //    if (Player* player = m_creature->GetMap()->GetPlayer(m_masterPlayerGuid))
-        //        player->CastSpell(player, SPELL_SIMON_GROUP_REWARD, TRIGGERED_OLD_TRIGGERED);
+        if (m_bIsLargeEvent)
+            if (Player* player = m_creature->GetMap()->GetPlayer(m_masterPlayerGuid))
+                player->CastSpell(player, SPELL_SIMON_GROUP_REWARD, TRIGGERED_OLD_TRIGGERED);
 
         // lock the buttons
         DoCastSpellIfCan(m_creature, SPELL_GAME_END_RED, CAST_TRIGGERED);
@@ -1131,9 +1130,6 @@ struct npc_vimgol_AI : public ScriptedAI
     uint32 m_uiVolleyTimer;
     uint32 m_uiCastTimer;
 
-    // lfm vimgol 
-    bool growing;
-
     npc_vimgol_AI(Creature* pCreature) : ScriptedAI(pCreature)
     {
         Reset();
@@ -1141,29 +1137,17 @@ struct npc_vimgol_AI : public ScriptedAI
 
     void Reset() override
     {
-        growing = false;
         m_uiEnrage = false;
         m_uiVolleyTimer = 5000;
         m_uiCastTimer = 0;
     }
 
-    // lfm vimgol
-    void JustRespawned() override
-    {
-        if (const BroadcastText* btext = sObjectMgr.GetBroadcastText(20773))
-        {
-            m_creature->MonsterYell(btext->GetText(0).c_str(), Language::LANG_UNIVERSAL);
-        }
-    }
-
     void MovementInform(uint32 /*uiMovementType*/, uint32 /*uiData*/) override
     {
         m_creature->GetMotionMaster()->Clear();
-        // lfm vimgol
-        m_creature->SetImmobilizedState(true);
-        growing = true;
         m_creature->CastSpell(m_creature, SPELL_UNHOLY_GROWTH, TRIGGERED_NONE);
         DoBroadcastText(SAY_VIMGOL_2, m_creature);
+        m_creature->GetMotionMaster()->MoveChase(m_creature->GetVictim());
     }
 
     void JustDied(Unit* /*pKiller*/) override
@@ -1188,21 +1172,6 @@ struct npc_vimgol_AI : public ScriptedAI
                     m_creature->UpdateAllowedPositionZ(x, y, z);
                     m_creature->GetMotionMaster()->MovePoint(1, x, y, z);
                 }
-            }
-        }
-
-        // lfm vimgol 
-        if (growing)
-        {
-            if (m_creature->IsNonMeleeSpellCasted(false))
-            {
-                return;
-            }
-            else
-            {
-                growing = false;
-                m_creature->SetImmobilizedState(false);
-                m_creature->GetMotionMaster()->MoveChase(m_creature->GetVictim());
             }
         }
 

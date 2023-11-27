@@ -72,10 +72,6 @@ struct boss_shirrakAI : public CombatAI
     {
         if (spellInfo->Id == SPELL_FOCUS_FIRE_AURA)
             DoBroadcastText(EMOTE_FOCUS, m_creature, target);
-                    // lfm carnivorous bite 10 seconds again.
-                    //ResetCombatAction(action, urand(4000, 10000));
-                    ResetCombatAction(action, 10000);
-                }                    
     }
 };
 

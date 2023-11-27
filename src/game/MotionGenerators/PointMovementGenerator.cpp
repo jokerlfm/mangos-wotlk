@@ -23,9 +23,6 @@
 #include "Entities/TemporarySpawn.h"
 #include "AI/BaseAI/UnitAI.h"
 
-// lfm grid search
-#include "Grids/GridNotifiers.h"
-
 //----- Point Movement Generator
 
 void PointMovementGenerator::Initialize(Unit& unit)
@@ -119,23 +116,11 @@ void PointMovementGenerator::MovementInform(Unit& unit)
     if (unit.GetTypeId() == TYPEID_UNIT && static_cast<Creature&>(unit).IsTemporarySummon())
     {
         if (unit.GetSpawnerGuid().IsAnyTypeCreature())
-        {
-            CreatureList cList;
-            MaNGOS::AnyUnitInObjectRangeCheck u_check(&unit, VISIBILITY_DISTANCE_GIGANTIC);
-            MaNGOS::CreatureListSearcher<MaNGOS::AnyUnitInObjectRangeCheck> searcher(cList, u_check);
-            Cell::VisitAllObjects(&unit, searcher, VISIBILITY_DISTANCE_GIGANTIC);
-            for (Creature* eachC : cList)
+            if (Creature* pSummoner = unit.GetMap()->GetCreature(unit.GetSpawnerGuid()))
             {
-                if (eachC->GetObjectGuid() == unit.GetSpawnerGuid())
-                {
-                    if (UnitAI* ai = eachC->AI())
-                    {
-                        ai->SummonedMovementInform(static_cast<Creature*>(&unit), type, m_id);
-                    }
-                    break;
-                }
+                if (UnitAI* ai = pSummoner->AI())
+                    ai->SummonedMovementInform(static_cast<Creature*>(&unit), type, m_id);
             }
-        }
     }
 
     if (m_relayId)

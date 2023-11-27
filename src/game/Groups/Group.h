@@ -142,10 +142,6 @@ class Group
         Group();
         ~Group();
 
-        // lfm ninger 
-        ObjectGuid GetGuidByTargetIcon(uint32 pmIcon);
-        int GetTargetIconByGuid(ObjectGuid pmOG);
-
         // group manipulation methods
         bool   Create(ObjectGuid guid, const char* name);
         bool   LoadGroupFromDB(Field* fields);

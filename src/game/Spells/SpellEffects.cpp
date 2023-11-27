@@ -2330,11 +2330,8 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                     }
                     if (go)
                     {
-                        // lfm skygurad bomb                        
-                        //go->SetRespawnTime(1);
-                        //go->SetLootState(GO_JUST_DEACTIVATED);                  
-                        go->SetRespawnTime(60000);
-                        go->ForcedDespawn(500);
+                        go->SetRespawnTime(1);
+                        go->SetLootState(GO_JUST_DEACTIVATED);
                     }
                     static_cast<Creature*>(unitTarget)->ForcedDespawn();
                     return;
@@ -3946,7 +3943,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
         {
             // Penance
             if (m_spellInfo->SpellFamilyFlags & uint64(0x0080000000000000))
-            {                
+            {
                 if (!unitTarget)
                     return;
 
@@ -3966,11 +3963,6 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                 // prevent interrupted message for main spell
                 finish(true);
 
-                // lfm force select self when casting penance without a target.
-                if (m_caster->GetSelectionGuid().IsEmpty())
-                {
-                    m_caster->SetSelectionGuid(m_caster->GetObjectGuid());
-                }
                 // replace cast by selected spell, this also make it interruptible including target death case
                 if (m_caster->CanAssistSpell(unitTarget, m_spellInfo))
                     m_caster->CastSpell(unitTarget, heal, TRIGGERED_NONE);
@@ -4837,13 +4829,6 @@ void Spell::EffectJump(SpellEffectIndex eff_idx)
 
 void Spell::EffectTeleportUnits(SpellEffectIndex eff_idx)   // TODO - Use target settings for this effect!
 {
-    // lfm debug 
-    uint32 spellId = m_spellInfo->Id;
-    if (spellId == 57840)
-    {
-        bool breakPoint = true;
-    }
-
     if (!unitTarget || unitTarget->IsTaxiFlying())
         return;
 
@@ -4895,37 +4880,9 @@ void Spell::EffectTeleportUnits(SpellEffectIndex eff_idx)   // TODO - Use target
     {
         if (unitTarget->IsPlayer() && unitTarget->IsMoving())
             position.z += 0.5f;
-
-        // lfm shadowstep will be a little more back
-        if (m_spellInfo->Id == 36563)
-        {
-            float gap = unitTarget->GetCombatReach() * 2.0f / 3.0f;
-            float ori = position.o;
-            float destX = position.x;
-            float destY = position.y;
-            float destZ = position.z;
-            if (ori < 0.0f)
-            {
-                ori = ori + M_PI * 2;
-            }
-            ori = ori + M_PI;
-            destX = destX + gap * std::cos(ori);
-            destY = destY + gap * std::sin(ori);
-            unitTarget->UpdateGroundPositionZ(destX, destY, destZ);
-            unitTarget->NearTeleportTo(destX, destY, destZ, ori + M_PI, unitTarget == m_caster,
-                m_spellInfo->EffectImplicitTargetA[eff_idx] == TARGET_LOCATION_DATABASE ||
-                m_spellInfo->EffectImplicitTargetB[eff_idx] == TARGET_LOCATION_DATABASE);
-        }
-        else
-        {
-            float destX = position.x;
-            float destY = position.y;
-            float destZ = position.z;
-            unitTarget->UpdateGroundPositionZ(destX, destY, destZ);
-            unitTarget->NearTeleportTo(destX, destY, destZ, orientation, unitTarget == m_caster,
-                m_spellInfo->EffectImplicitTargetA[eff_idx] == TARGET_LOCATION_DATABASE ||
-                m_spellInfo->EffectImplicitTargetB[eff_idx] == TARGET_LOCATION_DATABASE); // TODO: Fill this with m_targets instead and compare against target
-        }
+        unitTarget->NearTeleportTo(position.x, position.y, position.z, orientation, unitTarget == m_caster,
+            m_spellInfo->EffectImplicitTargetA[eff_idx] == TARGET_LOCATION_DATABASE ||
+            m_spellInfo->EffectImplicitTargetB[eff_idx] == TARGET_LOCATION_DATABASE); // TODO: Fill this with m_targets instead and compare against target
     }
     else if (unitTarget->GetTypeId() == TYPEID_PLAYER)
     {
@@ -11199,13 +11156,6 @@ void Spell::EffectSummonPlayer(SpellEffectIndex /*eff_idx*/)
 
 void Spell::EffectActivateObject(SpellEffectIndex effIdx)
 {
-    // lfm debug 
-    uint32 spellId = m_spellInfo->Id;
-    if (spellId == 46201)
-    {
-        bool breakPoint = true;
-    }
-
     if (!gameObjTarget)
         return;
 
@@ -11247,17 +11197,9 @@ void Spell::EffectActivateObject(SpellEffectIndex effIdx)
         case GameObjectActions::CLOSE:
         case GameObjectActions::REBUILD:
             if (m_spellInfo->Id == 46610)
-            {
                 gameObjTarget->Use(m_caster, m_spellInfo);
-            }
-            // lfm mammoth calf trap
-            else if (m_spellInfo->Id == 46201)
-            {
-                gameObjTarget->Use(m_caster, m_spellInfo);
-            }
             else
                 gameObjTarget->ResetDoorOrButton(m_caster);
-            }
             break;
         case GameObjectActions::DESPAWN:
             gameObjTarget->ForcedDespawn();

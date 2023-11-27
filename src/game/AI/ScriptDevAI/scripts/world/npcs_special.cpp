@@ -3120,86 +3120,6 @@ bool GossipHello_npc_gossip_npc(Player* player, Creature* creature)
     return true;
 }
 
-// lfm scripts 
-struct npc_murkblood_minerAI : public ScriptedAI
-{
-    npc_murkblood_minerAI(Creature* creature) : ScriptedAI(creature), m_dieTimer(15000)
-    {
-        Reset();
-    }
-
-    void Reset() override {}
-
-    uint32 m_dieTimer;
-
-    void JustRespawned() override
-    {
-        if (m_creature->HasAura(31261))
-        {
-            m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
-            m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_NPC);
-        }
-    }
-
-    void UpdateAI(const uint32 diff) override
-    {
-
-    }
-};
-
-//struct blades_edge_black_dragonAI : public ScriptedAI
-//{
-//    blades_edge_black_dragonAI(Creature* creature) : ScriptedAI(creature)
-//    {
-//        Reset();
-//    }
-//
-//    void JustRespawned() override
-//    {
-//        m_creature->SetByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_MISC_FLAGS, UNIT_BYTE1_FLAG_FLY_ANIM);
-//        m_creature->m_movementInfo.AddMovementFlag(MovementFlags::MOVEFLAG_FLYING);
-//        if (m_creature->GetMotionMaster()->GetPathId() == 1)
-//        {
-//            m_creature->GetMotionMaster()->MovePath(1);
-//            m_creature->GetMotionMaster()->PauseWaypoints(5000);
-//            if (Unit* spawner = m_creature->GetSpawner())
-//            {
-//                DoDisplayText(m_creature, sScriptMgr.GetRandomScriptStringFromTemplate(10083), spawner);
-//            }
-//        }
-//    }
-//
-//    void ReceiveAIEvent(AIEventType eventType, Unit* /*sender*/, Unit* /*invoker*/, uint32 /*miscValue*/) override
-//    {
-//        if (Creature* whelping = GetClosestCreatureWithEntry(m_creature, 23364, 20.0f))
-//        {
-//            whelping->ForcedDespawn(100);
-//        }
-//        if (GameObject* egg = GetClosestGameObjectWithEntry(m_creature, 185932, 20.0f))
-//        {
-//            egg->ForcedDespawn(100);
-//        }
-//        m_creature->RemoveByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_MISC_FLAGS, UNIT_BYTE1_FLAG_FLY_ANIM);
-//        m_creature->m_movementInfo.RemoveMovementFlag(MovementFlags::MOVEFLAG_FLYING);
-//        m_creature->SetImmuneToNPC(false);
-//        m_creature->SetImmuneToPlayer(false);                
-//        if (Unit* spawner = m_creature->GetSpawner())
-//        {
-//            AttackStart(spawner);
-//        }        
-//    }
-//
-//    void UpdateAI(const uint32 uiDiff) override
-//    {
-//        if (m_creature->SelectHostileTarget() && m_creature->GetVictim())
-//        {
-//            DoMeleeAttackIfReady();
-//        }
-//    }
-//
-//    int actionType;
-//};
-
 void AddSC_npcs_special()
 {
     Script* pNewScript = new Script;
@@ -3337,15 +3257,4 @@ void AddSC_npcs_special()
 
     RegisterSpellScript<MirrorImageFrostbolt>("spell_mirror_image_frostbolt");
     RegisterSpellScript<InheritMastersThreatList>("spell_inherit_masters_threat_list");
-
-    // lfm scripts 
-    pNewScript = new Script;
-    pNewScript->Name = "npc_murkblood_miner";
-    pNewScript->GetAI = &GetNewAIInstance<npc_murkblood_minerAI>;
-    pNewScript->RegisterSelf();
-
-    //pNewScript = new Script;
-    //pNewScript->Name = "blades_edge_black_dragon";
-    //pNewScript->GetAI = &GetNewAIInstance<blades_edge_black_dragonAI>;
-    //pNewScript->RegisterSelf();
 }

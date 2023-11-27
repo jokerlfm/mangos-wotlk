@@ -90,8 +90,6 @@ struct boss_thespiaAI : public CombatAI
         if (spellInfo->Id == SPELL_LIGHTNING_CLOUD)
             if (urand(0, 1))
                 DoBroadcastText(SAY_CLOUD, m_creature);
-                    //m_uiLightningCloudTimer = m_bIsRegularMode ? 30000 : 10000;
-                    m_uiLightningCloudTimer = m_bIsRegularMode ? 30000 : 14000;
     }
 };
 

@@ -52,9 +52,6 @@
 #include "Entities/Transports.h"
 #include "Anticheat/Anticheat.hpp"
 
- // lfm minger 
-#include "MingerManager.h"
-
 #ifdef BUILD_METRICS
  #include "Metric/Metric.h"
 #endif
@@ -1393,7 +1390,6 @@ void Unit::JustKilledCreature(Unit* killer, Creature* victim, Player* responsibl
 
     // Inform Owner
     Unit* pOwner = victim->GetMaster();
-
     if (victim->IsTemporarySummon())
     {
         if (victim->GetSpawnerGuid().IsCreatureOrVehicle())
@@ -6962,14 +6958,11 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
         data << float(0);
         data << float(0);
         data << float(0);
-        // lfm acore in 1 loop 
-        //for (uint8 i = 0; i < 5; ++i)
-        //{
-        //    data << float(0);
-        //    data << float(0);
-        //}
-        data << float(0);
-        data << float(0);
+        for (uint8 i = 0; i < 5; ++i)
+        {
+            data << float(0);
+            data << float(0);
+        }
         data << uint32(0);
     }
 
@@ -7995,57 +7988,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, Spel
     {
         // Creature damage
         if (GetTypeId() == TYPEID_UNIT && !((Creature*)this)->IsPet())
-    {
             DoneTotalMod *= Creature::_GetSpellDamageMod(((Creature*)this)->GetCreatureInfo()->Rank);
-
-        // lfm creature spell damage mod
-        if (CreatureInfo const* ci = sObjectMgr.GetCreatureTemplate(GetEntry()))
-        {
-            switch (ci->Rank)
-            {
-            case CreatureEliteType::CREATURE_ELITE_NORMAL:
-            {
-                DoneTotalMod = DoneTotalMod * 1.5f;
-                break;
-            }
-            case CreatureEliteType::CREATURE_ELITE_ELITE:
-            {
-                uint32 diffEntry = ci->Entry;
-                const CreatureInfo* ciDiff = ci;
-                for (Difficulty diff = GetMap()->GetDifficulty(); diff > REGULAR_DIFFICULTY; diff = GetPrevDifficulty(diff, GetMap()->IsRaid()))
-                {
-                    if (ciDiff->DifficultyEntry[diff - 1])
-                    {
-                        if (ciDiff = ObjectMgr::GetCreatureTemplate(ci->DifficultyEntry[diff - 1]))
-                        {
-                            diffEntry = ci->DifficultyEntry[diff - 1];
-                            break;
-                        }
-                    }
-                }
-                if (!sMingerManager->IsMingerExceptionEntry(diffEntry))
-                {
-                    DoneTotalMod = DoneTotalMod * 1.5f;
-                }
-                break;
-            }
-            case CreatureEliteType::CREATURE_ELITE_RARE:
-            {
-                DoneTotalMod = DoneTotalMod * 2.0f;
-                break;
-            }
-            case CreatureEliteType::CREATURE_ELITE_RAREELITE:
-            {
-                DoneTotalMod = DoneTotalMod * 2.5f;
-                break;
-            }
-            default:
-            {
-                break;
-            }
-            }
-        }
-    }
 
         AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
         for (auto i : mModDamagePercentDone)
@@ -11491,35 +11434,10 @@ void Unit::UpdateModelData()
 {
     if (CreatureModelInfo const* modelInfo = sObjectMgr.GetCreatureModelInfo(GetDisplayId()))
     {
-        // lfm creature size 
         // we expect values in database to be relative to scale = 1.0
-        //SetFloatValue(UNIT_FIELD_BOUNDINGRADIUS, GetObjectScale() * modelInfo->bounding_radius);
-        //SetFloatValue(UNIT_FIELD_COMBATREACH, GetObjectScale() * modelInfo->combat_reach);
-        float br = modelInfo->bounding_radius;
-        float cr = modelInfo->combat_reach;
-        float size = GetCollisionWidth();
-        if (br > size)
-        {
-            size = br;
-        }
-        if (cr > size)
-        {
-            size = cr;
-        }
-        br = size / 2.0f;
-        cr = size;
-        float scale = GetObjectScale();
-        uint32 modelId = GetDisplayId();
-        if (CreatureModelDataEntry const* modelData = sCreatureModelDataStore.LookupEntry(modelId))
-        {
-            if (scale < modelData->Scale)
-            {
-                scale = modelData->Scale;
-            }
-        }
-        // we expect values in database to be relative to scale = 1.0
-        SetFloatValue(UNIT_FIELD_BOUNDINGRADIUS, scale * br);
-        SetFloatValue(UNIT_FIELD_COMBATREACH, scale * cr);
+        SetFloatValue(UNIT_FIELD_BOUNDINGRADIUS, GetObjectScale() * modelInfo->bounding_radius);
+
+        SetFloatValue(UNIT_FIELD_COMBATREACH, GetObjectScale() * modelInfo->combat_reach);
 
         SetBaseWalkSpeed(modelInfo->SpeedWalk);
         SetBaseRunSpeed(modelInfo->SpeedRun, false);
@@ -13393,7 +13311,12 @@ float Unit::OCTRegenHPPerSpirit() const
     float baseSpirit = spirit;
     if (baseSpirit > 50) baseSpirit = 50;
     float moreSpirit = spirit - baseSpirit;
+
     float regen = baseSpirit * baseRatio->ratio + moreSpirit * moreRatio->ratio;
+
+    // lfm regen  
+    regen = baseSpirit * 0.1f + moreSpirit * 0.1f;
+    
     return regen;
 }
 
@@ -13412,6 +13335,10 @@ float Unit::OCTRegenMPPerSpirit() const
     // Formula get from PaperDollFrame script
     float spirit = GetStat(STAT_SPIRIT);
     float regen = spirit * moreRatio->ratio;
+
+    // lfm regen  
+    regen = spirit * 0.2f;
+
     return regen;
 }
 
@@ -13466,17 +13393,13 @@ float Unit::GetCollisionWidth() const
     }
 
     //! Dismounting case - use basic default model data
-    if (CreatureDisplayInfoEntry const* displayInfo = sCreatureDisplayInfoStore.LookupEntry(GetNativeDisplayId()))
-    {
-        MANGOS_ASSERT(displayInfo);
-        CreatureModelDataEntry const* modelData = sCreatureModelDataStore.LookupEntry(displayInfo->ModelId);
-        MANGOS_ASSERT(modelData);
+    CreatureDisplayInfoEntry const* displayInfo = sCreatureDisplayInfoStore.LookupEntry(GetNativeDisplayId());
+    MANGOS_ASSERT(displayInfo);
+    CreatureModelDataEntry const* modelData = sCreatureModelDataStore.LookupEntry(displayInfo->ModelId);
+    MANGOS_ASSERT(modelData);
 
-        float const collisionWidth = scaleMod * modelData->CollisionWidth * modelData->Scale * displayInfo->scale;
-        return collisionWidth == 0.0f ? DEFAULT_COLLISION_WIDTH : collisionWidth;
-    }
-
-    return 0.0f;
+    float const collisionWidth = scaleMod * modelData->CollisionWidth * modelData->Scale * displayInfo->scale;
+    return collisionWidth == 0.0f ? DEFAULT_COLLISION_WIDTH : collisionWidth;
 }
 
 Player* Unit::GetNextRandomRaidMember(float radius, AuraType noAuraType)

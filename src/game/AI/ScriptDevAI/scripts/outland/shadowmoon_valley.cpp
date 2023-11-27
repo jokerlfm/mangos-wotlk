@@ -121,7 +121,7 @@ struct mob_mature_netherwing_drakeAI : public ScriptedAI
         {
             if (m_uiEatTimer <= uiDiff)
             {
-                if (GameObject* pGo = GetClosestGameObjectWithEntry(m_creature, GO_FLAYER_CARCASS, VISIBILITY_DISTANCE_LARGE))
+                if (GameObject* pGo = GetClosestGameObjectWithEntry(m_creature, GO_FLAYER_CARCASS, 80.0f))
                 {
                     if (m_creature->GetMotionMaster()->GetCurrentMovementGeneratorType() == WAYPOINT_MOTION_TYPE)
                         m_creature->GetMotionMaster()->MovementExpired();

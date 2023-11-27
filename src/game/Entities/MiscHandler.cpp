@@ -401,7 +401,7 @@ void WorldSession::HandleSetSelectionOpcode(WorldPacket& recv_data)
             mover->SetSelectionGuid(guid);
 
     // lfm reputation list 
-    //// update reputation list if need
+    // update reputation list if need
     //Unit* unit = ObjectAccessor::GetUnit(*_player, guid);   // can select group members at diff maps
     //if (!unit)
     //    return;

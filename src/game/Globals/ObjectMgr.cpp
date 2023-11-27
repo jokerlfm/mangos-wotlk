@@ -967,6 +967,13 @@ void ObjectMgr::LoadCreatureClassLvlStats()
 
             cCLS.BaseHealth = fields[6 + (i * 2)].GetUInt32();
             cCLS.BaseDamage = fields[7 + (i * 2)].GetFloat();
+
+            // lfm min damage base set to 0.5
+            if (cCLS.BaseDamage < 0.5f)
+            {
+                cCLS.BaseDamage = 0.5f;
+            }
+
         }
         ++storedRow;
     }

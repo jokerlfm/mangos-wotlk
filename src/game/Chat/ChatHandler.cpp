@@ -213,12 +213,6 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
                 if (lang != LANG_ADDON && !m_anticheat->IsSilenced())
                     m_anticheat->Say(msg);
             }
-
-            // lfm ninger 
-            if (!GetPlayer()->GetSession()->isNinger)
-            {
-                sNingerManager->HandleChatCommand(GetPlayer(), msg);
-            }
         } break;
 
         case CHAT_MSG_WHISPER:
@@ -288,12 +282,6 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
 
             if (lang != LANG_ADDON && !m_anticheat->IsSilenced())
                 m_anticheat->Whisper(msg, player->GetObjectGuid());
-
-            // lfm ninger 
-            if (!GetPlayer()->GetSession()->isNinger)
-            {
-                sNingerManager->HandleChatCommand(GetPlayer(), msg, player);
-            }
         } break;
 
         case CHAT_MSG_PARTY:
@@ -332,11 +320,6 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
             ChatHandler::BuildChatPacket(data, ChatMsg(type), msg.c_str(), Language(lang), _player->GetChatTag(), _player->GetObjectGuid(), _player->GetName());
             group->BroadcastPacket(data, false, group->GetMemberGroup(GetPlayer()->GetObjectGuid()));
 
-            // lfm ninger 
-            if (!GetPlayer()->GetSession()->isNinger)
-            {
-                sNingerManager->HandleChatCommand(GetPlayer(), msg, nullptr, group);
-            }
             break;
         }
         case CHAT_MSG_GUILD:
@@ -452,12 +435,6 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
             WorldPacket data;
             ChatHandler::BuildChatPacket(data, CHAT_MSG_RAID_LEADER, msg.c_str(), Language(lang), _player->GetChatTag(), _player->GetObjectGuid(), _player->GetName());
             group->BroadcastPacket(data, false);
-
-            // lfm ninger 
-            if (!GetPlayer()->GetSession()->isNinger)
-            {
-                sNingerManager->HandleChatCommand(GetPlayer(), msg, nullptr, group);
-            }
         } break;
 
         case CHAT_MSG_RAID_WARNING:
@@ -538,12 +515,6 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
             WorldPacket data;
             ChatHandler::BuildChatPacket(data, CHAT_MSG_BATTLEGROUND_LEADER, msg.c_str(), Language(lang), _player->GetChatTag(), _player->GetObjectGuid(), _player->GetName());
             group->BroadcastPacket(data, false);
-
-            // lfm ninger 
-            if (!GetPlayer()->GetSession()->isNinger)
-            {
-                sNingerManager->HandleChatCommand(GetPlayer(), msg, nullptr, group);
-            }
         } break;
 
         case CHAT_MSG_CHANNEL:

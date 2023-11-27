@@ -96,12 +96,12 @@ struct npc_shaheenAI : public npc_escortAI, private DialogueHelper
     npc_shaheenAI(Creature* pCreature) : npc_escortAI(pCreature),
         DialogueHelper(aIntroDialogue)
     {
-        pauseDelay = 0;
         StartNextDialogueText(SPELL_ETHEREAL_TELEPORT);
         Reset();
     }
 
-    ObjectGuid m_xiraxisGuid;    
+    ObjectGuid m_xiraxisGuid;
+    uint32 m_uiSummonCount;
 
     void Reset() override { }
 
@@ -125,14 +125,11 @@ struct npc_shaheenAI : public npc_escortAI, private DialogueHelper
                 pSummoned->GetMotionMaster()->MovePoint(1, -67.49f, -74.55f, -0.86f);
                 break;
             default:
-            {
-                // lfm all other summons will count                
                 pSummoned->AI()->AttackStart(m_creature);
-            }
-            //// no break;
-            //case NPC_NEXUS_TERROR:
-            //    ++m_uiSummonCount;
-            //    break;
+            // no break;
+            case NPC_NEXUS_TERROR:
+                ++m_uiSummonCount;
+                break;
         }
     }
 
@@ -151,6 +148,12 @@ struct npc_shaheenAI : public npc_escortAI, private DialogueHelper
                 m_creature->HandleEmote(EMOTE_ONESHOT_ROAR);
                 break;
             default:
+                --m_uiSummonCount;
+                if (!m_uiSummonCount)
+                {
+                    SetEscortPaused(false);
+                    m_creature->HandleEmote(EMOTE_STATE_NONE);
+                }
                 break;
         }
     }
@@ -161,7 +164,6 @@ struct npc_shaheenAI : public npc_escortAI, private DialogueHelper
         {
             case 8:
                 SetEscortPaused(true);
-                pauseDelay = 10000;
                 DoScriptText(SAY_FIRST_STOP, m_creature);
                 // summon first wave
                 m_creature->SummonCreature(NPC_ETHEREAL_THEURGIST, -375.86f, -129.16f, -0.95f, 4.82f, TEMPSPAWN_TIMED_OOC_OR_DEAD_DESPAWN, 60000);
@@ -177,7 +179,6 @@ struct npc_shaheenAI : public npc_escortAI, private DialogueHelper
                 break;
             case 18:
                 SetEscortPaused(true);
-                pauseDelay = 10000;
                 DoScriptText(SAY_SECOND_STOP, m_creature);
                 // summon second wave
                 m_creature->SummonCreature(NPC_ETHEREAL_SORCERER, -278.17f, -195.50f, 0.68f, 1.22f, TEMPSPAWN_TIMED_OOC_OR_DEAD_DESPAWN, 60000);
@@ -191,8 +192,8 @@ struct npc_shaheenAI : public npc_escortAI, private DialogueHelper
                 m_creature->SummonCreature(NPC_NEXUS_TERROR, -15.76f, -225.36f,  0.79f, 2.93f, TEMPSPAWN_TIMED_OOC_OR_DEAD_DESPAWN, 240000);
                 break;
             case 27:
-                SetEscortPaused(true);
-                pauseDelay = 5000;
+                if (m_uiSummonCount)
+                    SetEscortPaused(true);
                 DoScriptText(SAY_THIRD_STOP, m_creature);
                 break;
             case 30:
@@ -204,7 +205,6 @@ struct npc_shaheenAI : public npc_escortAI, private DialogueHelper
                 break;
             case 41:
                 SetEscortPaused(true);
-                pauseDelay = 60000;
                 m_creature->SummonCreature(NPC_SHADOW_LORD_XIRAXIS, -47.10f, -0.49f, -0.95f, 3.45f, TEMPSPAWN_TIMED_OOC_OR_DEAD_DESPAWN, 60000);
                 break;
             case 42:
@@ -263,20 +263,6 @@ struct npc_shaheenAI : public npc_escortAI, private DialogueHelper
 
     void UpdateEscortAI(const uint32 uiDiff) override
     {
-        if (!m_creature->IsInCombat())
-        {
-            if (pauseDelay > 0)
-            {
-                pauseDelay -= uiDiff;
-                if (pauseDelay <= 0)
-                {
-                    pauseDelay = 0;
-                    SetEscortPaused(false);
-                    m_creature->HandleEmote(EMOTE_STATE_NONE);
-                }
-            }
-        }
-
         DialogueUpdate(uiDiff);
 
         if (!m_creature->SelectHostileTarget() || !m_creature->GetVictim())
@@ -286,9 +272,6 @@ struct npc_shaheenAI : public npc_escortAI, private DialogueHelper
 
         DoMeleeAttackIfReady();
     }
-
-    // lfm quest pay off
-    int pauseDelay;
 };
 
 UnitAI* GetAI_npc_shaheen(Creature* pCreature)

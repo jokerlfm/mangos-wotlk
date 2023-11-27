@@ -85,17 +85,6 @@
 #include <algorithm>
 #include <mutex>
 
-// lfm minger 
-#include "MingerManager.h"
-
-// lfm ninger
-#include "NingerConfig.h"
-#include "NingerManager.h"
-
-// lfm linger 
-#include "LingerConfig.h"
-#include "LingerManager.h"
-
 INSTANTIATE_SINGLETON_1(World);
 
 volatile bool World::m_stopEvent = false;
@@ -968,9 +957,6 @@ void World::SetInitialWorldSettings()
     // load SQL dbcs first, other DBCs need them
     sObjectMgr.LoadSQLDBCs();
 
-    // lfm minger 
-    sMingerManager->InitializeManager();
-
     // Load before npc_text, gossip_menu_option, script_texts
     sLog.outString("Loading broadcast_text...");
     sObjectMgr.LoadBroadcastText();
@@ -1545,19 +1531,6 @@ void World::SetInitialWorldSettings()
 #ifdef BUILD_PLAYERBOT
     PlayerbotMgr::SetInitialWorldSettings();
 #endif
-
-    // lfm ninger
-    if (sNingerConfig.StartNinger())
-    {
-        sNingerManager->InitializeManager();
-    }
-
-    // lfm linger
-    if (sLingerConfig.StartLinger())
-    {
-        sLingerManager->InitializeManager();
-    }
-
     sLog.outString("---------------------------------------");
     sLog.outString("      CMANGOS: World initialized       ");
     sLog.outString("---------------------------------------");
@@ -1793,13 +1766,6 @@ void World::Update(uint32 diff)
     meas.add_field("singletons", std::to_string(singletons));
     meas.add_field("cleanup", std::to_string(cleanup));
 #endif
-
-    // lfm ninger
-    sNingerManager->UpdateNingerManager(diff);
-    sNingerManager->UpdateNingerEntities(diff);
-
-    // lfm linger 
-    sLingerManager->UpdateManager(diff);
 }
 
 namespace MaNGOS
@@ -2186,9 +2152,6 @@ void World::_UpdateGameTime()
 /// Shutdown the server
 void World::ShutdownServ(uint32 time, uint32 options, uint8 exitcode)
 {
-    // lfm ninger
-    sNingerManager->LogoutNingers(true);
-
     // ignore if server shutdown at next tick
     if (m_stopEvent)
         return;

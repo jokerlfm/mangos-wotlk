@@ -87,9 +87,6 @@ struct boss_telestraAI : public CombatAI
 {
     boss_telestraAI(Creature* creature) : CombatAI(creature, TELESTRA_ACTION_MAX), m_instance(static_cast<instance_nexus*>(creature->GetInstanceData()))
     {
-        cloned = false;
-        cloneCheckDelay = 0;
-
         m_isRegularMode = creature->GetMap()->IsRegularDifficulty();
 
         AddCombatAction(TELESTRA_ACTION_FIRE_BOMB, 0u, 1000u);
@@ -118,8 +115,6 @@ struct boss_telestraAI : public CombatAI
 
     void Reset() override
     {
-        cloned = false;
-        cloneCheckDelay = 0;
         m_uiCloneDeadCount = 0;
         m_uiPersonalityTimer = 0;
         m_bCanCheckAchiev = false;
@@ -276,8 +271,6 @@ struct boss_telestraAI : public CombatAI
                         DisableCombatAction(TELESTRA_ACTION_FIRE_BOMB);
 
                         SetCombatMovement(false);
-                        cloned = true;
-                        cloneCheckDelay = 5000;
                     }
                 }
                 break;
@@ -295,8 +288,6 @@ struct boss_telestraAI : public CombatAI
                         DisableCombatAction(TELESTRA_ACTION_FIRE_BOMB);
 
                         SetCombatMovement(false);
-                        cloned = true;
-                        cloneCheckDelay = 5000;
                     }
                 }
                 break;
@@ -313,45 +304,7 @@ struct boss_telestraAI : public CombatAI
 
         if (m_bCanCheckAchiev)
             m_uiPersonalityTimer += diff;
-
-        if (cloned)
-        {
-            if (cloneCheckDelay > 0)
-            {
-                cloneCheckDelay -= diff;
-                return;
-            }
-            cloneCheckDelay = 5000;
-            Creature* myClone = GetClosestCreatureWithEntry(m_creature, 26928, 100.0f);
-            if (myClone)
-            {
-                return;
-            }
-            myClone = GetClosestCreatureWithEntry(m_creature, 26929, 100.0f);
-            if (myClone)
-            {
-                return;
-            }
-            myClone = GetClosestCreatureWithEntry(m_creature, 26930, 100.0f);
-            if (myClone)
-            {
-                return;
-            }
-            ResetTimer(TELESTRA_SPAWN_BACK_IN, 6000);
-            // Check if it took longer than 5 sec
-            if (m_uiPersonalityTimer > 5000)
-            {
-                if (m_instance)
-                    m_instance->SetSpecialAchievementCriteria(TYPE_ACHIEV_SPLIT_PERSONALITY, false);
-            }
-            m_bCanCheckAchiev = false;
-            cloned = false;
-        }
     }
-
-    // lfm telestra clones
-    bool cloned;
-    int cloneCheckDelay;
 };
 
 /*######

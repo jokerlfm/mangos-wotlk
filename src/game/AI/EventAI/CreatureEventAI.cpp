@@ -331,11 +331,9 @@ bool CreatureEventAI::CheckEvent(CreatureEventAIHolder& holder, Unit* actionInvo
                 return false;
             break;
         case EVENT_T_TIMER_OOC:
-        {
             if (m_creature->IsInCombat() || m_creature->GetCombatManager().IsInEvadeMode())
                 return false;
             break;
-        }
         case EVENT_T_TIMER_GENERIC:
             break;
         case EVENT_T_HP:
@@ -1318,11 +1316,13 @@ bool CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
                     sLog.outErrorEventAI("Event %d attempt to attack nullptr target. Creature %d", eventId, m_creature->GetEntry());
                 return false;
             }
+
             // lfm attack assist
             if (m_creature->IsFriend(target))
             {
                 target = target->GetVictim();
             }
+
             AttackStart(target);
             break;
         }

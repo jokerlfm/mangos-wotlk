@@ -23,9 +23,6 @@
 #include "Globals/SharedDefines.h"
 #include "Spells/SpellAuras.h"
 
- // lfm minger 
-#include "MingerManager.h"
-
 /*#######################################
 ########                         ########
 ########   PLAYERS STAT SYSTEM   ########
@@ -936,59 +933,6 @@ void Creature::UpdateDamagePhysical(WeaponAttackType attType)
     float weapon_mindamage = GetBaseWeaponDamage(attType, MINDAMAGE);
     float weapon_maxdamage = GetBaseWeaponDamage(attType, MAXDAMAGE);
 
-    // lfm creature damage
-    float lfmMultiplier = 1.0f;
-    
-    if (CreatureInfo const* ci = GetCreatureInfo())
-    {
-        switch (ci->Rank)
-        {
-        case CreatureEliteType::CREATURE_ELITE_NORMAL:
-        {
-            lfmMultiplier = 1.5f;
-            break;
-        }
-        case CreatureEliteType::CREATURE_ELITE_ELITE:
-        {
-            uint32 diffEntry = ci->Entry;
-            const CreatureInfo* ciDiff = ci;
-            for (Difficulty diff = GetMap()->GetDifficulty(); diff > REGULAR_DIFFICULTY; diff = GetPrevDifficulty(diff, GetMap()->IsRaid()))
-            {
-                if (ciDiff->DifficultyEntry[diff - 1])
-                {
-                    if (ciDiff = ObjectMgr::GetCreatureTemplate(ci->DifficultyEntry[diff - 1]))
-                    {
-                        diffEntry = ci->DifficultyEntry[diff - 1];
-                        break;
-                    }
-                }
-            }
-            if (!sMingerManager->IsMingerExceptionEntry(diffEntry))
-            {
-                lfmMultiplier = 1.5f;
-            }
-            break;
-        }
-        case CreatureEliteType::CREATURE_ELITE_RARE:
-        {
-            lfmMultiplier = 2.0f;
-            break;
-        }
-        case CreatureEliteType::CREATURE_ELITE_RAREELITE:
-        {
-            lfmMultiplier = 2.5f;
-            break;
-        }
-        default:
-        {
-            break;
-        }
-        }
-    }
-    weapon_mindamage = weapon_mindamage * lfmMultiplier;
-    weapon_maxdamage = weapon_maxdamage * lfmMultiplier;
-
-    // Disarm for creatures
     // lfm disarm will has not weapon damage for creature 
     if (hasWeapon(attType) && !hasWeaponForAttack(attType))
     {
@@ -999,11 +943,12 @@ void Creature::UpdateDamagePhysical(WeaponAttackType attType)
     float mindamage = ((base_value + weapon_mindamage) * base_pct + total_value) * total_pct;
     float maxdamage = ((base_value + weapon_maxdamage) * base_pct + total_value) * total_pct;
 
-    //if (hasWeapon(attType) && !hasWeaponForAttack(attType))
-    //{
-    //    mindamage *= 0.5f;
-    //    maxdamage *= 0.5f;
-    //}
+    // Disarm for creatures
+    if (hasWeapon(attType) && !hasWeaponForAttack(attType))
+    {
+        mindamage *= 0.5f;
+        maxdamage *= 0.5f;
+    }
 
     uint16 fieldmin, fieldmax;
 
