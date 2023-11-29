@@ -65,6 +65,11 @@ struct FactionTemplateEntry;
 #include "PlayerBot/Base/PlayerbotAI.h"
 #endif
 
+// lfm nier 
+#include "Nier/NierEntity.h"
+#include "Nier/NierManager.h"
+#include "Nier/NierStrategies/NierStrategy_Base.h"
+
 struct AreaTrigger;
 
 typedef std::deque<Mail*> PlayerMails;
@@ -1073,6 +1078,14 @@ class Player : public Unit
 
         // lfm auto fish
         int fishingDelay;
+
+        // lfm nier 
+        bool isNier;
+        std::unordered_set<NierEntity*> nParters;
+        std::unordered_set<NierEntity*> nRivals;
+        std::unordered_set<NierEntity*> nComrades;
+        std::unordered_set<NierEntity*> nEnemies;
+        NierStrategy_Base* strategy;
 
         void CleanupsBeforeDelete() override;
 

@@ -43,8 +43,6 @@ public:
     bool IsHerb(uint32 pmEntry);
     bool NearHerb(uint32 pmMapId, Position pmPos, float pmDistance);
     bool AddHerb(uint32 pmGuid, uint32 pmMapId, Position pmPos, float pmDistance);
-    std::vector<std::string> SplitString(std::string srcStr, std::string delimStr, bool repeatedCharIgnored);
-    std::string TrimString(std::string srcStr);
     static MingerManager* instance();    
 
 public:
@@ -53,6 +51,11 @@ public:
     std::unordered_set<uint32> heroicCreatureEntrySet;
     std::unordered_set<uint32> worldCreatureEntrySet;
     std::unordered_set<SpawnedObject*> spawnedHerbSet;
+
+    /// <summary>
+    /// class, subclass, level, entry set
+    /// </summary>
+    std::unordered_map<uint32, std::unordered_map<uint32, std::unordered_map<uint32, std::unordered_set<uint32>>>> vendorEquipsMap;
 };
 
 #define sMingerManager MingerManager::instance()

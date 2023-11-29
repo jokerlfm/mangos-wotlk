@@ -1,77 +1,70 @@
-#ifndef NINGER_MANAGER_H
-#define NINGER_MANAGER_H
+#ifndef NIER_MANAGER_H
+#define NIER_MANAGER_H
 
-#include "NingerEntity.h"
+#include "NierEntity.h"
 
 #include <string>
 #include <iostream>
 #include <sstream>
 
-#include "NingerConfig.h"
+#include "NierConfig.h"
 
 class pvpZonePosition
 {
 public:
-    pvpZonePosition()
-    {
-        mapID = 0;
-        minLevel = 0;
-        maxLevel = 0;
-        spawnDistance = 5.0f;
-        flagPointMap.clear();
-    }
+	pvpZonePosition()
+	{
+		mapID = 0;
+		minLevel = 0;
+		maxLevel = 0;
+		spawnDistance = 5.0f;
+		flagPointMap.clear();
+	}
 
-    uint32 mapID;
-    uint32 minLevel;
-    uint32 maxLevel;
-    float spawnDistance;
-    std::unordered_map<uint32, Position> flagPointMap;
+	uint32 mapID;
+	uint32 minLevel;
+	uint32 maxLevel;
+	float spawnDistance;
+	std::unordered_map<uint32, Position> flagPointMap;
 };
 
 enum ShapeshiftSpell :uint32
 {
-    CatForm = 768,
-    DireBearForm = 9634,
-    BearForm = 5487,
-    MoonkinForm = 24858
+	CatForm = 768,
+	DireBearForm = 9634,
+	BearForm = 5487,
+	MoonkinForm = 24858
 };
 
-class NingerManager
+class NierManager
 {
-    NingerManager();
-    NingerManager(NingerManager const&) = delete;
-    NingerManager& operator=(NingerManager const&) = delete;
-    ~NingerManager() = default;
+	NierManager();
+	NierManager(NierManager const&) = delete;
+	NierManager& operator=(NierManager const&) = delete;
+	~NierManager() = default;
 
 public:
-    void InitializeManager();
-    void UpdateNingerManager(uint32 pmDiff);
-    void UpdateNingerEntities(uint32 pmDiff);
-    void LogoutNingers(bool pmInstant=false);
-    void DeleteNingers();
-    bool LoginNinger(uint32 pmLevel, uint32 pmCount);
+	void InitializeManager();
+	void DeleteNiers();
 
-    bool IsPolymorphed(Unit* pmTarget);
+	void HandleChatCommand(Player* pmCommander, std::string pmContent, Player* pmTargetPlayer = nullptr, Group* pmTargetGroup = nullptr);
+	void HandleNierPacket(const WorldSession* pmSession, WorldPacket pmPacket);
 
-    void HandleChatCommand(Player* pmCommander, std::string pmContent, Player* pmTargetPlayer = nullptr, Group* pmTargetGroup = nullptr);    
-    void HandleNingerPacket(const WorldSession* pmSession, WorldPacket pmPacket);
+	std::vector<std::string> SplitString(std::string srcStr, std::string delimStr, bool repeatedCharIgnored);
+	std::string TrimString(std::string srcStr);
 
-    static NingerManager* instance();
+	static NierManager* instance();
 
 public:
-    std::unordered_map<uint32, std::unordered_map<uint32, uint32>> allianceRaces;
-    std::unordered_map<uint32, std::unordered_map<uint32, uint32>> hordeRaces;
-    uint32 nameIndex;
-    std::unordered_map<uint32, std::string> ningerNameMap;
-    std::unordered_set<NingerEntity*> ningerEntitySet;
-    std::unordered_map<uint32, std::unordered_map<uint32, std::string>> characterTalentTabNameMap;
-    std::unordered_set<uint32> instanceEncounterEntrySet;
+	std::unordered_map<uint32, std::unordered_map<uint32, uint32>> allianceRaces;
+	std::unordered_map<uint32, std::unordered_map<uint32, uint32>> hordeRaces;	
+	std::unordered_map<uint32, std::string> nierNameMap;	
+	std::unordered_map<uint32, std::unordered_map<uint32, std::string>> characterTalentTabNameMap;	
 
 private:
-    void CreateNinger(uint32 pmLevel, bool pmAlliance, uint32 pmGroupRole);
-    int checkDelay;
+	void CreateNier(uint32 pmLevel, bool pmAlliance, uint32 pmGroupRole);
 };
 
-#define sNingerManager NingerManager::instance()
+#define sNierManager NierManager::instance()
 
 #endif

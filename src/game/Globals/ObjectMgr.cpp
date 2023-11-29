@@ -60,6 +60,9 @@
 #include <cstdarg>
 #include <cstring>
 
+// lfm minger 
+#include "Minger/MingerManager.h"
+
 INSTANTIATE_SINGLETON_1(ObjectMgr);
 
 bool normalizePlayerName(std::string& name, size_t max_len)
@@ -2849,6 +2852,34 @@ void ObjectMgr::LoadItemPrototypes()
                 sLog.outErrorDb("Item (Entry: %u) doesn't exists in DB, but must exist.",i);
             */
             continue;
+        }
+
+
+        // lfm npc vendor items 
+        bool canSell = false;
+        if (proto->Class == ItemClass::ITEM_CLASS_WEAPON || proto->Class == ItemClass::ITEM_CLASS_ARMOR)
+        {
+            if (proto->Quality == ItemQualities::ITEM_QUALITY_UNCOMMON)
+            {
+                if (proto->RequiredLevel > 0)
+                {
+                    if (proto->Class == ItemClass::ITEM_CLASS_WEAPON)
+                    {
+                        if (proto->SubClass != ItemSubclassWeapon::ITEM_SUBCLASS_WEAPON_MISC)
+                        {
+                            canSell = true;
+                        }
+                    }
+                    else
+                    {
+                        canSell = true;
+                    }
+                }
+            }
+        }
+        if (canSell)
+        {                    
+            sMingerManager->vendorEquipsMap[proto->Class][proto->SubClass][proto->RequiredLevel].insert(proto->ItemId);
         }
 
         for (const auto& Spell : proto->Spells)
@@ -9401,7 +9432,10 @@ void ObjectMgr::LoadMailLevelRewards()
     m_mailLevelRewardMap.clear();                           // for reload case
 
     uint32 count = 0;
-    auto queryResult = WorldDatabase.Query("SELECT level, raceMask, mailTemplateId, senderEntry FROM mail_level_reward");
+
+    // lfm maile level will be 40+ only 
+    //auto queryResult = WorldDatabase.Query("SELECT level, raceMask, mailTemplateId, senderEntry FROM mail_level_reward");
+    auto queryResult = WorldDatabase.Query("SELECT level, raceMask, mailTemplateId, senderEntry FROM mail_level_reward where level > 40");
 
     if (!queryResult)
     {

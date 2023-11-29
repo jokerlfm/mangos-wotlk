@@ -1,10 +1,10 @@
-#ifndef NINGER_CONFIG_H
-#define NINGER_CONFIG_H
+#ifndef NIER_CONFIG_H
+#define NIER_CONFIG_H
 
-#define NINGER_CONFIG_FILE_NAME "ninger.conf"
+#define NIER_CONFIG_FILE_NAME "nier.conf"
 
-#ifndef NINGER_MARK
-# define NINGER_MARK "ninger"
+#ifndef NIER_MARK
+# define NIER_MARK "nier"
 #endif
 
 #ifndef AOE_TARGETS_RANGE
@@ -87,23 +87,17 @@
 #include <string>
 #include <unordered_map>
 
-class NingerConfig
+class NierConfig
 {
 private:
 	std::string m_filename;
 	std::unordered_map<std::string, std::string> m_entries; // keys are converted to lower case.  values cannot be.
 
 public:
-	NingerConfig()
+	NierConfig()
 	{
 		Enable = 0;
 		Reset = 0;
-		ReviveDelay = 0;
-		DPSDelay = 0;
-		ManagerCheckDelay = 0;
-		NingerCountEachLevel = 0;
-		TeleportDelay = 0;
-		CorpseRunDelay = 0;
 	}
 
 	bool SetSource(const std::string& file);
@@ -120,17 +114,11 @@ public:
 	std::mutex m_configLock;
 
 public:
-	bool StartNinger();
+	bool StartNier();
 	uint32 Enable;
 	uint32 Reset;
-	uint32 ReviveDelay;
-	uint32 DPSDelay;	
-	uint32 TeleportDelay;
-	uint32 CorpseRunDelay;
-	uint32 ManagerCheckDelay;
-	uint32 NingerCountEachLevel;
 };
 
-#define sNingerConfig MaNGOS::Singleton<NingerConfig>::Instance()
+#define sNierConfig MaNGOS::Singleton<NierConfig>::Instance()
 
 #endif

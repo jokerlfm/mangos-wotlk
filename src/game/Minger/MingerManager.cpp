@@ -13,30 +13,30 @@ void MingerManager::InitializeManager()
 {
 	sLog.outBasic("Initialize minger");
 
-	instanceEncounterEntrySet.clear();
-	QueryResult* icQR = WorldDatabase.Query("SELECT distinct creditEntry FROM instance_encounters");
-	if (icQR)
-	{
-		do
-		{
-			Field* fields = icQR->Fetch();
-			uint32 eachEntry = fields[0].GetUInt32();
-			instanceEncounterEntrySet.insert(eachEntry);
-		} while (icQR->NextRow());
-	}
-	delete icQR;
-	heroicCreatureEntrySet.clear();
-	QueryResult* hcQR = WorldDatabase.Query("SELECT DifficultyEntry1 FROM creature_template where DifficultyEntry1 > 0 and entry in (SELECT distinct id FROM creature where map in (269,540,542,543,545,546,547,552,553,554,555,556,557,558,560,574,575,576,578,585,595,599,600,601,602,604,608,619,631,632,649,650,658,668,724) and id > 0);");
-	if (hcQR)
-	{
-		do
-		{
-			Field* fields = hcQR->Fetch();
-			uint32 eachEntry = fields[0].GetUInt32();
-			heroicCreatureEntrySet.insert(eachEntry);
-		} while (hcQR->NextRow());
-	}
-	delete hcQR;
+	//instanceEncounterEntrySet.clear();
+	//QueryResult* icQR = WorldDatabase.Query("SELECT distinct creditEntry FROM instance_encounters");
+	//if (icQR)
+	//{
+	//	do
+	//	{
+	//		Field* fields = icQR->Fetch();
+	//		uint32 eachEntry = fields[0].GetUInt32();
+	//		instanceEncounterEntrySet.insert(eachEntry);
+	//	} while (icQR->NextRow());
+	//}
+	//delete icQR;
+	//heroicCreatureEntrySet.clear();
+	//QueryResult* hcQR = WorldDatabase.Query("SELECT DifficultyEntry1 FROM creature_template where DifficultyEntry1 > 0 and entry in (SELECT distinct id FROM creature where map in (269,540,542,543,545,546,547,552,553,554,555,556,557,558,560,574,575,576,578,585,595,599,600,601,602,604,608,619,631,632,649,650,658,668,724) and id > 0);");
+	//if (hcQR)
+	//{
+	//	do
+	//	{
+	//		Field* fields = hcQR->Fetch();
+	//		uint32 eachEntry = fields[0].GetUInt32();
+	//		heroicCreatureEntrySet.insert(eachEntry);
+	//	} while (hcQR->NextRow());
+	//}
+	//delete hcQR;
 	heroicCreatureEntrySet.insert(18374); // focus fire 
 	heroicCreatureEntrySet.insert(20535); // Lieutenant Drake
 	heroicCreatureEntrySet.insert(20521); // Captain Skarloc
@@ -217,37 +217,4 @@ bool MingerManager::StringEndWith(const std::string& str, const std::string& tai
 bool MingerManager::StringStartWith(const std::string& str, const std::string& head)
 {
 	return str.compare(0, head.size(), head) == 0;
-}
-
-std::vector<std::string> MingerManager::SplitString(std::string srcStr, std::string delimStr, bool repeatedCharIgnored)
-{
-	std::vector<std::string> resultStringVector;
-	std::replace_if(srcStr.begin(), srcStr.end(), [&](const char& c) {if (delimStr.find(c) != std::string::npos) { return true; } else { return false; }}, delimStr.at(0));
-	size_t pos = srcStr.find(delimStr.at(0));
-	std::string addedString = "";
-	while (pos != std::string::npos) {
-		addedString = srcStr.substr(0, pos);
-		if (!addedString.empty() || !repeatedCharIgnored) {
-			resultStringVector.push_back(addedString);
-		}
-		srcStr.erase(srcStr.begin(), srcStr.begin() + pos + 1);
-		pos = srcStr.find(delimStr.at(0));
-	}
-	addedString = srcStr;
-	if (!addedString.empty() || !repeatedCharIgnored) {
-		resultStringVector.push_back(addedString);
-	}
-	return resultStringVector;
-}
-
-std::string MingerManager::TrimString(std::string srcStr)
-{
-	std::string result = srcStr;
-	if (!result.empty())
-	{
-		result.erase(0, result.find_first_not_of(" "));
-		result.erase(result.find_last_not_of(" ") + 1);
-	}
-
-	return result;
 }

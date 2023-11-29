@@ -52,6 +52,9 @@
 #include "Entities/Transports.h"
 #include "Anticheat/Anticheat.hpp"
 
+// lfm minger 
+#include "Minger/MingerManager.h"
+
 #ifdef BUILD_METRICS
  #include "Metric/Metric.h"
 #endif
@@ -369,6 +372,10 @@ Unit::Unit() :
 
     m_aoeImmune = false;
     m_chainImmune = false;
+
+
+    // lfm vendor replacement
+    vendorReplaceCheckDelay = urand(10000, 30000);
 }
 
 Unit::~Unit()
@@ -488,6 +495,64 @@ void Unit::Update(const uint32 diff)
         ModifyAuraState(AURA_STATE_HEALTHLESS_20_PERCENT, GetHealth() < GetMaxHealth() * 0.20f);
         ModifyAuraState(AURA_STATE_HEALTHLESS_35_PERCENT, GetHealth() < GetMaxHealth() * 0.35f);
         ModifyAuraState(AURA_STATE_HEALTH_ABOVE_75_PERCENT, GetHealth() > GetMaxHealth() * 0.75f);
+    }
+
+    // lfm vendor replacement
+    if (vendorReplaceCheckDelay > 0)
+    {
+        vendorReplaceCheckDelay -= diff;
+    }
+    else
+    {
+        vendorReplaceCheckDelay = urand(3600000, 7200000);
+
+        VendorItemData const* vItems = sObjectMgr.GetNpcVendorItemList(GetEntry());
+        if (!vItems || vItems->Empty())
+        {
+            return;
+        }
+        for (VendorItemList::const_iterator itr = vItems->m_items.begin(); itr != vItems->m_items.end(); ++itr)
+        {
+            if (const ItemPrototype* proto = sObjectMgr.GetItemPrototype((*itr)->item))
+            {
+                if (proto->Class == ItemClass::ITEM_CLASS_WEAPON || proto->Class == ItemClass::ITEM_CLASS_ARMOR)
+                {
+                    if (proto->Quality == ItemQualities::ITEM_QUALITY_NORMAL)
+                    {
+                        std::unordered_map<uint32, uint32> replaceMap;
+                        int equipLevel = proto->RequiredLevel;
+                        if (equipLevel > 0)
+                        {
+                            int minLevel = equipLevel - 3;
+                            int maxLevel = equipLevel + 3;
+                            if (minLevel < 1)
+                            {
+                                minLevel = 1;
+                            }
+                            if (maxLevel > 80)
+                            {
+                                maxLevel = 80;
+                            }
+                            for (int checkLevel = minLevel; checkLevel <= maxLevel; checkLevel++)
+                            {
+                                for (std::unordered_set<uint32>::iterator entryIT = sMingerManager->vendorEquipsMap[proto->Class][proto->SubClass][checkLevel].begin(); entryIT != sMingerManager->vendorEquipsMap[proto->Class][proto->SubClass][checkLevel].end(); entryIT++)
+                                {
+                                    replaceMap[replaceMap.size()] = *entryIT;
+                                }
+                            }
+                            if (replaceMap.size() > 0)
+                            {
+                                uint32 replaceEntry = urand(0, replaceMap.size());
+                                replaceEntry = replaceMap[replaceEntry];
+                                (*itr)->item = replaceEntry;
+                                (*itr)->maxcount = 1;
+                                (*itr)->incrtime = 7200000;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     WorldObject::Update(diff);
@@ -13315,7 +13380,7 @@ float Unit::OCTRegenHPPerSpirit() const
     float regen = baseSpirit * baseRatio->ratio + moreSpirit * moreRatio->ratio;
 
     // lfm regen  
-    regen = baseSpirit * 0.1f + moreSpirit * 0.1f;
+    regen = baseSpirit * 0.2f + moreSpirit * 0.2f;
     
     return regen;
 }

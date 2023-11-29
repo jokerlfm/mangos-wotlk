@@ -1163,6 +1163,9 @@ class Unit : public WorldObject
 
         virtual ~Unit();
 
+        // lfm vendor replacement
+        int vendorReplaceCheckDelay;
+
         void AddToWorld() override;
         void RemoveFromWorld() override;
 

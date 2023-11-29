@@ -699,6 +699,16 @@ Player::Player(WorldSession* session): Unit(), m_taxiTracker(*this), m_mover(thi
 
     // lfm auto fishing 
     fishingDelay = 0;
+
+    // lfm nier 
+    isNier = false;
+
+    nParters.clear();
+    nRivals.clear();
+    nComrades.clear();
+    nEnemies.clear();
+
+    strategy = new NierStrategy_Base(this);
 }
 
 Player::~Player()
@@ -1552,7 +1562,7 @@ void Player::Update(const uint32 diff)
             QuestStatusData& q_status = mQuestStatus[*iter];
             if (q_status.m_timer <= diff)
             {
-                uint32 quest_id  = *iter;
+                uint32 quest_id = *iter;
                 ++iter;                                     // Current iter will be removed in FailQuest
                 FailQuest(quest_id);
             }
@@ -1690,7 +1700,7 @@ void Player::Update(const uint32 diff)
     }
 
     // Not auto-free ghost from body in instances; also check for resurrection prevention
-    if (m_deathTimer > 0  && !GetMap()->Instanceable() && !HasAuraType(SPELL_AURA_PREVENT_RESURRECTION) && !IsGhouled())
+    if (m_deathTimer > 0 && !GetMap()->Instanceable() && !HasAuraType(SPELL_AURA_PREVENT_RESURRECTION) && !IsGhouled())
     {
         if (diff >= m_deathTimer)
         {
@@ -1727,17 +1737,93 @@ void Player::Update(const uint32 diff)
         m_playerbotMgr->UpdateAI(diff);
 #endif
 
-    // lfm auto fish
+    // lfm auto fish     
     if (fishingDelay > 0)
     {
         fishingDelay -= diff;
         if (fishingDelay <= 0)
         {
-            CastSpell(this, 7620, TriggerCastFlags::TRIGGERED_NONE);
-            fishingDelay = 0;
+            if (IsNonMeleeSpellCasted(false))
+            {
+                fishingDelay = urand(500, 1000);
+            }
+            else
+            {
+                CastSpell(this, 7620, TriggerCastFlags::TRIGGERED_NONE);
+                fishingDelay = 0;
+            }
         }
     }
 
+    // lfm nier 
+    if (nParters.empty())
+    {
+        uint32 master_id = GetObjectGuid().GetCounter();
+        std::ostringstream queryStream;
+        queryStream << "SELECT entry, master_id, account_id, character_id, career, race, nier_type, specialty, group_role FROM nier where master_id = " << master_id;
+        auto nierQR = CharacterDatabase.Query(queryStream.str().c_str());
+        if (nierQR)
+        {
+            do
+            {
+                Field* fields = nierQR->Fetch();
+                NierEntity* re = new NierEntity();
+                re->nier_id = fields[0].GetUInt32();
+                re->master_id = fields[1].GetUInt32();
+                re->account_id = fields[2].GetUInt32();
+                re->character_id = fields[3].GetUInt32();
+                re->target_class = fields[4].GetUInt32();
+                re->target_race = fields[5].GetUInt32();
+                re->nier_type = fields[6].GetUInt32();
+                re->target_specialty = fields[6].GetUInt32();
+                re->group_role = fields[6].GetUInt32();
+                re->target_level = GetLevel();
+                nParters.insert(re);
+            } while (nierQR->NextRow());
+        }
+        if (nParters.empty())
+        {
+            uint32 myRace = getRace();
+            bool isAlliance = false;
+            if (myRace == Races::RACE_DRAENEI || myRace == Races::RACE_DWARF || myRace == Races::RACE_GNOME || myRace == Races::RACE_HUMAN || myRace == Races::RACE_NIGHTELF)
+            {
+                isAlliance = true;
+            }
+            std::unordered_set<uint32> classSet;
+            classSet.insert(Classes::CLASS_PRIEST);
+            classSet.insert(Classes::CLASS_MAGE);
+            classSet.insert(Classes::CLASS_WARLOCK);
+            classSet.insert(Classes::CLASS_DRUID);
+
+            for (std::unordered_set<uint32>::iterator classIT = classSet.begin(); classIT != classSet.end(); classIT++)
+            {
+                uint32 eachClass = *classIT;
+                uint32 raceCount = sizeof(sNierManager->allianceRaces[eachClass]);
+                uint32 raceIndex = urand(0, raceCount);
+                if (raceIndex == raceCount)
+                {
+                    sLog.outError("urand exceeded.");
+                    raceIndex = raceCount - 1;
+                }
+                uint32 targetRace = sNierManager->allianceRaces[Classes::CLASS_PRIEST][raceIndex];
+
+                std::ostringstream sqlStream;
+                sqlStream << "INSERT INTO nier (master_id, account_id, character_id, career, race, nier_type, specialty, group_role) VALUES (" << master_id << ", 0, 0, " << eachClass << ", " << targetRace << ", 0 , 0, 0)";
+                std::string sql = sqlStream.str();
+                CharacterDatabase.DirectExecute(sql.c_str());
+                sLog.outBasic("Nier added : %d, %d", eachClass, targetRace);
+            }
+        }
+    }
+    else
+    {
+        for (std::unordered_set<NierEntity*>::iterator nierIT = nParters.begin(); nierIT != nParters.end(); nierIT++)
+        {
+            (*nierIT)->Update(diff);
+        }
+
+        strategy->Update(diff);
+    }
 }
 
 void Player::Heartbeat()
@@ -5813,6 +5899,9 @@ bool Player::UpdateFishingSkill()
     if (SkillValue >= GetSkillMax(SKILL_FISHING))
         return false;
 
+    // lfm fishing skill chance always be 25     
+    return UpdateSkillPro(SKILL_FISHING, 25 * 10, 1);
+
     uint8 stepsNeededToLevelUp = GetFishingStepsNeededToLevelUp(SkillValue);
     ++m_fishingSteps;
 
@@ -5820,8 +5909,8 @@ bool Player::UpdateFishingSkill()
     if (m_fishingSteps >= stepsNeededToLevelUp)
     {
         m_fishingSteps = 0;
-
-        return UpdateSkillPro(SKILL_FISHING, 100*10, 1);
+        
+        return UpdateSkillPro(SKILL_FISHING, 100*10, 1);        
     }
 
     return false;
@@ -13425,7 +13514,8 @@ void Player::PrepareGossipMenu(WorldObject* pSource, uint32 menuId, bool forceQu
 #ifdef BUILD_PLAYERBOT
                     if (botConfig.GetBoolDefault("PlayerbotAI.DisableBots", false) && !pCreature->isInnkeeper())
                     {
-                        ChatHandler(this).PSendSysMessage("|cffff0000Playerbot system is currently disabled!");
+                        // lfm bot alert disabled 
+                        //ChatHandler(this).PSendSysMessage("|cffff0000Playerbot system is currently disabled!");
                         hasMenuItem = false;
                         break;
                     }

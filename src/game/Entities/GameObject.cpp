@@ -393,7 +393,6 @@ void GameObject::Update(const uint32 diff)
             {
                 Unit* caster = GetOwner();
                 Use(caster);
-                break;
             }
 
             if (m_respawnTime > 0)                          // timer on
@@ -1799,10 +1798,13 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                             maxRootRate = 150.0f;
                         }
                         chance = (skill + 10 - zone_skill) * 100 / maxRootRate;
+
+                        // lfm fish chance will not be lower 
+                        chance = skill + 10 - zone_skill;
                     }
-                    if (chance > 75)
+                    if (chance > 50)
                     {
-                        chance = 75;
+                        chance = 50;
                     }
                     success = chance >= roll;
 
@@ -1844,10 +1846,8 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
 
                             // lfm auto fishing 
                             m_loot->AutoStore(player);
-                            m_loot->Release(player);
                             player->FinishSpell(CURRENT_CHANNELED_SPELL);
                             player->fishingDelay = urand(500, 1000);
-
                         }
                     }
                     else
@@ -2028,10 +2028,8 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
             m_loot = new Loot(player, this, LOOT_FISHINGHOLE);
             m_loot->ShowContentTo(player);
 
-            // lfm fishing hole 
             // lfm auto fishing 
             m_loot->AutoStore(player);
-            m_loot->Release(player);
             player->FinishSpell(CURRENT_CHANNELED_SPELL);
             player->fishingDelay = urand(500, 1000);
 
