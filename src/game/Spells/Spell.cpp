@@ -7116,6 +7116,30 @@ SpellCastResult Spell::CheckCast(bool strict)
         }
     }
 
+    // lfm disarm 
+    // Not allow disarm unarmed player
+    if (m_spellInfo->Mechanic == MECHANIC_DISARM)
+    {
+        if (target->IsPlayer())
+        {
+            if (Player const* player = static_cast<Player*>(target))
+            {
+                if (!player->GetWeaponForAttack(WeaponAttackType::BASE_ATTACK))
+                {
+                    return SPELL_FAILED_TARGET_NO_WEAPONS;
+                }
+            }
+        }
+        else
+        {
+            uint32 creatureWeapon = target->GetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID);
+            if (creatureWeapon == 0)
+            {
+                return SPELL_FAILED_TARGET_NO_WEAPONS;
+            }
+        }
+    }
+
     // all ok
     return OnCheckCast(strict);
 }

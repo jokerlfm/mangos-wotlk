@@ -85,6 +85,14 @@
 #include <algorithm>
 #include <mutex>
 
+// lfm ming 
+#include "Ming/MingConfig.h"
+#include "Ming/MingManager.h"
+
+// lfm nier 
+#include "Nier/NierConfig.h"
+#include "Nier/NierManager.h"
+
 INSTANTIATE_SINGLETON_1(World);
 
 volatile bool World::m_stopEvent = false;
@@ -1531,6 +1539,25 @@ void World::SetInitialWorldSettings()
 #ifdef BUILD_PLAYERBOT
     PlayerbotMgr::SetInitialWorldSettings();
 #endif
+
+    // lfm ming 
+    if (sMingConfig.StartMing())
+    {
+        if (sMingConfig.Enable == 1)
+        {
+            sMingManager->InitializeManager();
+        }
+    }
+
+    // lfm nier 
+    if (sNierConfig.StartNier())
+    {
+        if (sNierConfig.Enable == 1)
+        {
+            sNierManager->InitializeManager();
+        }
+    }
+
     sLog.outString("---------------------------------------");
     sLog.outString("      CMANGOS: World initialized       ");
     sLog.outString("---------------------------------------");

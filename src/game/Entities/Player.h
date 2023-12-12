@@ -66,9 +66,8 @@ struct FactionTemplateEntry;
 #endif
 
 // lfm nier 
-#include "Nier/NierEntity.h"
-#include "Nier/NierManager.h"
 #include "Nier/NierStrategies/NierStrategy_Base.h"
+#include "Nier/Nier_Base.h"
 
 struct AreaTrigger;
 
@@ -1079,12 +1078,15 @@ class Player : public Unit
         // lfm auto fish
         int fishingDelay;
 
-        // lfm nier 
+        // lfm nier
         bool isNier;
-        std::unordered_set<NierEntity*> nParters;
-        std::unordered_set<NierEntity*> nRivals;
-        std::unordered_set<NierEntity*> nComrades;
-        std::unordered_set<NierEntity*> nEnemies;
+        uint32 masterId;
+        uint32 groupRole;
+
+        std::unordered_set<Nier_Base*> partners;
+        std::unordered_set<Nier_Base*> rivals;
+        std::unordered_set<Nier_Base*> comrades;
+        std::unordered_set<Nier_Base*> enemies;
         NierStrategy_Base* strategy;
 
         void CleanupsBeforeDelete() override;

@@ -1,68 +1,57 @@
 #ifndef NIER_MANAGER_H
 #define NIER_MANAGER_H
 
-#include "NierEntity.h"
-
 #include <string>
 #include <iostream>
 #include <sstream>
 
-#include "NierConfig.h"
-
-class pvpZonePosition
+enum GroupRole :uint32
 {
-public:
-	pvpZonePosition()
-	{
-		mapID = 0;
-		minLevel = 0;
-		maxLevel = 0;
-		spawnDistance = 5.0f;
-		flagPointMap.clear();
-	}
-
-	uint32 mapID;
-	uint32 minLevel;
-	uint32 maxLevel;
-	float spawnDistance;
-	std::unordered_map<uint32, Position> flagPointMap;
+    GroupRole_DPS = 0,
+    GroupRole_Tank = 1,
+    GroupRole_Healer = 2,
 };
 
 enum ShapeshiftSpell :uint32
 {
-	CatForm = 768,
-	DireBearForm = 9634,
-	BearForm = 5487,
-	MoonkinForm = 24858
+    CatForm = 768,
+    DireBearForm = 9634,
+    BearForm = 5487,
+    MoonkinForm = 24858
 };
 
 class NierManager
 {
-	NierManager();
-	NierManager(NierManager const&) = delete;
-	NierManager& operator=(NierManager const&) = delete;
-	~NierManager() = default;
+    NierManager();
+    NierManager(NierManager const&) = delete;
+    NierManager& operator=(NierManager const&) = delete;
+    ~NierManager() = default;
 
 public:
-	void InitializeManager();
-	void DeleteNiers();
+    void InitializeManager();
+    void LogoutNiers(bool pmInstant = false);
+    void DeleteNiers();
+    void AddNier(Player* pMaster, uint32 pCareer);
+    bool IsPolymorphed(Unit* pmTarget);
 
-	void HandleChatCommand(Player* pmCommander, std::string pmContent, Player* pmTargetPlayer = nullptr, Group* pmTargetGroup = nullptr);
-	void HandleNierPacket(const WorldSession* pmSession, WorldPacket pmPacket);
+    void RandomTeleport(Player* me, Player* target);
 
-	std::vector<std::string> SplitString(std::string srcStr, std::string delimStr, bool repeatedCharIgnored);
-	std::string TrimString(std::string srcStr);
+    float GetExactDistance(Position p1, Position p2);
+    Position PredictPosition(Unit* target);
 
-	static NierManager* instance();
+    void HandleChatCommand(Player* pCommander, std::string pContent, Player* pTargetPlayer = nullptr);
+    void HandlePacket(const WorldSession* pmSession, WorldPacket pmPacket);
+
+    static NierManager* instance();
 
 public:
-	std::unordered_map<uint32, std::unordered_map<uint32, uint32>> allianceRaces;
-	std::unordered_map<uint32, std::unordered_map<uint32, uint32>> hordeRaces;	
-	std::unordered_map<uint32, std::string> nierNameMap;	
-	std::unordered_map<uint32, std::unordered_map<uint32, std::string>> characterTalentTabNameMap;	
+    std::unordered_map<uint32, std::unordered_map<uint32, uint32>> allianceRaces;
+    std::unordered_map<uint32, std::unordered_map<uint32, uint32>> hordeRaces;
+    std::unordered_map<uint32, std::string> nierNameMap;
+    std::unordered_map<uint32, std::unordered_map<uint32, std::string>> characterTalentTabNameMap;
+    std::unordered_map<uint32, std::string> groupRoleNameMap;
 
-private:
-	void CreateNier(uint32 pmLevel, bool pmAlliance, uint32 pmGroupRole);
+    std::unordered_map<uint32, uint32> trainerMap;
 };
 
 #define sNierManager NierManager::instance()

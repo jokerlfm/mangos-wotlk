@@ -37,6 +37,9 @@
 #include "GMTickets/GMTicketMgr.h"
 #include "Anticheat/Anticheat.hpp"
 
+ // lfm nier
+#include "Nier/NierManager.h"
+
 bool WorldSession::CheckChatMessage(std::string& msg, bool addon/* = false*/)
 {
 #ifdef BUILD_PLAYERBOT
@@ -213,6 +216,12 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
                 if (lang != LANG_ADDON && !m_anticheat->IsSilenced())
                     m_anticheat->Say(msg);
             }
+
+            // lfm nier 
+            if (!_player->GetSession()->isNier)
+            {
+                sNierManager->HandleChatCommand(_player, msg);
+            }
         } break;
 
         case CHAT_MSG_WHISPER:
@@ -282,6 +291,13 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
 
             if (lang != LANG_ADDON && !m_anticheat->IsSilenced())
                 m_anticheat->Whisper(msg, player->GetObjectGuid());
+
+            // lfm nier 
+            if (!_player->GetSession()->isNier)
+            {
+                sNierManager->HandleChatCommand(_player, msg, player);
+            }
+
         } break;
 
         case CHAT_MSG_PARTY:
@@ -319,6 +335,12 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
             WorldPacket data;
             ChatHandler::BuildChatPacket(data, ChatMsg(type), msg.c_str(), Language(lang), _player->GetChatTag(), _player->GetObjectGuid(), _player->GetName());
             group->BroadcastPacket(data, false, group->GetMemberGroup(GetPlayer()->GetObjectGuid()));
+
+            // lfm nier 
+            if (!_player->GetSession()->isNier)
+            {
+                sNierManager->HandleChatCommand(_player, msg);
+            }
 
             break;
         }
@@ -435,6 +457,13 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
             WorldPacket data;
             ChatHandler::BuildChatPacket(data, CHAT_MSG_RAID_LEADER, msg.c_str(), Language(lang), _player->GetChatTag(), _player->GetObjectGuid(), _player->GetName());
             group->BroadcastPacket(data, false);
+
+            // lfm nier 
+            if (!_player->GetSession()->isNier)
+            {
+                sNierManager->HandleChatCommand(_player, msg);
+            }
+
         } break;
 
         case CHAT_MSG_RAID_WARNING:
@@ -515,6 +544,13 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
             WorldPacket data;
             ChatHandler::BuildChatPacket(data, CHAT_MSG_BATTLEGROUND_LEADER, msg.c_str(), Language(lang), _player->GetChatTag(), _player->GetObjectGuid(), _player->GetName());
             group->BroadcastPacket(data, false);
+
+            // lfm nier 
+            if (!_player->GetSession()->isNier)
+            {
+                sNierManager->HandleChatCommand(_player, msg);
+            }
+
         } break;
 
         case CHAT_MSG_CHANNEL:

@@ -269,7 +269,9 @@ bool GameObject::Create(uint32 dbGuid, uint32 guidlow, uint32 name_id, Map* map,
         case GAMEOBJECT_TYPE_SPELL_FOCUS:
         case GAMEOBJECT_TYPE_GOOBER:
         case GAMEOBJECT_TYPE_CHEST:
-            SetUInt32Value(GAMEOBJECT_DYNAMIC, GO_DYNFLAG_LO_ACTIVATE | GO_DYNFLAG_LO_SPARKLE);
+            // lfm no sparkle 
+            //SetUInt32Value(GAMEOBJECT_DYNAMIC, GO_DYNFLAG_LO_ACTIVATE | GO_DYNFLAG_LO_SPARKLE);
+            SetUInt32Value(GAMEOBJECT_DYNAMIC, GO_DYNFLAG_LO_ACTIVATE);
             break;
         case GAMEOBJECT_TYPE_QUESTGIVER:
             SetUInt32Value(GAMEOBJECT_DYNAMIC, GO_DYNFLAG_LO_ACTIVATE);

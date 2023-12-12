@@ -435,10 +435,13 @@ void Spell::EffectSchoolDMG(SpellEffectIndex eff_idx)
                 }
                 // Shield Slam
                 else if ((m_spellInfo->SpellFamilyFlags & uint64(0x0000020000000000)) && m_spellInfo->Category == 1209)
-                    damage += int32(m_caster->GetShieldBlockValue());
-                // Revenge ${$m1+$AP*0.310} to ${$M1+$AP*0.310}
+                    damage += int32(m_caster->GetShieldBlockValue());                
                 else if (m_spellInfo->SpellFamilyFlags & uint64(0x0000000000000400))
-                    damage += uint32(m_caster->GetTotalAttackPowerValue(BASE_ATTACK) * 0.310f);
+                {
+                    // lfm revenge bonus 
+                    // Revenge ${$m1+$AP*0.310} to ${$M1+$AP*0.310}
+                    damage += uint32(m_caster->GetTotalAttackPowerValue(BASE_ATTACK) * 0.1f);
+                }                    
                 // Heroic Throw ${$m1+$AP*.50}
                 else if (m_spellInfo->SpellFamilyFlags & uint64(0x0000000100000000))
                     damage += uint32(m_caster->GetTotalAttackPowerValue(BASE_ATTACK) * 0.5f);

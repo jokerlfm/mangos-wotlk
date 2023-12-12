@@ -944,11 +944,11 @@ void Creature::UpdateDamagePhysical(WeaponAttackType attType)
     float maxdamage = ((base_value + weapon_maxdamage) * base_pct + total_value) * total_pct;
 
     // Disarm for creatures
-    if (hasWeapon(attType) && !hasWeaponForAttack(attType))
-    {
-        mindamage *= 0.5f;
-        maxdamage *= 0.5f;
-    }
+    //if (hasWeapon(attType) && !hasWeaponForAttack(attType))
+    //{
+    //    mindamage *= 0.5f;
+    //    maxdamage *= 0.5f;
+    //}
 
     uint16 fieldmin, fieldmax;
 

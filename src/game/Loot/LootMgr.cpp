@@ -299,6 +299,24 @@ bool LootStoreItem::Roll(bool rate) const
 
     float qualityModifier = pProto && rate ? sWorld.getConfig(qualityToRate[pProto->Quality]) : 1.0f;
 
+    // lfm equipment drop rate 
+    if (pProto->Class == ItemClass::ITEM_CLASS_WEAPON && pProto->Quality == ItemQualities::ITEM_QUALITY_POOR)
+    {
+        qualityModifier = qualityModifier * 0.25f;
+    }
+    else if (pProto->Class == ItemClass::ITEM_CLASS_WEAPON && pProto->Quality == ItemQualities::ITEM_QUALITY_NORMAL)
+    {
+        qualityModifier = qualityModifier * 0.25f;
+    }
+    else if (pProto->Class == ItemClass::ITEM_CLASS_ARMOR && pProto->Quality == ItemQualities::ITEM_QUALITY_POOR)
+    {
+        qualityModifier = qualityModifier * 0.25f;
+    }
+    else if (pProto->Class == ItemClass::ITEM_CLASS_ARMOR && pProto->Quality == ItemQualities::ITEM_QUALITY_NORMAL)
+    {
+        qualityModifier = qualityModifier * 0.25f;
+    }
+
     return roll_chance_f(chance * qualityModifier);
 }
 

@@ -1,22 +1,16 @@
-#ifndef NIER_STRATEGY_H
-#define NIER_STRATEGY_H
+#ifndef NIER_STRATEGY_BASE_H
+#define NIER_STRATEGY_BASE_H
 
-#include "Nier/NierConfig.h"
-
-enum GroupRole :uint32
-{
-	GroupRole_DPS = 0,
-	GroupRole_Tank = 1,
-	GroupRole_Healer = 2,
-};
+#include "Nier/Nier_Base.h"
 
 class NierStrategy_Base
 {
 public:
-	NierStrategy_Base(Player* pmMe);
-	void Update(uint32 diff);
+    NierStrategy_Base();
+
+    virtual void Update(uint32 pDiff, Player* pMaster, std::unordered_set<Nier_Base*> pNierSet);
 
 public:
-	Player* me;
+    bool rushing;
 };
 #endif

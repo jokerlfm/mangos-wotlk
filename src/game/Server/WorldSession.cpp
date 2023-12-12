@@ -54,6 +54,9 @@
 #include "PlayerBot/Base/PlayerbotAI.h"
 #endif
 
+// lfm nier 
+#include "Nier/NierManager.h"
+
 // select opcodes appropriate for processing in Map::Update context for current session state
 static bool MapSessionFilterHelper(WorldSession* session, OpcodeHandler const& opHandle)
 {
@@ -205,6 +208,14 @@ void WorldSession::SetExpansion(uint8 expansion)
 /// Send a packet to the client
 void WorldSession::SendPacket(WorldPacket const& packet) const
 {
+    // lfm nier    
+    if (isNier)
+    {
+        sNierManager->HandlePacket(this, packet);
+        return;
+    }
+
+
 #ifdef BUILD_PLAYERBOT
     // Send packet to bot AI
     if (GetPlayer())
@@ -355,6 +366,27 @@ void WorldSession::ProcessByteBufferException(WorldPacket const& packet)
 /// Update the WorldSession (triggered by World update)
 bool WorldSession::Update(uint32 /*diff*/)
 {
+    // lfm nier    
+    if (isNier)
+    {
+        if (_player)
+        {
+            if (_player->IsBeingTeleportedNear())
+            {
+                WorldPacket pkt(MSG_MOVE_TELEPORT_ACK, 20);
+                pkt << _player->GetPackGUID();
+                pkt << uint32(0); // flags
+                pkt << uint32(0); // time
+                HandleMoveTeleportAckOpcode(pkt);
+            }
+            else if (_player->IsBeingTeleportedFar())
+            {
+                HandleMoveWorldportAckOpcode();
+            }
+        }
+        return true;
+    }
+
     GetMessager().Execute(this);
 
     std::deque<std::unique_ptr<WorldPacket>> recvQueueCopy;

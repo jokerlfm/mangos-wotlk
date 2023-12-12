@@ -1,7 +1,7 @@
 DROP TABLE IF EXISTS `nier`;
 CREATE TABLE `nier` (
   `entry` int(11) NOT NULL AUTO_INCREMENT,
-  `ninger_id` int(11) NOT NULL DEFAULT '0',
+  `nier_id` int(11) NOT NULL DEFAULT '0',
   `account_name` varchar(50) COLLATE utf8_unicode_ci NOT NULL,
   `account_id` int(11) NOT NULL DEFAULT '0',
   `character_id` int(11) NOT NULL DEFAULT '0',

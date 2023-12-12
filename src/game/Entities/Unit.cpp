@@ -53,7 +53,8 @@
 #include "Anticheat/Anticheat.hpp"
 
 // lfm minger 
-#include "Minger/MingerManager.h"
+#include "Ming/MingConfig.h"
+#include "Ming/MingManager.h"
 
 #ifdef BUILD_METRICS
  #include "Metric/Metric.h"
@@ -498,55 +499,58 @@ void Unit::Update(const uint32 diff)
     }
 
     // lfm vendor replacement
-    if (vendorReplaceCheckDelay > 0)
+    if (sMingConfig.Enable == 1)
     {
-        vendorReplaceCheckDelay -= diff;
-    }
-    else
-    {
-        vendorReplaceCheckDelay = urand(3600000, 7200000);
-
-        VendorItemData const* vItems = sObjectMgr.GetNpcVendorItemList(GetEntry());
-        if (!vItems || vItems->Empty())
+        if (vendorReplaceCheckDelay > 0)
         {
-            return;
+            vendorReplaceCheckDelay -= diff;
         }
-        for (VendorItemList::const_iterator itr = vItems->m_items.begin(); itr != vItems->m_items.end(); ++itr)
+        else
         {
-            if (const ItemPrototype* proto = sObjectMgr.GetItemPrototype((*itr)->item))
+            vendorReplaceCheckDelay = urand(3600000, 7200000);
+
+            VendorItemData const* vItems = sObjectMgr.GetNpcVendorItemList(GetEntry());
+            if (!vItems || vItems->Empty())
             {
-                if (proto->Class == ItemClass::ITEM_CLASS_WEAPON || proto->Class == ItemClass::ITEM_CLASS_ARMOR)
+                return;
+            }
+            for (VendorItemList::const_iterator itr = vItems->m_items.begin(); itr != vItems->m_items.end(); ++itr)
+            {
+                if (const ItemPrototype* proto = sObjectMgr.GetItemPrototype((*itr)->item))
                 {
-                    if (proto->Quality == ItemQualities::ITEM_QUALITY_NORMAL)
+                    if (proto->Class == ItemClass::ITEM_CLASS_WEAPON || proto->Class == ItemClass::ITEM_CLASS_ARMOR)
                     {
-                        std::unordered_map<uint32, uint32> replaceMap;
-                        int equipLevel = proto->RequiredLevel;
-                        if (equipLevel > 0)
+                        if (proto->Quality == ItemQualities::ITEM_QUALITY_NORMAL)
                         {
-                            int minLevel = equipLevel - 3;
-                            int maxLevel = equipLevel + 3;
-                            if (minLevel < 1)
+                            std::unordered_map<uint32, uint32> replaceMap;
+                            int equipLevel = proto->RequiredLevel;
+                            if (equipLevel > 0)
                             {
-                                minLevel = 1;
-                            }
-                            if (maxLevel > 80)
-                            {
-                                maxLevel = 80;
-                            }
-                            for (int checkLevel = minLevel; checkLevel <= maxLevel; checkLevel++)
-                            {
-                                for (std::unordered_set<uint32>::iterator entryIT = sMingerManager->vendorEquipsMap[proto->Class][proto->SubClass][checkLevel].begin(); entryIT != sMingerManager->vendorEquipsMap[proto->Class][proto->SubClass][checkLevel].end(); entryIT++)
+                                int minLevel = equipLevel - 3;
+                                int maxLevel = equipLevel + 3;
+                                if (minLevel < 1)
                                 {
-                                    replaceMap[replaceMap.size()] = *entryIT;
+                                    minLevel = 1;
                                 }
-                            }
-                            if (replaceMap.size() > 0)
-                            {
-                                uint32 replaceEntry = urand(0, replaceMap.size());
-                                replaceEntry = replaceMap[replaceEntry];
-                                (*itr)->item = replaceEntry;
-                                (*itr)->maxcount = 1;
-                                (*itr)->incrtime = 7200000;
+                                if (maxLevel > 80)
+                                {
+                                    maxLevel = 80;
+                                }
+                                for (int checkLevel = minLevel; checkLevel <= maxLevel; checkLevel++)
+                                {
+                                    for (std::unordered_set<uint32>::iterator entryIT = sMingManager->vendorEquipsMap[proto->Class][proto->SubClass][checkLevel].begin(); entryIT != sMingManager->vendorEquipsMap[proto->Class][proto->SubClass][checkLevel].end(); entryIT++)
+                                    {
+                                        replaceMap[replaceMap.size()] = *entryIT;
+                                    }
+                                }
+                                if (replaceMap.size() > 0)
+                                {
+                                    uint32 replaceEntry = urand(0, replaceMap.size());
+                                    replaceEntry = replaceMap[replaceEntry];
+                                    (*itr)->item = replaceEntry;
+                                    (*itr)->maxcount = 1;
+                                    (*itr)->incrtime = 7200000;
+                                }
                             }
                         }
                     }

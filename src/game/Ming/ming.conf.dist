@@ -1,0 +1,10 @@
+[ming]
+
+Enable = 1
+ManagerCheckDelay = 60000
+VenderReplaceDelay_Min = 3600000
+VenderReplaceDelay_Max = 7200000
+PlayerHealthMod = 0
+CreatureHealthMod = 0
+CreatureDamageMod = 0
+CreatureSpellMod = 0

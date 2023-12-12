@@ -1726,3 +1726,26 @@ void Group::RewardGroupAtKill(Unit* pVictim, Player* player_tap)
         }
     }
 }
+
+// lfm nier
+uint32 Group::GetTargetIconByGuid(ObjectGuid ogTarget)
+{
+    for (uint32 i = 0; i < TARGET_ICON_COUNT; ++i)
+    {
+        if (m_targetIcons[i] == ogTarget)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// lfm nier
+ObjectGuid Group::GetGuidByTargetIcon(uint32 icon)
+{
+    if (icon >= 0 && icon < TARGET_ICON_COUNT)
+    {
+        return m_targetIcons[icon];
+    }
+    return ObjectGuid();
+}

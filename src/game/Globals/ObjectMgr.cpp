@@ -61,7 +61,8 @@
 #include <cstring>
 
 // lfm minger 
-#include "Minger/MingerManager.h"
+#include "Ming/MingConfig.h"
+#include "Ming/MingManager.h"
 
 INSTANTIATE_SINGLETON_1(ObjectMgr);
 
@@ -754,6 +755,9 @@ void ObjectMgr::LoadCreatureTemplates()
             sLog.outErrorDb("Table creature_template entry %u StringID2 %u does not exist. Setting to 0.", cInfo->Entry, cInfo->StringID2);
             const_cast<CreatureInfo*>(cInfo)->StringID2 = 0;
         }
+
+        // lfm force gossip 
+        const_cast<CreatureInfo*>(cInfo)->CreatureTypeFlags |= CreatureTypeFlags::CREATURE_TYPEFLAGS_FORCE_GOSSIP;
     }
 
     sLog.outString(">> Loaded %u creature definitions", sCreatureStorage.GetRecordCount());
@@ -2332,6 +2336,22 @@ void ObjectMgr::LoadGameObjects()
         uint32 guid         = fields[ 0].GetUInt32();
         uint32 entry        = fields[ 1].GetUInt32();
 
+        // lfm ming vein
+        if (sMingConfig.Enable==1)
+        {
+            if (sMingManager->IsVein(entry))
+            {
+                uint32 eachMapId = fields[2].GetUInt32();
+                float eachX = fields[3].GetFloat();
+                float eachY = fields[4].GetFloat();
+                float eachZ = fields[5].GetFloat();
+                if (!sMingManager->AddVein(guid, eachMapId, Position(eachX, eachY, eachZ), 20.0f))
+                {
+                    continue;
+                }
+            }
+        }
+
         if (entry == 0)
             if (uint32 randomEntry = GetRandomGameObjectEntry(guid))
                 entry = randomEntry;
@@ -2856,11 +2876,11 @@ void ObjectMgr::LoadItemPrototypes()
 
 
         // lfm npc vendor items 
-        bool canSell = false;
         if (proto->Class == ItemClass::ITEM_CLASS_WEAPON || proto->Class == ItemClass::ITEM_CLASS_ARMOR)
         {
             if (proto->Quality == ItemQualities::ITEM_QUALITY_UNCOMMON)
             {
+                bool canSell = false;
                 if (proto->RequiredLevel > 0)
                 {
                     if (proto->Class == ItemClass::ITEM_CLASS_WEAPON)
@@ -2875,11 +2895,11 @@ void ObjectMgr::LoadItemPrototypes()
                         canSell = true;
                     }
                 }
+                if (canSell)
+                {
+                    sMingManager->vendorEquipsMap[proto->Class][proto->SubClass][proto->RequiredLevel].insert(proto->ItemId);
+                }
             }
-        }
-        if (canSell)
-        {                    
-            sMingerManager->vendorEquipsMap[proto->Class][proto->SubClass][proto->RequiredLevel].insert(proto->ItemId);
         }
 
         for (const auto& Spell : proto->Spells)

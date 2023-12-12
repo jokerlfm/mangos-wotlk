@@ -78,6 +78,10 @@
 
 #include <cmath>
 
+// lfm nier 
+#include "Nier/NierConfig.h"
+#include "Nier/NierManager.h"
+
 #define ZONE_UPDATE_INTERVAL (1*IN_MILLISECONDS)
 
 #define PLAYER_SKILL_INDEX(x)       (PLAYER_SKILL_INFO_1_1 + ((x)*3))
@@ -700,15 +704,15 @@ Player::Player(WorldSession* session): Unit(), m_taxiTracker(*this), m_mover(thi
     // lfm auto fishing 
     fishingDelay = 0;
 
-    // lfm nier 
+    // lfm nier
+    masterId = 0;
+    groupRole = 0;
     isNier = false;
-
-    nParters.clear();
-    nRivals.clear();
-    nComrades.clear();
-    nEnemies.clear();
-
-    strategy = new NierStrategy_Base(this);
+    partners.clear();
+    rivals.clear();
+    comrades.clear();
+    enemies.clear();
+    strategy = nullptr;
 }
 
 Player::~Player()
@@ -1755,74 +1759,31 @@ void Player::Update(const uint32 diff)
         }
     }
 
-    // lfm nier 
-    if (nParters.empty())
+    // lfm nier
+    if (!m_session->isNier)
     {
-        uint32 master_id = GetObjectGuid().GetCounter();
-        std::ostringstream queryStream;
-        queryStream << "SELECT entry, master_id, account_id, character_id, career, race, nier_type, specialty, group_role FROM nier where master_id = " << master_id;
-        auto nierQR = CharacterDatabase.Query(queryStream.str().c_str());
-        if (nierQR)
+        if (sNierConfig.Enable == 1)
         {
-            do
+            if (!partners.empty())
             {
-                Field* fields = nierQR->Fetch();
-                NierEntity* re = new NierEntity();
-                re->nier_id = fields[0].GetUInt32();
-                re->master_id = fields[1].GetUInt32();
-                re->account_id = fields[2].GetUInt32();
-                re->character_id = fields[3].GetUInt32();
-                re->target_class = fields[4].GetUInt32();
-                re->target_race = fields[5].GetUInt32();
-                re->nier_type = fields[6].GetUInt32();
-                re->target_specialty = fields[6].GetUInt32();
-                re->group_role = fields[6].GetUInt32();
-                re->target_level = GetLevel();
-                nParters.insert(re);
-            } while (nierQR->NextRow());
-        }
-        if (nParters.empty())
-        {
-            uint32 myRace = getRace();
-            bool isAlliance = false;
-            if (myRace == Races::RACE_DRAENEI || myRace == Races::RACE_DWARF || myRace == Races::RACE_GNOME || myRace == Races::RACE_HUMAN || myRace == Races::RACE_NIGHTELF)
-            {
-                isAlliance = true;
-            }
-            std::unordered_set<uint32> classSet;
-            classSet.insert(Classes::CLASS_PRIEST);
-            classSet.insert(Classes::CLASS_MAGE);
-            classSet.insert(Classes::CLASS_WARLOCK);
-            classSet.insert(Classes::CLASS_DRUID);
-
-            for (std::unordered_set<uint32>::iterator classIT = classSet.begin(); classIT != classSet.end(); classIT++)
-            {
-                uint32 eachClass = *classIT;
-                uint32 raceCount = sizeof(sNierManager->allianceRaces[eachClass]);
-                uint32 raceIndex = urand(0, raceCount);
-                if (raceIndex == raceCount)
+                for (std::unordered_set<Nier_Base*>::iterator nit = partners.begin(); nit != partners.end(); nit++)
                 {
-                    sLog.outError("urand exceeded.");
-                    raceIndex = raceCount - 1;
+                    if (Nier_Base* nb = *nit)
+                    {
+                        nb->Update(diff);
+                    }
                 }
-                uint32 targetRace = sNierManager->allianceRaces[Classes::CLASS_PRIEST][raceIndex];
+            }
 
-                std::ostringstream sqlStream;
-                sqlStream << "INSERT INTO nier (master_id, account_id, character_id, career, race, nier_type, specialty, group_role) VALUES (" << master_id << ", 0, 0, " << eachClass << ", " << targetRace << ", 0 , 0, 0)";
-                std::string sql = sqlStream.str();
-                CharacterDatabase.DirectExecute(sql.c_str());
-                sLog.outBasic("Nier added : %d, %d", eachClass, targetRace);
+            if (strategy)
+            {
+                strategy->Update(diff, this, partners);
+            }
+            else
+            {
+                strategy = new NierStrategy_Base();
             }
         }
-    }
-    else
-    {
-        for (std::unordered_set<NierEntity*>::iterator nierIT = nParters.begin(); nierIT != nParters.end(); nierIT++)
-        {
-            (*nierIT)->Update(diff);
-        }
-
-        strategy->Update(diff);
     }
 }
 
@@ -3094,6 +3055,25 @@ void Player::GiveLevel(uint32 level)
     // resend quests status directly
     GetSession()->SetCurrentPlayerLevel(level);
     SendQuestGiverStatusMultiple();
+
+    // lfm nier 
+    if (!isNier)
+    {
+        if (level >= 10)
+        {
+            for (std::unordered_set<Nier_Base*>::iterator nit = this->partners.begin(); nit != this->partners.end(); nit++)
+            {
+                if (Nier_Base* nb = *nit)
+                {
+                    if (nb->entityState == NierState::NierState_Online)
+                    {
+                        nb->updateDelay = urand(500, 3000);
+                        nb->entityState = NierState::NierState_LevelUp;
+                    }
+                }
+            }
+        }
+    }
 }
 
 void Player::UpdateFreeTalentPoints(bool resetIfNeed)
@@ -15264,12 +15244,13 @@ bool Player::CanGiveQuestSourceItemIfNeed(Quest const* pQuest, ItemPosCountVec* 
     {
         uint32 count = pQuest->GetSrcItemCount();
 
+        // lfm quest source item will always be given 
         // player already have max amount required item (including bank), just report success
-        uint32 has_count = GetItemCount(srcitem, true);
-        if (has_count >= count)
-            return true;
+        //uint32 has_count = GetItemCount(srcitem, true);
+        //if (has_count >= count)
+        //    return true;
 
-        count -= has_count;                                 // real need amount
+        //count -= has_count;                                 // real need amount
 
         InventoryResult msg;
         if (!dest)

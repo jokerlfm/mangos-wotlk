@@ -827,7 +827,11 @@ void Object::BuildValuesUpdate(uint8 updatetype, ByteBuffer* data, UpdateMask* u
                                 break;
                             case GAMEOBJECT_TYPE_CHEST:
                                 if (gameObject->GetLootState() == GO_READY || gameObject->GetLootState() == GO_ACTIVATED)
-                                    *data << uint16(GO_DYNFLAG_LO_ACTIVATE | GO_DYNFLAG_LO_SPARKLE);
+                                {
+                                    // lfm gameobject never sparkle
+                                    //*data << uint16(GO_DYNFLAG_LO_ACTIVATE | GO_DYNFLAG_LO_SPARKLE);
+                                    *data << uint16(GO_DYNFLAG_LO_ACTIVATE);
+                                }                                    
                                 else
                                     *data << uint16(0);
                                 *data << uint16(-1);
@@ -835,7 +839,9 @@ void Object::BuildValuesUpdate(uint8 updatetype, ByteBuffer* data, UpdateMask* u
                             case GAMEOBJECT_TYPE_GENERIC:
                             case GAMEOBJECT_TYPE_SPELL_FOCUS:
                             case GAMEOBJECT_TYPE_GOOBER:
-                                *data << uint16(GO_DYNFLAG_LO_ACTIVATE | GO_DYNFLAG_LO_SPARKLE);
+                                // lfm gameobject never sparkle
+                                //*data << uint16(GO_DYNFLAG_LO_ACTIVATE | GO_DYNFLAG_LO_SPARKLE);
+                                *data << uint16(GO_DYNFLAG_LO_ACTIVATE);
                                 *data << uint16(-1);
                                 break;
                             default:

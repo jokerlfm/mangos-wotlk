@@ -1,23 +1,21 @@
 #include "NierManager.h"
-#include "NierStrategies/NierStrategy_Base.h"
-#include "NierConfig.h"
-#include "NierActions/NierAction_Base.h"
-#include "NierActions/NierAction_Druid.h"
-#include "NierActions/NierAction_Hunter.h"
-#include "NierActions/NierAction_Mage.h"
-#include "NierActions/NierAction_Paladin.h"
-#include "NierActions/NierAction_Priest.h"
-#include "NierActions/NierAction_Rogue.h"
-#include "NierActions/NierAction_Shaman.h"
-#include "NierActions/NierAction_Warlock.h"
-#include "NierActions/NierAction_Warrior.h"
 
+#include "NierConfig.h"
+
+#include "Nier_Base.h"
+#include "Nier/Nier_Druid.h"
+#include "Nier/Nier_Hunter.h"
+#include "Nier/Nier_Mage.h"
+#include "Nier/Nier_Paladin.h"
+#include "Nier/Nier_Priest.h"
+#include "Nier/Nier_Rogue.h"
+#include "Nier/Nier_Shaman.h"
+#include "Nier/Nier_Warlock.h"
+#include "Nier/Nier_Warrior.h"
+
+#include "Ming/MingManager.h"
 #include "World/World.h"
 #include "Accounts/AccountMgr.h"
-#include "Grids/GridNotifiers.h"
-
-// lfm nier 
-#include <boost/chrono/duration.hpp>
 
 NierManager::NierManager()
 {
@@ -25,17 +23,12 @@ NierManager::NierManager()
 	hordeRaces.clear();
 	nierNameMap.clear();
 	characterTalentTabNameMap.clear();
+	trainerMap.clear();
 }
 
 void NierManager::InitializeManager()
 {
-	if (sNierConfig.Enable == 0)
-	{
-		return;
-	}
-
 	sLog.outBasic("Initialize nier");
-
 
 	allianceRaces.clear();
 	allianceRaces[CLASS_WARRIOR][allianceRaces[CLASS_WARRIOR].size()] = RACE_HUMAN;
@@ -137,10 +130,21 @@ void NierManager::InitializeManager()
 	characterTalentTabNameMap[Classes::CLASS_DRUID][1] = "Feral";
 	characterTalentTabNameMap[Classes::CLASS_DRUID][2] = "Restoration";
 
-	if (sNierConfig.Reset)
-	{
-		DeleteNiers();
-	}
+	trainerMap.clear();
+	trainerMap[Classes::CLASS_WARRIOR] = 914;
+	trainerMap[Classes::CLASS_PALADIN] = 928;
+	trainerMap[Classes::CLASS_HUNTER] = 5115;
+	trainerMap[Classes::CLASS_ROGUE] = 4214;
+	trainerMap[Classes::CLASS_PRIEST] = 3046;
+	trainerMap[Classes::CLASS_SHAMAN] = 3032;
+	trainerMap[Classes::CLASS_MAGE] = 3047;
+	trainerMap[Classes::CLASS_WARLOCK] = 5173;
+	trainerMap[Classes::CLASS_DRUID] = 4217;
+
+	groupRoleNameMap.clear();
+	groupRoleNameMap[GroupRole::GroupRole_Tank] = "tank";
+	groupRoleNameMap[GroupRole::GroupRole_Healer] = "healer";
+	groupRoleNameMap[GroupRole::GroupRole_DPS] = "dps";
 
 	auto nierNameQR = WorldDatabase.Query("SELECT name FROM nier_names order by rand()");
 	if (nierNameQR)
@@ -153,13 +157,23 @@ void NierManager::InitializeManager()
 		} while (nierNameQR->NextRow());
 	}
 
-	sLog.outBasic("nier initialized");
+	if (sNierConfig.Reset == 1)
+	{
+		DeleteNiers();
+	}
+
+	sLog.outBasic("nier system initialized");
 }
 
 NierManager* NierManager::instance()
 {
 	static NierManager instance;
 	return &instance;
+}
+
+void NierManager::LogoutNiers(bool pmInstant)
+{
+	sWorld.KickAll(true);
 }
 
 void NierManager::DeleteNiers()
@@ -172,12 +186,12 @@ void NierManager::DeleteNiers()
 			Field* fields = nierQR->Fetch();
 			uint32 eachAccountId = fields[0].GetUInt32();
 			if (eachAccountId > 0)
-			{				
+			{
 				sAccountMgr.DeleteAccount(eachAccountId);
 			}
 		} while (nierQR->NextRow());
 	}
-	CharacterDatabase.DirectExecute("delete from nier");	
+	CharacterDatabase.DirectExecute("delete from nier");
 
 	std::ostringstream accountQueryStream;
 	accountQueryStream << "SELECT id FROM account where username like '" << NIER_MARK << "%'";
@@ -197,58 +211,534 @@ void NierManager::DeleteNiers()
 	}
 }
 
-void NierManager::HandleChatCommand(Player* pmCommander, std::string pmContent, Player* pmTargetPlayer, Group* pmTargetGroup)
+bool NierManager::IsPolymorphed(Unit* pmTarget)
 {
-	if (!pmCommander)
+	if (pmTarget)
+	{
+		if (pmTarget->HasAura(118) || pmTarget->HasAura(12824) || pmTarget->HasAura(12825) || pmTarget->HasAura(12826))
+		{
+			return true;
+		}
+		if (pmTarget->HasAura(2637) || pmTarget->HasAura(18657) || pmTarget->HasAura(18658))
+		{
+			return true;
+		}
+		if (pmTarget->HasAura(339) || pmTarget->HasAura(1062) || pmTarget->HasAura(5195) || pmTarget->HasAura(5196) || pmTarget->HasAura(9852) || pmTarget->HasAura(9853) || pmTarget->HasAura(26989) || pmTarget->HasAura(53308))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+float NierManager::GetExactDistance(Position p1, Position p2)
+{
+	float result = 10000.0f;
+
+	result = p1.GetDistance(p2);
+	result = sqrt(result);
+
+	return result;
+}
+
+Position NierManager::PredictPosition(Unit* target)
+{
+	Position pos = target->GetPosition();
+
+	float speed = target->GetSpeed(UnitMoveType::MOVE_RUN);
+	float orientation = target->GetOrientation();
+
+	if (target->m_movementInfo.HasMovementFlag(MovementFlags::MOVEFLAG_FORWARD))
+	{
+		pos.x += cos(orientation) * speed;
+		pos.y += std::sin(orientation) * speed;
+	}
+	else if (target->m_movementInfo.HasMovementFlag(MovementFlags::MOVEFLAG_BACKWARD))
+	{
+		pos.x -= cos(orientation) * speed;
+		pos.y -= std::sin(orientation) * speed;
+	}
+
+	if (target->m_movementInfo.HasMovementFlag(MovementFlags::MOVEFLAG_STRAFE_LEFT))
+	{
+		pos.x += cos(orientation + M_PI / 2.f) * speed;
+		pos.y += std::sin(orientation + M_PI / 2.f) * speed;
+	}
+	else if (target->m_movementInfo.HasMovementFlag(MovementFlags::MOVEFLAG_STRAFE_RIGHT))
+	{
+		pos.x += cos(orientation - M_PI / 2.f) * speed;
+		pos.y += std::sin(orientation - M_PI / 2.f) * speed;
+	}
+
+	return pos;
+}
+
+void NierManager::HandleChatCommand(Player* pCommander, std::string pContent, Player* pTargetPlayer)
+{
+	if (!pCommander)
 	{
 		return;
 	}
-	std::vector<std::string> commandVector = SplitString(pmContent, " ", true);
+	std::vector<std::string> commandVector = sMingManager->SplitString(pContent, " ", true);
 	std::string commandName = commandVector.at(0);
-	if (commandName == "tank")
+
+	if (commandName == "nier")
 	{
-		if (pmTargetGroup)
+		if (commandVector.size() > 1)
 		{
-
-		}
-		else
-		{
-
+			std::string partnerAction = commandVector.at(1);
+			if (partnerAction == "online")
+			{
+				if (commandVector.size() > 2)
+				{
+					std::string partnerAction = commandVector.at(2);
+					if (partnerAction == "partner")
+					{
+						uint32 rawLevel = pCommander->GetLevel();
+						if (rawLevel < 10)
+						{
+							sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, "Level lower than 10", pCommander);
+							return;
+						}
+						if (pCommander->partners.empty())
+						{
+							uint32 meId = pCommander->GetGUIDLow();
+							std::ostringstream nierQueryStream;
+							nierQueryStream << "SELECT entry, master_id, account_id, character_id, account_name, race, career, specialty, role, nier_type FROM nier where master_id = " << meId << " and nier_type = 0";
+							while (true)
+							{
+								auto nierQR = CharacterDatabase.Query(nierQueryStream.str().c_str());
+								if (nierQR)
+								{
+									std::ostringstream replyStream;
+									replyStream << "Partner loaded : ";
+									do
+									{
+										Nier_Base* nier = nullptr;
+										Field* fields = nierQR->Fetch();
+										uint32 targetCareer = fields[6].GetUInt32();
+										switch (targetCareer)
+										{
+										case 1:
+										{
+											nier = new Nier_Warrior();
+											break;
+										}
+										case 2:
+										{
+											nier = new Nier_Paladin();
+											break;
+										}
+										case 3:
+										{
+											nier = new Nier_Hunter();
+											break;
+										}
+										case 4:
+										{
+											nier = new Nier_Rogue();
+											break;
+										}
+										case 5:
+										{
+											nier = new Nier_Priest();
+											break;
+										}
+										case 7:
+										{
+											nier = new Nier_Shaman();
+											break;
+										}
+										case 8:
+										{
+											nier = new Nier_Mage();
+											break;
+										}
+										case 9:
+										{
+											nier = new Nier_Warlock();
+											break;
+										}
+										case 11:
+										{
+											nier = new Nier_Druid();
+											break;
+										}
+										default:
+										{
+											nier = new Nier_Base();
+											break;
+										}
+										}
+										nier->entry = fields[0].GetUInt32();
+										nier->master_id = fields[1].GetUInt32();
+										nier->account_id = fields[2].GetUInt32();
+										nier->character_id = fields[3].GetUInt32();
+										nier->target_race = fields[5].GetUInt32();
+										nier->target_specialty = fields[7].GetUInt32();
+										nier->target_class = targetCareer;
+										pCommander->partners.insert(nier);
+										replyStream << targetCareer << " ";
+									} while (nierQR->NextRow());
+									sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, replyStream.str().c_str(), pCommander);
+									break;
+								}
+								else
+								{
+									std::ostringstream replyStream;
+									replyStream << "Nier added : ";
+									uint32 career = Classes::CLASS_PRIEST;
+									AddNier(pCommander, career);
+									replyStream << career << " ";
+									career = Classes::CLASS_WARLOCK;
+									AddNier(pCommander, career);
+									replyStream << career << " ";
+									career = Classes::CLASS_MAGE;
+									AddNier(pCommander, career);
+									replyStream << career << " ";
+									career = Classes::CLASS_ROGUE;
+									AddNier(pCommander, career);
+									replyStream << career << " ";
+									career = Classes::CLASS_ROGUE;
+									AddNier(pCommander, career);
+									replyStream << career << " ";
+									career = Classes::CLASS_ROGUE;
+									AddNier(pCommander, career);
+									replyStream << career << " ";
+									sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, replyStream.str().c_str(), pCommander);
+								}
+							}
+						}
+						for (std::unordered_set<Nier_Base*>::iterator nit = pCommander->partners.begin(); nit != pCommander->partners.end(); nit++)
+						{
+							if (Nier_Base* nb = *nit)
+							{
+								if (nb->entityState == NierState::NierState_OffLine)
+								{
+									nb->entityState = NierState::NierState_Enter;
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 	}
-	else if (commandName == "debug")
+	else if (commandName == "role")
 	{
-
+		if (commandVector.size() > 1)
+		{
+			std::string role = commandVector.at(1);
+			if (role == "tank")
+			{
+				pCommander->groupRole = GroupRole::GroupRole_Tank;
+			}
+			else if (role == "healer")
+			{
+				pCommander->groupRole = GroupRole::GroupRole_Healer;
+			}
+			else if (role == "dps")
+			{
+				pCommander->groupRole = GroupRole::GroupRole_DPS;
+			}
+		}
+		std::ostringstream replyStream;
+		replyStream << "Role is : " << groupRoleNameMap[pCommander->groupRole];
+		sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, replyStream.str().c_str(), pCommander);
+	}
+	else if (commandName == "equip")
+	{
+		for (std::unordered_set<Nier_Base*>::iterator nit = pCommander->partners.begin(); nit != pCommander->partners.end(); nit++)
+		{
+			if (Nier_Base* nb = *nit)
+			{
+				if (Player* eachPlayer = nb->me)
+				{
+					if (pTargetPlayer)
+					{
+						if (pTargetPlayer->GetObjectGuid() == eachPlayer->GetObjectGuid())
+						{
+							nb->updateDelay = urand(500, 3000);
+							nb->entityState = NierState::NierState_Upgrade;
+							break;
+						}
+					}
+					else
+					{
+						if (eachPlayer->IsInGroup(pCommander))
+						{
+							nb->updateDelay = urand(500, 3000);
+							nb->entityState = NierState::NierState_Upgrade;
+						}
+					}
+				}
+			}
+		}
+	}
+	else if (commandName == "assemble")
+	{
+		for (std::unordered_set<Nier_Base*>::iterator nit = pCommander->partners.begin(); nit != pCommander->partners.end(); nit++)
+		{
+			if (Nier_Base* nb = *nit)
+			{
+				if (Player* eachPlayer = nb->me)
+				{
+					if (pTargetPlayer)
+					{
+						if (pTargetPlayer->GetObjectGuid() == eachPlayer->GetObjectGuid())
+						{
+							nb->assembleDelay = 60000;
+							eachPlayer->Whisper("Assemble in 60 seconds", Language::LANG_UNIVERSAL, pCommander->GetObjectGuid());
+							break;
+						}
+					}
+					else
+					{
+						if (eachPlayer->IsInGroup(pCommander))
+						{
+							nb->assembleDelay = 60000;
+							eachPlayer->Whisper("Assemble in 60 seconds", Language::LANG_UNIVERSAL, pCommander->GetObjectGuid());
+						}
+					}
+				}
+			}
+		}
+	}
+	else if (commandName == "who")
+	{
+		for (std::unordered_set<Nier_Base*>::iterator nit = pCommander->partners.begin(); nit != pCommander->partners.end(); nit++)
+		{
+			if (Nier_Base* nb = *nit)
+			{
+				if (Player* eachPlayer = nb->me)
+				{
+					if (pTargetPlayer)
+					{
+						if (pTargetPlayer->GetObjectGuid() == eachPlayer->GetObjectGuid())
+						{
+							std::ostringstream replyStream;
+							replyStream << "Role is : " << groupRoleNameMap[eachPlayer->groupRole];
+							replyStream << " Specialty is : " << characterTalentTabNameMap[eachPlayer->getClass()][nb->target_specialty];
+							eachPlayer->Whisper(replyStream.str(), Language::LANG_UNIVERSAL, pCommander->GetObjectGuid());
+							break;
+						}
+					}
+					else
+					{
+						if (eachPlayer->IsInGroup(pCommander))
+						{
+							std::ostringstream replyStream;
+							replyStream << "Role is : " << groupRoleNameMap[eachPlayer->groupRole];
+							replyStream << " Specialty is : " << characterTalentTabNameMap[eachPlayer->getClass()][nb->target_specialty];
+							eachPlayer->Whisper(replyStream.str(), Language::LANG_UNIVERSAL, pCommander->GetObjectGuid());
+						}
+					}
+				}
+			}
+		}
+	}
+	else if (commandName == "freeze")
+	{
+		for (std::unordered_set<Nier_Base*>::iterator nit = pCommander->partners.begin(); nit != pCommander->partners.end(); nit++)
+		{
+			if (Nier_Base* nb = *nit)
+			{
+				if (Player* eachPlayer = nb->me)
+				{
+					if (pTargetPlayer)
+					{
+						if (pTargetPlayer->GetObjectGuid() == eachPlayer->GetObjectGuid())
+						{
+							nb->freezing = true;
+							eachPlayer->InterruptSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL);
+							eachPlayer->InterruptSpell(CurrentSpellTypes::CURRENT_CHANNELED_SPELL);
+							eachPlayer->InterruptSpell(CurrentSpellTypes::CURRENT_GENERIC_SPELL);
+							eachPlayer->InterruptSpell(CurrentSpellTypes::CURRENT_MELEE_SPELL);
+							eachPlayer->AttackStop();
+							if (Pet* myPet = eachPlayer->GetPet())
+							{
+								myPet->AttackStop(true, true);
+								if (CharmInfo* pci = myPet->GetCharmInfo())
+								{
+									pci->SetCommandState(COMMAND_FOLLOW);
+								}
+							}
+							eachPlayer->StopMoving();
+							eachPlayer->GetMotionMaster()->Clear();
+							eachPlayer->Whisper("Freezed", Language::LANG_UNIVERSAL, pCommander->GetObjectGuid());
+							break;
+						}
+					}
+					else
+					{
+						if (eachPlayer->IsInGroup(pCommander))
+						{
+							nb->freezing = true;
+							eachPlayer->InterruptSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL);
+							eachPlayer->InterruptSpell(CurrentSpellTypes::CURRENT_CHANNELED_SPELL);
+							eachPlayer->InterruptSpell(CurrentSpellTypes::CURRENT_GENERIC_SPELL);
+							eachPlayer->InterruptSpell(CurrentSpellTypes::CURRENT_MELEE_SPELL);
+							eachPlayer->AttackStop();
+							if (Pet* myPet = eachPlayer->GetPet())
+							{
+								myPet->AttackStop(true, true);
+								if (CharmInfo* pci = myPet->GetCharmInfo())
+								{
+									pci->SetCommandState(COMMAND_FOLLOW);
+								}
+							}
+							eachPlayer->StopMoving();
+							eachPlayer->GetMotionMaster()->Clear();
+							eachPlayer->Whisper("Freezed", Language::LANG_UNIVERSAL, pCommander->GetObjectGuid());
+						}
+					}
+				}
+			}
+		}
+	}
+	else if (commandName == "follow")
+	{
+		float followDistance = 0.0f;
+		if (commandVector.size() > 1)
+		{
+			followDistance = atof(commandVector.at(1).c_str());
+		}
+		for (std::unordered_set<Nier_Base*>::iterator nit = pCommander->partners.begin(); nit != pCommander->partners.end(); nit++)
+		{
+			if (Nier_Base* nb = *nit)
+			{
+				if (Player* eachPlayer = nb->me)
+				{
+					if (pTargetPlayer)
+					{
+						if (pTargetPlayer->GetObjectGuid() == eachPlayer->GetObjectGuid())
+						{
+							std::ostringstream replyStream;
+							replyStream << "Following";
+							if (followDistance > CONTACT_DISTANCE)
+							{
+								nb->followDistance = followDistance;
+								replyStream << " : " << nb->followDistance;
+							}
+							nb->freezing = false;
+							eachPlayer->Whisper(replyStream.str(), Language::LANG_UNIVERSAL, pCommander->GetObjectGuid());
+							break;
+						}
+					}
+					else
+					{
+						if (eachPlayer->IsInGroup(pCommander))
+						{
+							std::ostringstream replyStream;
+							replyStream << "Following";
+							if (followDistance > CONTACT_DISTANCE)
+							{
+								nb->followDistance = followDistance;
+								replyStream << " : " << nb->followDistance;
+							}
+							nb->freezing = false;
+							eachPlayer->Whisper(replyStream.str(), Language::LANG_UNIVERSAL, pCommander->GetObjectGuid());
+						}
+					}
+				}
+			}
+		}
+	}
+	else if (commandName == "formation")
+	{
+		if (commandVector.size() > 1)
+		{
+			std::string formation = commandVector.at(1);
+			for (std::unordered_set<Nier_Base*>::iterator nit = pCommander->partners.begin(); nit != pCommander->partners.end(); nit++)
+			{
+				if (Nier_Base* nb = *nit)
+				{
+					if (Player* eachPlayer = nb->me)
+					{
+						if (pTargetPlayer)
+						{
+							if (pTargetPlayer->GetObjectGuid() == eachPlayer->GetObjectGuid())
+							{
+								if (formation == "point")
+								{
+									eachPlayer->GetMotionMaster()->Clear();
+									nb->destination = pCommander->GetPosition();
+									nb->orderDelay = 2000;
+									eachPlayer->GetMotionMaster()->MovePoint(0, nb->destination.x, nb->destination.y, nb->destination.z, ForcedMovement::FORCED_MOVEMENT_RUN, true);
+								}
+								break;
+							}
+						}
+						else
+						{
+							if (eachPlayer->IsInGroup(pCommander))
+							{
+								if (formation == "point")
+								{
+									eachPlayer->GetMotionMaster()->Clear();
+									nb->destination = pCommander->GetPosition();
+									nb->orderDelay = 2000;
+									eachPlayer->GetMotionMaster()->MovePoint(0, nb->destination.x, nb->destination.y, nb->destination.z, ForcedMovement::FORCED_MOVEMENT_RUN, true);
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	else if (commandName == "prepare")
+	{
+		for (std::unordered_set<Nier_Base*>::iterator nit = pCommander->partners.begin(); nit != pCommander->partners.end(); nit++)
+		{
+			if (Nier_Base* nb = *nit)
+			{
+				if (Player* eachPlayer = nb->me)
+				{
+					if (pTargetPlayer)
+					{
+						if (pTargetPlayer->GetObjectGuid() == eachPlayer->GetObjectGuid())
+						{
+							nb->Prepare();
+							eachPlayer->Whisper("Prepared", Language::LANG_UNIVERSAL, pCommander->GetObjectGuid());
+							break;
+						}
+					}
+					else
+					{
+						if (eachPlayer->IsInGroup(pCommander))
+						{
+							nb->Prepare();
+							eachPlayer->Whisper("Prepared", Language::LANG_UNIVERSAL, pCommander->GetObjectGuid());
+						}
+					}
+				}
+			}
+		}
 	}
 }
 
-void NierManager::HandleNierPacket(const WorldSession* pmSession, WorldPacket pmPacket)
+void NierManager::HandlePacket(const WorldSession* pmSession, WorldPacket pmPacket)
 {
 	switch (pmPacket.GetOpcode())
 	{
 	case SMSG_CHAR_ENUM:
 	{
-		//std::unordered_set<uint32> myCharacterIdSet;
-		//QueryResult* characterQR = CharacterDatabase.PQuery("SELECT guid FROM characters where account = %d", pmSession->GetAccountId());
-		//if (characterQR)
-		//{
-		//	Field* characterFields = characterQR->Fetch();
-		//	uint32 character_id = characterFields[0].GetUInt32();
-		//	if (character_id > 0)
-		//	{
-		//		myCharacterIdSet.insert(character_id);
-		//	}
-		//}
-		//for (std::unordered_set<NierEntity*>::iterator reIT = sNierManager->nierEntitySet.begin(); reIT != sNierManager->nierEntitySet.end(); reIT++)
-		//{
-		//	if (NierEntity* re = *reIT)
-		//	{
-		//		if (myCharacterIdSet.find(re->character_id) != myCharacterIdSet.end())
-		//		{
-		//			re->entityState = NierEntityState::NierEntityState_DoLogin;
-		//		}
-		//	}
-		//}
+		std::unordered_set<uint32> myCharacterIdSet;
+
+		std::ostringstream sqlStream;
+		sqlStream << "SELECT guid FROM characters where account = " << pmSession->GetAccountId();
+		auto characterQR = CharacterDatabase.Query(sqlStream.str().c_str());
+		if (characterQR)
+		{
+			Field* characterFields = characterQR->Fetch();
+			uint32 character_id = characterFields[0].GetUInt32();
+			if (character_id > 0)
+			{
+				myCharacterIdSet.insert(character_id);
+			}
+		}
 		break;
 	}
 	case SMSG_SPELL_FAILURE:
@@ -261,49 +751,65 @@ void NierManager::HandleNierPacket(const WorldSession* pmSession, WorldPacket pm
 	}
 	case SMSG_GROUP_INVITE:
 	{
-		//if (Player* receiver = pmSession->GetPlayer())
-		//{
-		//	if (!pmSession->GetPlayer())
-		//	{
-		//		break;
-		//	}
-		//	else if (!receiver->IsInWorld())
-		//	{
-		//		break;
-		//	}
-		//	else if (!receiver->nierAction)
-		//	{
-		//		break;
-		//	}
-		//	if (Group* myGroup = receiver->GetGroup())
-		//	{
-		//		receiver->RemoveFromGroup();
-		//		receiver->ResetInstances(InstanceResetMethod::INSTANCE_RESET_ALL, false);
-		//		receiver->ResetInstances(InstanceResetMethod::INSTANCE_RESET_ALL, true);
-		//	}
-		//	if (Group* grp = receiver->GetGroupInvite())
-		//	{
-		//		receiver->ResetInstances(InstanceResetMethod::INSTANCE_RESET_ALL, false);
-		//		receiver->ResetInstances(InstanceResetMethod::INSTANCE_RESET_ALL, true);
-		//		WorldPacket wpAccept(CMSG_GROUP_ACCEPT, 4);
-		//		wpAccept << uint32(0);
-		//		receiver->GetSession()->HandleGroupAcceptOpcode(wpAccept);
-		//		std::ostringstream replyStream_Talent;
-		//		receiver->nierAction->Reset();
-		//		replyStream_Talent << sNierManager->characterTalentTabNameMap[receiver->getClass()][receiver->nierAction->specialty];
-		//		if (Player* inviter = ObjectAccessor::FindPlayer(grp->GetLeaderGuid()))
-		//		{
-		//			receiver->Whisper(replyStream_Talent.str(), Language::LANG_UNIVERSAL, inviter->GetObjectGuid());
-		//		}
-		//		if (receiver->getClass() == Classes::CLASS_ROGUE)
-		//		{
-		//			if (NierAction_Rogue* nar = (NierAction_Rogue*)receiver->nierAction)
-		//			{
-		//				nar->CancelAura(nar->spell_Stealth);
-		//			}
-		//		}
-		//	}
-		//}
+		if (Player* receiver = pmSession->GetPlayer())
+		{
+			if (!pmSession->GetPlayer())
+			{
+				break;
+			}
+			else if (!receiver->IsInWorld())
+			{
+				break;
+			}
+			if (Group* myGroup = receiver->GetGroup())
+			{
+				receiver->RemoveFromGroup();
+
+				for (uint8 i = 0; i < MAX_DIFFICULTY; ++i)
+				{
+					Player::BoundInstancesMap& binds = receiver->GetBoundInstances(Difficulty(i));
+					for (Player::BoundInstancesMap::iterator itr = binds.begin(); itr != binds.end(); itr++)
+					{
+						receiver->UnbindInstance(itr, Difficulty(i));
+					}
+				}
+			}
+			if (Group* grp = receiver->GetGroupInvite())
+			{
+				for (uint8 i = 0; i < MAX_DIFFICULTY; ++i)
+				{
+					Player::BoundInstancesMap& binds = receiver->GetBoundInstances(Difficulty(i));
+					for (Player::BoundInstancesMap::iterator itr = binds.begin(); itr != binds.end(); itr++)
+					{
+						receiver->UnbindInstance(itr, Difficulty(i));
+					}
+				}
+				WorldPacket wpAccept(CMSG_GROUP_ACCEPT, 4);
+				wpAccept << uint32(0);
+				receiver->GetSession()->HandleGroupAcceptOpcode(wpAccept);
+
+				ObjectGuid masterGuid = ObjectGuid(HighGuid::HIGHGUID_PLAYER, receiver->masterId);
+				Player* master = ObjectAccessor::FindPlayer(masterGuid);
+
+				for (std::unordered_set<Nier_Base*>::iterator nit = master->partners.begin(); nit != master->partners.end(); nit++)
+				{
+					if (Nier_Base* nb = *nit)
+					{
+						if (Player* eachPlayer = nb->me)
+						{
+							if (receiver->GetObjectGuid() == eachPlayer->GetObjectGuid())
+							{
+								std::ostringstream replyStream;
+								replyStream << "Role is : " << groupRoleNameMap[receiver->groupRole];
+								replyStream << " Specialty is : " << characterTalentTabNameMap[receiver->getClass()][nb->target_specialty];
+								receiver->Whisper(replyStream.str(), Language::LANG_UNIVERSAL, master->GetObjectGuid());
+								break;
+							}
+						}
+					}
+				}
+			}
+		}
 		break;
 	}
 	case BUY_ERR_NOT_ENOUGHT_MONEY:
@@ -325,10 +831,10 @@ void NierManager::HandleNierPacket(const WorldSession* pmSession, WorldPacket pm
 		//Player* newLeader = ObjectAccessor::FindPlayerByName(leaderName);
 		//if (newLeader)
 		//{
-		//    if (newLeader->GetGUID() == me->GetGUID())
+		//    if (newLeader->GetObjectGuid() == me->GetObjectGuid())
 		//    {
 		//        WorldPacket data(CMSG_GROUP_SET_LEADER, 8);
-		//        data << master->GetGUID().WriteAsPacked();
+		//        data << master->GetObjectGuid().WriteAsPacked();
 		//        me->GetSession()->HandleGroupSetLeaderOpcode(data);
 		//    }
 		//    else
@@ -343,28 +849,22 @@ void NierManager::HandleNierPacket(const WorldSession* pmSession, WorldPacket pm
 	}
 	case SMSG_RESURRECT_REQUEST:
 	{
-		//if (Player* receiver = pmSession->GetPlayer())
-		//{
-		//	if (!receiver)
-		//	{
-		//		break;
-		//	}
-		//	else if (!receiver->IsInWorld())
-		//	{
-		//		break;
-		//	}
-		//	else if (!receiver->nierAction)
-		//	{
-		//		break;
-		//	}
-		//	if (receiver->isRessurectRequested())
-		//	{
-		//		receiver->ResurrectUsingRequestDataInit();
-		//		receiver->ClearInCombat();
-		//		receiver->nierAction->ClearTarget();
-		//		receiver->nierAction->nm->ResetMovement();
-		//	}
-		//}
+		if (Player* receiver = pmSession->GetPlayer())
+		{
+			if (!receiver)
+			{
+				break;
+			}
+			else if (!receiver->IsInWorld())
+			{
+				break;
+			}
+			if (receiver->isRessurectRequested())
+			{
+				receiver->ResurrectUsingRequestDataInit();
+				receiver->ClearInCombat();
+			}
+		}
 		break;
 	}
 	case SMSG_INVENTORY_CHANGE_FAILURE:
@@ -411,35 +911,49 @@ void NierManager::HandleNierPacket(const WorldSession* pmSession, WorldPacket pm
 	}
 }
 
-std::vector<std::string> NierManager::SplitString(std::string srcStr, std::string delimStr, bool repeatedCharIgnored)
+void NierManager::RandomTeleport(Player* me, Player* target)
 {
-	std::vector<std::string> resultStringVector;
-	std::replace_if(srcStr.begin(), srcStr.end(), [&](const char& c) {if (delimStr.find(c) != std::string::npos) { return true; } else { return false; }}, delimStr.at(0));
-	size_t pos = srcStr.find(delimStr.at(0));
-	std::string addedString = "";
-	while (pos != std::string::npos) {
-		addedString = srcStr.substr(0, pos);
-		if (!addedString.empty() || !repeatedCharIgnored) {
-			resultStringVector.push_back(addedString);
-		}
-		srcStr.erase(srcStr.begin(), srcStr.begin() + pos + 1);
-		pos = srcStr.find(delimStr.at(0));
+	if (!target)
+	{
+		return;
 	}
-	addedString = srcStr;
-	if (!addedString.empty() || !repeatedCharIgnored) {
-		resultStringVector.push_back(addedString);
-	}
-	return resultStringVector;
+	float nearX = 0.0f;
+	float nearY = 0.0f;
+	float nearZ = 0.0f;
+	float nearDistance = frand(200.0f, 400.0f);
+	float nearAngle = frand(0.0f, M_PI * 2);
+	target->GetNearPoint(target, nearX, nearY, nearZ, 0.0f, nearDistance, nearAngle);
+	me->ClearInCombat();
+	me->TeleportTo(me->GetMapId(), nearX, nearY, nearZ, 0);
 }
 
-std::string NierManager::TrimString(std::string srcStr)
+void NierManager::AddNier(Player* pMaster, uint32 pCareer)
 {
-	std::string result = srcStr;
-	if (!result.empty())
+	Team meTeam = pMaster->GetTeam();
+	uint32 race = 0;
+	if (meTeam == Team::ALLIANCE)
 	{
-		result.erase(0, result.find_first_not_of(" "));
-		result.erase(result.find_last_not_of(" ") + 1);
+		race = sNierManager->allianceRaces[pCareer].size();
+		race = urand(1, race);
+		if (race >= sNierManager->allianceRaces[pCareer].size())
+		{
+			race = sNierManager->allianceRaces[pCareer].size() - 1;
+		}
+		race = sNierManager->allianceRaces[pCareer][race];
+	}
+	else
+	{
+		race = sNierManager->hordeRaces[pCareer].size();
+		race = urand(1, race);
+		if (race >= sNierManager->hordeRaces[pCareer].size())
+		{
+			race = sNierManager->hordeRaces[pCareer].size() - 1;
+		}
+		race = sNierManager->hordeRaces[pCareer][race];
 	}
 
-	return result;
+	std::ostringstream nierInsertStream;
+	nierInsertStream << "INSERT INTO `nier` (`master_id`, `account_id`, `character_id`, `account_name`, `race`, `career`, `specialty`, `role`, `nier_type`) VALUES (" << pMaster->GetGUIDLow() << ", 0, 0, '', " << race << ", " << pCareer << ", 1, 1, 0)";
+	CharacterDatabase.DirectExecute(nierInsertStream.str().c_str());
+	sLog.outBasic("nier added : %d, %d", race, pCareer);
 }

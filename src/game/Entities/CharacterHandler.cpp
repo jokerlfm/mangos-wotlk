@@ -45,6 +45,9 @@
 #include "PlayerBot/Base/PlayerbotMgr.h"
 #endif
 
+// lfm nier 
+#include "Nier/NierManager.h"
+
 // config option SkipCinematics supported values
 enum CinematicsSkipMode
 {
@@ -940,6 +943,22 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder* holder)
     pCurrChar->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_ON_LOGIN, 1);
 
     delete holder;
+
+    // lfm nier
+    uint32 meClass = pCurrChar->getClass();
+    if (meClass == Classes::CLASS_WARRIOR)
+    {
+        pCurrChar->groupRole = GroupRole::GroupRole_Tank;
+    }
+    else if (meClass == Classes::CLASS_PRIEST)
+    {
+        pCurrChar->groupRole = GroupRole::GroupRole_Healer;
+    }
+    else
+    {
+        pCurrChar->groupRole = GroupRole::GroupRole_DPS;
+    }
+
 }
 
 void WorldSession::HandlePlayerReconnect()

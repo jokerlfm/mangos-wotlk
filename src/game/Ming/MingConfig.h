@@ -1,11 +1,7 @@
-#ifndef NINGER_CONFIG_H
-#define NINGER_CONFIG_H
+#ifndef MING_CONFIG_H
+#define MING_CONFIG_H
 
-#define NIER_CONFIG_FILE_NAME "nier.conf"
-
-#ifndef NIER_MARK
-# define NIER_MARK "NIER"
-#endif
+#define MING_CONFIG_FILE_NAME "nier.conf"
 
 #include "Common.h"
 #include "Policies/Singleton.h"
@@ -15,14 +11,14 @@
 #include <string>
 #include <unordered_map>
 
-class NierConfig
+class MingConfig
 {
 private:
     std::string m_filename;
     std::unordered_map<std::string, std::string> m_entries; // keys are converted to lower case.  values cannot be.
 
 public:
-    NierConfig()
+    MingConfig()
     {
         Enable = 0;
         Reset = 0;
@@ -42,11 +38,11 @@ public:
     std::mutex m_configLock;
 
 public:
-    bool StartNier();
+    bool StartMing();
     uint32 Enable;
     uint32 Reset;
 };
 
-#define sNierConfig MaNGOS::Singleton<NierConfig>::Instance()
+#define sMingConfig MaNGOS::Singleton<MingConfig>::Instance()
 
 #endif
