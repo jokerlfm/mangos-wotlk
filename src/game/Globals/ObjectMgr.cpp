@@ -64,6 +64,9 @@
 #include "Ming/MingConfig.h"
 #include "Ming/MingManager.h"
 
+// lfm nier 
+#include "Nier/NierManager.h"
+
 INSTANTIATE_SINGLETON_1(ObjectMgr);
 
 bool normalizePlayerName(std::string& name, size_t max_len)
@@ -462,6 +465,9 @@ void ObjectMgr::LoadCreatureTemplates()
     std::set<uint32> difficultyEntries[MAX_DIFFICULTY - 1]; // already loaded difficulty 1 value in creatures
     std::set<uint32> hasDifficultyEntries[MAX_DIFFICULTY - 1]; // already loaded creatures with difficulty 1  values
 
+    // lfm tamable beasts 
+    sNierManager->tamableBeastMap.clear();
+
     // check data correctness
     for (uint32 i = 1; i < sCreatureStorage.GetMaxEntry(); ++i)
     {
@@ -480,7 +486,7 @@ void ObjectMgr::LoadCreatureTemplates()
             if (!difficultyInfo)
             {
                 sLog.outErrorDb("Creature (Entry: %u) have `DifficultyEntry%u`=%u but creature entry %u not exist.",
-                                i, diff + 1, cInfo->DifficultyEntry[diff], cInfo->DifficultyEntry[diff]);
+                    i, diff + 1, cInfo->DifficultyEntry[diff], cInfo->DifficultyEntry[diff]);
                 continue;
             }
 
@@ -503,7 +509,7 @@ void ObjectMgr::LoadCreatureTemplates()
                 if (hasDifficultyEntries[diff2].find(cInfo->DifficultyEntry[diff]) != hasDifficultyEntries[diff2].end())
                 {
                     sLog.outErrorDb("Creature (Entry: %u) have `DifficultyEntry%u`=%u but creature entry %u have difficulty %u entry also.",
-                                    i, diff + 1, cInfo->DifficultyEntry[diff], cInfo->DifficultyEntry[diff], diff2 + 1);
+                        i, diff + 1, cInfo->DifficultyEntry[diff], cInfo->DifficultyEntry[diff], diff2 + 1);
                     continue;
                 }
                 ok2 = true;
@@ -514,7 +520,7 @@ void ObjectMgr::LoadCreatureTemplates()
             if (cInfo->UnitClass != difficultyInfo->UnitClass)
             {
                 sLog.outErrorDb("Creature (Entry: %u, class %u) has different `UnitClass` in difficulty %u mode (Entry: %u, class %u).",
-                                i, cInfo->UnitClass, diff + 1, cInfo->DifficultyEntry[diff], difficultyInfo->UnitClass);
+                    i, cInfo->UnitClass, diff + 1, cInfo->DifficultyEntry[diff], difficultyInfo->UnitClass);
                 continue;
             }
 
@@ -551,14 +557,14 @@ void ObjectMgr::LoadCreatureTemplates()
             if (difficultyInfo->AIName && *difficultyInfo->AIName)
             {
                 sLog.outErrorDb("Difficulty %u mode creature (Entry: %u) has `AIName`, but in any case will used difficulty 0 mode creature (Entry: %u) AIName.",
-                                diff + 1, cInfo->DifficultyEntry[diff], i);
+                    diff + 1, cInfo->DifficultyEntry[diff], i);
                 continue;
             }
 
             if (difficultyInfo->ScriptID)
             {
                 sLog.outErrorDb("Difficulty %u mode creature (Entry: %u) has `ScriptName`, but in any case will used difficulty 0 mode creature (Entry: %u) ScriptName.",
-                                diff + 1, cInfo->DifficultyEntry[diff], i);
+                    diff + 1, cInfo->DifficultyEntry[diff], i);
                 continue;
             }
 
@@ -668,7 +674,7 @@ void ObjectMgr::LoadCreatureTemplates()
         }
 
         if (cInfo->MeleeBaseAttackTime == 0)
-            const_cast<CreatureInfo*>(cInfo)->MeleeBaseAttackTime  = BASE_ATTACK_TIME;
+            const_cast<CreatureInfo*>(cInfo)->MeleeBaseAttackTime = BASE_ATTACK_TIME;
 
         if (cInfo->RangedBaseAttackTime == 0)
             const_cast<CreatureInfo*>(cInfo)->RangedBaseAttackTime = BASE_ATTACK_TIME;
@@ -757,7 +763,13 @@ void ObjectMgr::LoadCreatureTemplates()
         }
 
         // lfm force gossip 
-        const_cast<CreatureInfo*>(cInfo)->CreatureTypeFlags |= CreatureTypeFlags::CREATURE_TYPEFLAGS_FORCE_GOSSIP;
+        //const_cast<CreatureInfo*>(cInfo)->CreatureTypeFlags |= CreatureTypeFlags::CREATURE_TYPEFLAGS_FORCE_GOSSIP;
+
+        // lfm tabmable beasts 
+        if (cInfo->isTameable(false))
+        {
+            sNierManager->tamableBeastMap[sNierManager->tamableBeastMap.size()] = cInfo->Entry;
+        }
     }
 
     sLog.outString(">> Loaded %u creature definitions", sCreatureStorage.GetRecordCount());
@@ -2337,7 +2349,7 @@ void ObjectMgr::LoadGameObjects()
         uint32 entry        = fields[ 1].GetUInt32();
 
         // lfm ming vein
-        if (sMingConfig.Enable==1)
+        if (sMingConfig.Enable == 1)
         {
             if (sMingManager->IsVein(entry))
             {
@@ -2345,7 +2357,18 @@ void ObjectMgr::LoadGameObjects()
                 float eachX = fields[3].GetFloat();
                 float eachY = fields[4].GetFloat();
                 float eachZ = fields[5].GetFloat();
-                if (!sMingManager->AddVein(guid, eachMapId, Position(eachX, eachY, eachZ), 20.0f))
+                if (!sMingManager->AddVein(guid, eachMapId, Position(eachX, eachY, eachZ), VISIBILITY_DISTANCE_SMALL))
+                {
+                    continue;
+                }
+            }
+            else if (sMingManager->IsHerb(entry))
+            {
+                uint32 eachMapId = fields[2].GetUInt32();
+                float eachX = fields[3].GetFloat();
+                float eachY = fields[4].GetFloat();
+                float eachZ = fields[5].GetFloat();
+                if (!sMingManager->AddHerb(guid, eachMapId, Position(eachX, eachY, eachZ), VISIBILITY_DISTANCE_SMALL))
                 {
                     continue;
                 }
@@ -4099,6 +4122,17 @@ void ObjectMgr::LoadPlayerInfo()
                 if (!sSpellTemplate.LookupEntry<SpellEntry>(spell_id))
                 {
                     sLog.outErrorDb("Non existing spell %u in `playercreateinfo_spell` table, ignoring.", spell_id);
+                    continue;
+                }
+
+                // lfm player default spells 
+                // dwarf 
+                //if (spell_id == 2481)
+                //{
+                //    continue;
+                //}
+                if (spell_id == 59224 || spell_id == 20595)
+                {
                     continue;
                 }
 

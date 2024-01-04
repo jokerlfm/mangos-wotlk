@@ -7,9 +7,10 @@ class Nier_Warlock :public Nier_Base
 {
 public:
     Nier_Warlock();
-    void Prepare();
+    bool Prepare();
     void InitializeCharacter();
     bool DPS(Unit* pTarget, Unit* pTank, bool pRushing);
+    bool PVP(Unit* pTarget);
     bool Buff();
 
 public:
@@ -17,5 +18,9 @@ public:
     uint32 spell_SummonImp;
     uint32 spell_Corruption;
     uint32 spell_Curse_Of_Agony;
+    uint32 spell_Immolate;
+    uint32 spell_Shadowbolt;
+    uint32 spell_RainOfFire;
+    uint32 spell_FireShield;
 };
 #endif

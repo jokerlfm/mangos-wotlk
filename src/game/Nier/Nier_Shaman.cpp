@@ -6,9 +6,14 @@ Nier_Shaman::Nier_Shaman() :Nier_Base()
 
 }
 
-void Nier_Shaman::Prepare()
+bool Nier_Shaman::Prepare()
 {
-    Nier_Base::Prepare();
+    if (Nier_Base::Prepare())
+    {
+
+    }
+
+    return false;
 }
 
 void Nier_Shaman::Update(uint32 pDiff)

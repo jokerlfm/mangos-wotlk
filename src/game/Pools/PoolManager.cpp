@@ -815,7 +815,8 @@ void PoolManager::LoadFromDB()
             GameObjectData const* data = sObjectMgr.GetGOData(guid);
             if (!data)
             {
-                sLog.outErrorDb("`pool_gameobject` has a non existing gameobject spawn (GUID: %u) defined for pool id (%u), skipped.", guid, pool_id);
+                // lfm gameobjects exception no logs 
+                //sLog.outErrorDb("`pool_gameobject` has a non existing gameobject spawn (GUID: %u) defined for pool id (%u), skipped.", guid, pool_id);
                 continue;
             }
             if (pool_id > max_pool_id)
@@ -1037,9 +1038,16 @@ void PoolManager::LoadFromDB()
             }
         }
         if (poolTemplate.mapEntry != nullptr || poolTemplate.MaxLimit > 0 || poolTemplate.description != "")
+        {
             if (pool_entry <= max_pool_id)
+            {
                 if (mPoolGameobjectGroups[pool_entry].isEmpty() && mPoolCreatureGroups[pool_entry].isEmpty() && mPoolPoolGroups[pool_entry].isEmpty())
-                    sLog.outErrorDb("Pool Template Id (%u) is empty.", pool_entry);
+                {
+                    // lfm gameobjects exception no warnings 
+                    //sLog.outErrorDb("Pool Template Id (%u) is empty.", pool_entry);
+                }
+            }
+        }
     }
 
     sLog.outString();

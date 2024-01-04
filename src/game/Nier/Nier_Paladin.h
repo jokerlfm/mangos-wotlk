@@ -8,7 +8,7 @@ class Nier_Paladin :public Nier_Base
 public:
     Nier_Paladin();
 
-    void Prepare();
+    bool Prepare();
     void Update(uint32 pDiff);
     void Update_Online(uint32 pDiff);
     void InitializeCharacter();

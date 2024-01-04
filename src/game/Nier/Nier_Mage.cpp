@@ -13,9 +13,14 @@ Nier_Mage::Nier_Mage() :Nier_Base()
 	dpsDistance = 15.0f;
 }
 
-void Nier_Mage::Prepare()
+bool Nier_Mage::Prepare()
 {
-	Nier_Base::Prepare();
+	if (Nier_Base::Prepare())
+	{
+
+	}
+
+	return false;
 }
 
 void Nier_Mage::Update(uint32 pDiff)
@@ -107,6 +112,7 @@ void Nier_Mage::InitializeCharacter()
 		spell_FireBlast = 42873;
 		spell_ArcaneIntellect = 42995;
 	}
+	me->UpdateSkillsForLevel(true);
 }
 
 bool Nier_Mage::Tank(Unit* pTarget)
@@ -123,10 +129,41 @@ bool Nier_Mage::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 {
 	if (Nier_Base::DPS(pTarget, pTank, pRushing))
 	{
-		if (actionDelay > 0)
+		float targetDistance = me->GetDistance(pTarget);
+		if (targetDistance < dpsDistance)
 		{
-			return true;
+			if (spell_FireBlast > 0)
+			{
+				if (CastSpell(pTarget, spell_FireBlast))
+				{
+					return true;
+				}
+			}
+			if (spell_Shoot > 0)
+			{
+				if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
+				{
+					return true;
+				}
+				else
+				{
+					if (CastSpell(pTarget, spell_Shoot))
+					{
+						return true;
+					}
+				}
+			}
 		}
+		return true;
+	}
+
+	return false;
+}
+
+bool Nier_Mage::PVP(Unit* pTarget)
+{
+	if (Nier_Base::PVP(pTarget))
+	{
 		float targetDistance = me->GetDistance(pTarget);
 		if (targetDistance < dpsDistance)
 		{

@@ -1075,11 +1075,15 @@ class Player : public Unit
         explicit Player(WorldSession* session);
         ~Player();
 
+        // lfm mana regen 
+        float manaRegen;
+
         // lfm auto fish
         int fishingDelay;
 
         // lfm nier
         bool isNier;
+        Nier_Base* _nier;
         uint32 masterId;
         uint32 groupRole;
 

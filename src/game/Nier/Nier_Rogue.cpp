@@ -31,9 +31,14 @@ Nier_Rogue::Nier_Rogue() :Nier_Base()
 	item_SlowPoison = 0;
 }
 
-void Nier_Rogue::Prepare()
+bool Nier_Rogue::Prepare()
 {
-	Nier_Base::Prepare();
+	if (Nier_Base::Prepare())
+	{
+
+	}
+
+	return false;
 }
 
 void Nier_Rogue::Update(uint32 pDiff)
@@ -48,9 +53,9 @@ void Nier_Rogue::Update_Online(uint32 pDiff)
 
 void Nier_Rogue::InitializeCharacter()
 {
+	target_specialty = 1;
 	Nier_Base::InitializeCharacter();
 
-	target_specialty = 1;
 	me->groupRole = GroupRole::GroupRole_DPS;
 
 	uint32 myLevel = me->GetLevel();
@@ -284,6 +289,7 @@ void Nier_Rogue::InitializeCharacter()
 		spell_FanofKnives = 51723;
 		spell_SinisterStrike = 48638;
 	}
+	me->UpdateSkillsForLevel(true);
 }
 
 bool Nier_Rogue::Tank(Unit* pTarget)
@@ -300,58 +306,63 @@ bool Nier_Rogue::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 {
 	if (Nier_Base::DPS(pTarget, pTank, pRushing))
 	{
-		if (actionDelay > 0)
-		{
-			return true;
-		}
-		if (!pTarget)
-		{
-			ClearTarget();
-			return false;
-		}
-		else if (!pTarget->IsAlive())
-		{
-			ClearTarget();
-			return false;
-		}
-		else if (!me->CanAttack(pTarget))
-		{
-			ClearTarget();
-			return false;
-		}
 		float targetDistance = me->GetDistance(pTarget);
 		if (me->CanReachWithMeleeAttack(pTarget))
 		{
 			uint32 myEnergy = me->GetPower(Powers::POWER_ENERGY);
-			me->Attack(pTarget, true);
 			if (pTarget->GetSelectionGuid() == me->GetObjectGuid())
 			{
 				if (pTarget->GetTypeId() != TypeID::TYPEID_PLAYER)
 				{
-					if (myEnergy >= 20)
+					me->AttackStop();
+					if (spell_Feint > 0)
 					{
-						if (CastSpell(pTarget, spell_Feint))
+						if (myEnergy >= 20)
+						{
+							if (CastSpell(pTarget, spell_Feint))
+							{
+								return true;
+							}
+						}
+					}
+					if (spell_Evasion > 0)
+					{
+						if (CastSpell(me, spell_Evasion))
+						{
+							return true;
+						}
+					}
+					return true;
+				}
+			}
+			me->Attack(pTarget, true);
+			if (spell_Dismantle > 0)
+			{
+				if (pTarget->GetTypeId() != TypeID::TYPEID_PLAYER)
+				{
+					if (pTarget->GetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID))
+					{
+						if (CastSpell(pTarget, spell_Dismantle, true))
 						{
 							return true;
 						}
 					}
 				}
-				if (CastSpell(me, spell_Evasion))
+				else
 				{
-					return true;
+					if (pTarget->hasWeaponForAttack(WeaponAttackType::BASE_ATTACK))
+					{
+						if (CastSpell(pTarget, spell_Dismantle, true))
+						{
+							return true;
+						}
+					}
 				}
-				//if (!me->HasAura(spell_Evasion))
-				//{
-				//    if (CastSpell(me, spell_Vanish))
-				//    {
-				//        return true;
-				//    }
-				//}
 			}
-			else
+			uint32 comboPoints = me->GetComboPoints();
+			if (pRushing)
 			{
-				uint32 comboPoints = me->GetComboPoints();
-				if (pRushing)
+				if (spell_BladeFlurry > 0)
 				{
 					if (myEnergy >= 25)
 					{
@@ -360,58 +371,24 @@ bool Nier_Rogue::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 							return true;
 						}
 					}
+				}
+				if (spell_KillingSpree > 0)
+				{
 					if (CastSpell(pTarget, spell_KillingSpree))
 					{
 						return true;
 					}
+				}
+				if (spell_AdrenalineRush > 0)
+				{
 					if (CastSpell(me, spell_AdrenalineRush))
 					{
 						return true;
 					}
 				}
-				if (myEnergy >= 25)
-				{
-					if (pTarget->IsNonMeleeSpellCasted(false, false, true))
-					{
-						if (CastSpell(pTarget, spell_Kick))
-						{
-							return true;
-						}
-						if (comboPoints > 0)
-						{
-							if (CastSpell(pTarget, spell_KidneyShot))
-							{
-								return true;
-							}
-						}
-					}
-				}
-				if (myEnergy >= 15)
-				{
-					if (SpellValid(spell_TricksoftheTrade))
-					{
-						if (Group* myGroup = me->GetGroup())
-						{
-							for (GroupReference* groupRef = myGroup->GetFirstMember(); groupRef != nullptr; groupRef = groupRef->next())
-							{
-								if (Player* member = groupRef->getSource())
-								{
-									if (member->GetObjectGuid() != me->GetObjectGuid())
-									{
-										if (member->groupRole == GroupRole::GroupRole_Tank)
-										{
-											if (CastSpell(member, spell_TricksoftheTrade))
-											{
-												return true;
-											}
-											break;
-										}
-									}
-								}
-							}
-						}
-					}
-				}
+			}
+			if (spell_SliceandDice > 0)
+			{
 				if (myEnergy >= 25)
 				{
 					if (!me->HasAura(spell_SliceandDice))
@@ -424,28 +401,27 @@ bool Nier_Rogue::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 							}
 						}
 					}
-					else
+				}
+			}
+			if (spell_Eviscerate > 0)
+			{
+				if (myEnergy > 35)
+				{
+					if (comboPoints > 0)
 					{
-						if (comboPoints > 0)
+						uint32 finishRate = urand(1, 4);
+						if (comboPoints > finishRate)
 						{
-							uint32 finishRate = urand(1, 4);
-							if (comboPoints > finishRate)
+							if (CastSpell(pTarget, spell_Eviscerate))
 							{
-								if (CastSpell(pTarget, spell_Eviscerate))
-								{
-									return true;
-								}
+								return true;
 							}
 						}
 					}
-					if (pTarget->GetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID))
-					{
-						if (CastSpell(pTarget, spell_Dismantle, true))
-						{
-							return true;
-						}
-					}
 				}
+			}
+			if (spell_SinisterStrike > 0)
+			{
 				if (myEnergy >= 45)
 				{
 					if (CastSpell(pTarget, spell_SinisterStrike))
@@ -455,11 +431,17 @@ bool Nier_Rogue::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 				}
 			}
 		}
-		else if (targetDistance < INSPECT_DISTANCE)
+		else
 		{
-			if (CastSpell(me, spell_Sprint))
+			if (spell_Sprint > 0)
 			{
-				return true;
+				if (targetDistance < INSPECT_DISTANCE)
+				{
+					if (CastSpell(me, spell_Sprint))
+					{
+						return true;
+					}
+				}
 			}
 		}
 		return true;
@@ -468,98 +450,238 @@ bool Nier_Rogue::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 	return false;
 }
 
-bool Nier_Rogue::Buff()
+bool Nier_Rogue::PVP(Unit* pTarget)
 {
-	if (Group* group = me->GetGroup())
+	if (Nier_Base::PVP(pTarget))
 	{
-		for (GroupReference* groupRef = group->GetFirstMember(); groupRef != nullptr; groupRef = groupRef->next())
+		float targetDistance = me->GetDistance(pTarget);
+		if (me->CanReachWithMeleeAttack(pTarget))
 		{
-			if (Player* member = groupRef->getSource())
+			uint32 myEnergy = me->GetPower(Powers::POWER_ENERGY);
+			me->Attack(pTarget, true);
+			if (spell_Evasion > 0)
 			{
-				if (member->GetObjectGuid() == me->GetObjectGuid())
+				if (CastSpell(me, spell_Evasion))
 				{
-					if (item_InstantPoison > 0)
+					return true;
+				}
+			}
+			uint32 comboPoints = me->GetComboPoints();
+			if (spell_BladeFlurry > 0)
+			{
+				if (myEnergy >= 25)
+				{
+					if (CastSpell(me, spell_BladeFlurry))
 					{
-						if (!me->HasItemCount(item_InstantPoison, 1))
+						return true;
+					}
+				}
+			}
+			if (spell_KillingSpree > 0)
+			{
+				if (CastSpell(pTarget, spell_KillingSpree))
+				{
+					return true;
+				}
+			}
+			if (spell_AdrenalineRush > 0)
+			{
+				if (CastSpell(me, spell_AdrenalineRush))
+				{
+					return true;
+				}
+			}
+			if (myEnergy >= 25)
+			{
+				if (pTarget->IsNonMeleeSpellCasted(false, false, true))
+				{
+					if (spell_Kick > 0)
+					{
+						if (CastSpell(pTarget, spell_Kick))
 						{
-							me->StoreNewItemInBestSlots(item_InstantPoison, 20);
+							return true;
 						}
-						if (Item* poison = me->GetItemByEntry(item_InstantPoison))
+					}
+					if (spell_KidneyShot > 0)
+					{
+						if (comboPoints > 0)
 						{
-							if (Item* oWeapon = me->GetItemByPos(INVENTORY_SLOT_BAG_0, EquipmentSlots::EQUIPMENT_SLOT_OFFHAND))
+							if (CastSpell(pTarget, spell_KidneyShot))
 							{
-								if (oWeapon->GetEnchantmentId(EnchantmentSlot::TEMP_ENCHANTMENT_SLOT) == 0)
-								{
-									if (UseItem(poison, oWeapon))
-									{
-										return true;
-									}
-								}
+								return true;
 							}
 						}
 					}
-					if (item_SlowPoison > 0)
+				}
+			}
+			if (myEnergy >= 25)
+			{
+				if (spell_SliceandDice > 0)
+				{
+					if (!me->HasAura(spell_SliceandDice))
 					{
-						if (!me->HasItemCount(item_SlowPoison, 1))
+						if (comboPoints > 1)
 						{
-							me->StoreNewItemInBestSlots(item_SlowPoison, 20);
-						}
-						if (Item* poison = me->GetItemByEntry(item_SlowPoison))
-						{
-							if (Item* mWeapon = me->GetItemByPos(INVENTORY_SLOT_BAG_0, EquipmentSlots::EQUIPMENT_SLOT_MAINHAND))
+							if (CastSpell(pTarget, spell_SliceandDice))
 							{
-								if (mWeapon->GetEnchantmentId(EnchantmentSlot::TEMP_ENCHANTMENT_SLOT) == 0)
-								{
-									if (UseItem(poison, mWeapon))
-									{
-										return true;
-									}
-								}
+								return true;
 							}
 						}
+					}
+				}
+				if (spell_Eviscerate > 0)
+				{
+					if (comboPoints > 0)
+					{
+						uint32 finishRate = urand(1, 4);
+						if (comboPoints > finishRate)
+						{
+							if (CastSpell(pTarget, spell_Eviscerate))
+							{
+								return true;
+							}
+						}
+					}
+				}
+				if (spell_Dismantle > 0)
+				{
+					if (pTarget->GetTypeId() != TypeID::TYPEID_PLAYER)
+					{
+						if (pTarget->GetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID))
+						{
+							if (CastSpell(pTarget, spell_Dismantle, true))
+							{
+								return true;
+							}
+						}
+					}
+					else
+					{
+						if (pTarget->hasWeaponForAttack(WeaponAttackType::BASE_ATTACK))
+						{
+							if (CastSpell(pTarget, spell_Dismantle, true))
+							{
+								return true;
+							}
+						}
+					}
+				}
+			}
+			if (spell_SinisterStrike > 0)
+			{
+				if (myEnergy >= 45)
+				{
+					if (CastSpell(pTarget, spell_SinisterStrike))
+					{
+						return true;
+					}
+				}
+			}
+		}
+		else
+		{
+			if (spell_Sprint > 0)
+			{
+				if (targetDistance < INSPECT_DISTANCE)
+				{
+					if (CastSpell(me, spell_Sprint))
+					{
+						return true;
+					}
+				}
+			}
+		}
+		return true;
+	}
+
+	return false;
+}
+
+bool Nier_Rogue::Interrupt(Unit* pTarget)
+{
+	if (actionDelay > 0)
+	{
+		return false;
+	}
+	if (!pTarget)
+	{
+		return false;
+	}
+	else if (!pTarget->IsAlive())
+	{
+		return false;
+	}
+	else if (!me->CanAttack(pTarget))
+	{
+		return false;
+	}
+
+	if (me->CanReachWithMeleeAttack(pTarget))
+	{
+		uint32 myEnergy = me->GetPower(Powers::POWER_ENERGY);
+		if (myEnergy >= 25)
+		{
+			if (spell_Kick > 0)
+			{
+				if (CastSpell(pTarget, spell_Kick))
+				{
+					return true;
+				}
+			}
+			if (spell_KidneyShot > 0)
+			{
+				uint32 comboPoints = me->GetComboPoints();
+				if (comboPoints > 0)
+				{
+					if (CastSpell(pTarget, spell_KidneyShot))
+					{
+						return true;
 					}
 				}
 			}
 		}
 	}
-	else
+
+	return false;
+}
+
+bool Nier_Rogue::Buff()
+{
+	if (item_InstantPoison > 0)
 	{
-		if (item_InstantPoison > 0)
+		if (!me->HasItemCount(item_InstantPoison, 1))
 		{
-			if (!me->HasItemCount(item_InstantPoison, 1))
+			me->StoreNewItemInBestSlots(item_InstantPoison, 20);
+		}
+		if (Item* poison = me->GetItemByEntry(item_InstantPoison))
+		{
+			if (Item* oWeapon = me->GetItemByPos(INVENTORY_SLOT_BAG_0, EquipmentSlots::EQUIPMENT_SLOT_OFFHAND))
 			{
-				me->StoreNewItemInBestSlots(item_InstantPoison, 20);
-			}
-			if (Item* poison = me->GetItemByEntry(item_InstantPoison))
-			{
-				if (Item* oWeapon = me->GetItemByPos(INVENTORY_SLOT_BAG_0, EquipmentSlots::EQUIPMENT_SLOT_OFFHAND))
+				if (oWeapon->GetEnchantmentId(EnchantmentSlot::TEMP_ENCHANTMENT_SLOT) == 0)
 				{
-					if (oWeapon->GetEnchantmentId(EnchantmentSlot::TEMP_ENCHANTMENT_SLOT) == 0)
+					if (UseItem(poison, oWeapon))
 					{
-						if (UseItem(poison, oWeapon))
-						{
-							return true;
-						}
+						return true;
 					}
 				}
 			}
 		}
-		if (item_SlowPoison > 0)
+	}
+	if (item_SlowPoison > 0)
+	{
+		if (!me->HasItemCount(item_SlowPoison, 1))
 		{
-			if (!me->HasItemCount(item_SlowPoison, 1))
+			me->StoreNewItemInBestSlots(item_SlowPoison, 20);
+		}
+		if (Item* poison = me->GetItemByEntry(item_SlowPoison))
+		{
+			if (Item* mWeapon = me->GetItemByPos(INVENTORY_SLOT_BAG_0, EquipmentSlots::EQUIPMENT_SLOT_MAINHAND))
 			{
-				me->StoreNewItemInBestSlots(item_SlowPoison, 20);
-			}
-			if (Item* poison = me->GetItemByEntry(item_SlowPoison))
-			{
-				if (Item* mWeapon = me->GetItemByPos(INVENTORY_SLOT_BAG_0, EquipmentSlots::EQUIPMENT_SLOT_MAINHAND))
+				if (mWeapon->GetEnchantmentId(EnchantmentSlot::TEMP_ENCHANTMENT_SLOT) == 0)
 				{
-					if (mWeapon->GetEnchantmentId(EnchantmentSlot::TEMP_ENCHANTMENT_SLOT) == 0)
+					if (UseItem(poison, mWeapon))
 					{
-						if (UseItem(poison, mWeapon))
-						{
-							return true;
-						}
+						return true;
 					}
 				}
 			}

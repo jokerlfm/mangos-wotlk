@@ -8,7 +8,7 @@ class Nier_Mage :public Nier_Base
 public:
     Nier_Mage();
 
-    void Prepare();
+    bool Prepare();
     void Update(uint32 pDiff);
     void Update_Online(uint32 pDiff);
     void InitializeCharacter();
@@ -16,6 +16,7 @@ public:
     bool Tank(Unit* pTarget);
     bool Heal(Unit* pTarget);
     bool DPS(Unit* pTarget, Unit* pTank, bool pRushing);
+    bool PVP(Unit* pTarget);
     bool Buff();
     bool Cure();
     bool Revive();

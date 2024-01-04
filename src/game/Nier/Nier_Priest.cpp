@@ -66,9 +66,14 @@ Nier_Priest::Nier_Priest() :Nier_Base()
 	aura_Surge_of_Light = 0;
 }
 
-void Nier_Priest::Prepare()
+bool Nier_Priest::Prepare()
 {
-	Nier_Base::Prepare();
+	if (Nier_Base::Prepare())
+	{
+
+	}
+
+	return false;
 }
 
 void Nier_Priest::Update(uint32 pDiff)
@@ -83,9 +88,9 @@ void Nier_Priest::Update_Online(uint32 pDiff)
 
 void Nier_Priest::InitializeCharacter()
 {
+	target_specialty = 1;
 	Nier_Base::InitializeCharacter();
 
-	target_specialty = 1;
 	me->groupRole = GroupRole::GroupRole_Healer;
 
 	uint32 myLevel = me->GetLevel();
@@ -335,6 +340,7 @@ void Nier_Priest::InitializeCharacter()
 		spell_Prayer_of_Fortitude = 48162;
 		spell_HolyNova = 48078;
 	}
+	me->UpdateSkillsForLevel(true);
 }
 
 bool Nier_Priest::Tank(Unit* pTarget)
@@ -346,21 +352,9 @@ bool Nier_Priest::Heal(Unit* pTarget)
 {
 	if (Nier_Base::Heal(pTarget))
 	{
-		if (actionDelay > 0)
-		{
-			return true;
-		}
 		if (me->IsNonMeleeSpellCasted(false, false, true))
 		{
 			return true;
-		}
-		if (!pTarget)
-		{
-			return false;
-		}
-		else if (!pTarget->IsAlive())
-		{
-			return false;
 		}
 		float targetDistance = me->GetDistance(pTarget);
 		if (targetDistance > VISIBILITY_DISTANCE_TINY)
@@ -480,10 +474,6 @@ bool Nier_Priest::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 {
 	if (Nier_Base::DPS(pTarget, pTank, pRushing))
 	{
-		if (actionDelay > 0)
-		{
-			return true;
-		}
 		float targetDistance = me->GetDistance(pTarget);
 		if (targetDistance < dpsDistance)
 		{

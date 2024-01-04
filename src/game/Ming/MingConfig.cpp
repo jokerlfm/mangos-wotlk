@@ -104,7 +104,6 @@ bool MingConfig::StartMing()
 	}
 
 	Enable = GetIntDefault("Enable", 0);
-	Reset = GetIntDefault("Reset", 0);
 
 	if (Enable == 0)
 	{

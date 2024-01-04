@@ -738,7 +738,8 @@ void Player::UpdateManaRegen()
 
     float Intellect = GetStat(STAT_INTELLECT);
     // Mana regen from spirit and intellect
-    float power_regen = sqrt(Intellect) * OCTRegenMPPerSpirit();
+    float power_regen = sqrt(Intellect) * OCTRegenMPPerSpirit();    
+
     // Apply PCT bonus from SPELL_AURA_MOD_POWER_REGEN_PERCENT aura on spirit base regen
     power_regen *= GetTotalAuraMultiplierByMiscValue(SPELL_AURA_MOD_POWER_REGEN_PERCENT, POWER_MANA);
 
@@ -761,7 +762,11 @@ void Player::UpdateManaRegen()
 
     float value = power_regen_mp5 + power_regen;
     float oldValue = GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER);
-    SetStatFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER, value);
+
+    // lfm regen by seconds 
+    //SetStatFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER, value);
+    SetStatFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER, 0);
+    manaRegen = value;
 
     if (value != oldValue)
         if (Pet* pet = GetPet())

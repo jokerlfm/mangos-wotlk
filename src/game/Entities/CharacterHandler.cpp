@@ -286,23 +286,25 @@ void WorldSession::HandleCharCreateOpcode(WorldPacket& recv_data)
         return;
     }
 
-    // prevent character creating Expansion race without Expansion account
-    if (raceEntry->expansion > GetExpansion())
-    {
-        data << (uint8)CHAR_CREATE_EXPANSION;
-        sLog.outError("Expansion %u account:[%d] tried to Create character with expansion %u race (%u)", GetExpansion(), GetAccountId(), raceEntry->expansion, race_);
-        SendPacket(data);
-        return;
-    }
+    // lfm race no expansion limit 
+    //// prevent character creating Expansion race without Expansion account
+    //if (raceEntry->expansion > GetExpansion())
+    //{
+    //    data << (uint8)CHAR_CREATE_EXPANSION;
+    //    sLog.outError("Expansion %u account:[%d] tried to Create character with expansion %u race (%u)", GetExpansion(), GetAccountId(), raceEntry->expansion, race_);
+    //    SendPacket(data);
+    //    return;
+    //}
 
-    // prevent character creating Expansion class without Expansion account
-    if (classEntry->expansion > GetExpansion())
-    {
-        data << (uint8)CHAR_CREATE_EXPANSION_CLASS;
-        sLog.outError("Expansion %u account:[%d] tried to Create character with expansion %u class (%u)", GetExpansion(), GetAccountId(), classEntry->expansion, class_);
-        SendPacket(data);
-        return;
-    }
+    // lfm class no expansion limit 
+    //// prevent character creating Expansion class without Expansion account
+    //if (classEntry->expansion > GetExpansion())
+    //{
+    //    data << (uint8)CHAR_CREATE_EXPANSION_CLASS;
+    //    sLog.outError("Expansion %u account:[%d] tried to Create character with expansion %u class (%u)", GetExpansion(), GetAccountId(), classEntry->expansion, class_);
+    //    SendPacket(data);
+    //    return;
+    //}
 
     // prevent character creating with invalid name
     if (!normalizePlayerName(name))
@@ -810,7 +812,10 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder* holder)
         if (!mapEntry)
             lockStatus = AREA_LOCKSTATUS_UNKNOWN_ERROR;
         else if (pCurrChar->GetSession()->GetExpansion() < mapEntry->Expansion())
-            lockStatus = AREA_LOCKSTATUS_INSUFFICIENT_EXPANSION;
+        {
+            // lfm map no expansion limit 
+            //lockStatus = AREA_LOCKSTATUS_INSUFFICIENT_EXPANSION;
+        }            
     }
     if (lockStatus != AREA_LOCKSTATUS_OK || !pCurrChar->GetMap()->Add(pCurrChar))
     {

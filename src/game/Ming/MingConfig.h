@@ -1,7 +1,7 @@
 #ifndef MING_CONFIG_H
 #define MING_CONFIG_H
 
-#define MING_CONFIG_FILE_NAME "nier.conf"
+#define MING_CONFIG_FILE_NAME "ming.conf"
 
 #include "Common.h"
 #include "Policies/Singleton.h"
@@ -21,7 +21,6 @@ public:
     MingConfig()
     {
         Enable = 0;
-        Reset = 0;
     }
 
     bool SetSource(const std::string& file);
@@ -40,7 +39,6 @@ public:
 public:
     bool StartMing();
     uint32 Enable;
-    uint32 Reset;
 };
 
 #define sMingConfig MaNGOS::Singleton<MingConfig>::Instance()

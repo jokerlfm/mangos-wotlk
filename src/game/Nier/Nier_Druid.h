@@ -8,7 +8,7 @@ class Nier_Druid :public Nier_Base
 public:
     Nier_Druid();
 
-    void Prepare();
+    bool Prepare();
     void Update(uint32 pDiff);
     void Update_Online(uint32 pDiff);
     void InitializeCharacter();

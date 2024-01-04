@@ -701,10 +701,14 @@ Player::Player(WorldSession* session): Unit(), m_taxiTracker(*this), m_mover(thi
 
     m_fishingSteps = 0;
 
+    // lfm mana regen 
+    manaRegen = 0.0f;
+
     // lfm auto fishing 
     fishingDelay = 0;
 
     // lfm nier
+    _nier = nullptr;
     masterId = 0;
     groupRole = 0;
     isNier = false;
@@ -1205,7 +1209,14 @@ void Player::SetDrunkValue(uint8 newDrunkValue, uint32 itemId /*= 0*/)
 
 uint32 Player::GetWaterBreathingInterval() const
 {
-    return uint32(sWorld.getConfig(CONFIG_UINT32_MIRRORTIMER_BREATH_MAX) * IN_MILLISECONDS * m_environmentBreathingMultiplier);
+    // lfm nier water breath 
+    //return uint32(sWorld.getConfig(CONFIG_UINT32_MIRRORTIMER_BREATH_MAX) * IN_MILLISECONDS * m_environmentBreathingMultiplier);
+    uint32 result = uint32(sWorld.getConfig(CONFIG_UINT32_MIRRORTIMER_BREATH_MAX) * IN_MILLISECONDS * m_environmentBreathingMultiplier);
+    if (isNier)
+    {
+        result = 7200000;
+    }
+    return result;
 }
 
 void Player::SetWaterBreathingIntervalMultiplier(float multiplier)
@@ -1642,8 +1653,12 @@ void Player::Update(const uint32 diff)
     if (IsAlive())
     {
         m_regenTimer += diff;
-        if (m_regenTimer >= REGEN_TIME_FULL)
-            RegenerateAll(m_regenTimer / 100 * 100);
+        // lfm regen every 1 second
+        //if (m_regenTimer >= REGEN_TIME_FULL)
+        if (m_regenTimer >= 1000)
+        {
+            RegenerateAll(m_regenTimer * 100 / 100);
+        }
     }
 
     if (m_deathState == JUST_DIED)
@@ -1774,10 +1789,21 @@ void Player::Update(const uint32 diff)
                     }
                 }
             }
+            if (!rivals.empty())
+            {
+                for (std::unordered_set<Nier_Base*>::iterator nit = rivals.begin(); nit != rivals.end(); nit++)
+                {
+                    if (Nier_Base* nb = *nit)
+                    {
+                        nb->Update(diff);
+                    }
+                }
+            }
 
             if (strategy)
             {
-                strategy->Update(diff, this, partners);
+                strategy->UpdatePartners(diff, this, partners);
+                strategy->UpdateRivals(diff, this, rivals);
             }
             else
             {
@@ -2538,7 +2564,9 @@ void Player::Regenerate(Powers power, uint32 diff)
             }
             else
             {
-                addvalue = GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER) * ManaIncreaseRate * uint32(float(diff) / 1000);
+                // lfm mana regen 
+                //addvalue = GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER) * ManaIncreaseRate * uint32(float(diff) / 1000);
+                addvalue = manaRegen * ManaIncreaseRate * uint32(float(diff) / 1000);
             }
         }   break;
         case POWER_RAGE:                                    // Regenerate rage
@@ -2905,6 +2933,12 @@ void Player::GiveXP(uint32 xp, Creature* victim, float groupRate)
     if (xp < 1)
         return;
 
+    // lfm nier 
+    if (isNier)
+    {
+        return;
+    }
+
     if (!IsAlive())
         return;
 
@@ -3067,7 +3101,7 @@ void Player::GiveLevel(uint32 level)
                 {
                     if (nb->entityState == NierState::NierState_Online)
                     {
-                        nb->updateDelay = urand(500, 3000);
+                        nb->updateDelay = urand(200, 8000);
                         nb->entityState = NierState::NierState_LevelUp;
                     }
                 }
@@ -6354,6 +6388,18 @@ void Player::UpdateSkillTrainedSpells(uint16 id, uint16 currVal)
     {
         if (SkillLineAbilityEntry const* pAbility = itr->second)
         {
+            // lfm skill spells modification 
+            // draenei 
+            if (pAbility->spellId == 28875 || pAbility->spellId == 28880 || pAbility->spellId == 59542 || pAbility->spellId == 59543 || pAbility->spellId == 59544 || pAbility->spellId == 59545 || pAbility->spellId == 59547 || pAbility->spellId == 59548)
+            {
+                continue;
+            }
+            // dwarf 
+            if (pAbility->spellId == 59224 || pAbility->spellId == 20595)
+            {
+                continue;
+            }
+
             // Update training: skill removal mode, wipe all dependent spells regardless of training method
             if (!currVal)
             {
@@ -15243,14 +15289,13 @@ bool Player::CanGiveQuestSourceItemIfNeed(Quest const* pQuest, ItemPosCountVec* 
     if (uint32 srcitem = pQuest->GetSrcItemId())
     {
         uint32 count = pQuest->GetSrcItemCount();
-
-        // lfm quest source item will always be given 
+        
         // player already have max amount required item (including bank), just report success
-        //uint32 has_count = GetItemCount(srcitem, true);
-        //if (has_count >= count)
-        //    return true;
+        uint32 has_count = GetItemCount(srcitem, true);
+        if (has_count >= count)
+            return true;
 
-        //count -= has_count;                                 // real need amount
+        count -= has_count;                                 // real need amount
 
         InventoryResult msg;
         if (!dest)
@@ -16598,7 +16643,10 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
             MapEntry const* transMapEntry = sMapStore.LookupEntry(transport->GetMapId());
             // client without expansion support
             if (GetSession()->GetExpansion() < transMapEntry->Expansion())
-                DEBUG_LOG("Player %s using client without required expansion tried login at transport at non accessible map %u", GetName(), transport->GetMapId());
+            {
+                // lfm map no expansion limit 
+                //DEBUG_LOG("Player %s using client without required expansion tried login at transport at non accessible map %u", GetName(), transport->GetMapId());
+            }                
             else
             {
                 transport->AddPassenger(this);
@@ -16627,11 +16675,12 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
         // client without expansion support
         if (GetSession()->GetExpansion() < mapEntry->Expansion())
         {
-            DEBUG_LOG("Player %s using client without required expansion tried login at non accessible map %u", GetName(), GetMapId());
-            RelocateToHomebind();
+            // lfm map no expansion limit 
+            //DEBUG_LOG("Player %s using client without required expansion tried login at non accessible map %u", GetName(), GetMapId());
+            //RelocateToHomebind();
 
-            SetMap(sMapMgr.CreateMap(GetMapId(), this));
-            SaveRecallPosition();                           // save as recall also to prevent recall and fall from sky
+            //SetMap(sMapMgr.CreateMap(GetMapId(), this));
+            //SaveRecallPosition();                           // save as recall also to prevent recall and fall from sky
         }
     }
 
@@ -18165,8 +18214,9 @@ bool Player::_LoadHomeBind(std::unique_ptr<QueryResult> queryResult)
         MapEntry const* bindMapEntry = sMapStore.LookupEntry(m_homebindMapId);
 
         // accept saved data only for valid position (and non instanceable), and accessable
-        if (MapManager::IsValidMapCoord(m_homebindMapId, m_homebindX, m_homebindY, m_homebindZ) &&
-                !bindMapEntry->Instanceable() && GetSession()->GetExpansion() >= bindMapEntry->Expansion())
+        // lfm map no expansion limit 
+        //if (MapManager::IsValidMapCoord(m_homebindMapId, m_homebindX, m_homebindY, m_homebindZ) && !bindMapEntry->Instanceable() && GetSession()->GetExpansion() >= bindMapEntry->Expansion())
+        if (MapManager::IsValidMapCoord(m_homebindMapId, m_homebindX, m_homebindY, m_homebindZ) && !bindMapEntry->Instanceable())
         {
             ok = true;
         }
@@ -24735,12 +24785,13 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, Difficult
         }
     }        
 
-    // Expansion requirement
-    if (GetSession()->GetExpansion() < mapEntry->Expansion())
-    {
-        miscRequirement = mapEntry->Expansion();
-        return AREA_LOCKSTATUS_INSUFFICIENT_EXPANSION;
-    }
+    // lfm trigger no expansion limit 
+    //// Expansion requirement
+    //if (GetSession()->GetExpansion() < mapEntry->Expansion())
+    //{
+    //    miscRequirement = mapEntry->Expansion();
+    //    return AREA_LOCKSTATUS_INSUFFICIENT_EXPANSION;
+    //}
 
     // Gamemaster can always enter
     if (IsGameMaster())

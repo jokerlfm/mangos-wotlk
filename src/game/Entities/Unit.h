@@ -1166,6 +1166,15 @@ class Unit : public WorldObject
         // lfm vendor replacement
         int vendorReplaceCheckDelay;
 
+        // lfm charging 
+        bool charging;
+
+        // lfm melee delay 
+        int meleeDealy;
+        WeaponAttackType meleeType;
+        Unit* meleeVictim;
+        CalcDamageInfo* cdi;
+
         void AddToWorld() override;
         void RemoveFromWorld() override;
 

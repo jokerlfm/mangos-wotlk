@@ -1276,7 +1276,11 @@ void WorldSession::SendAuthOk() const
     packet << uint32(0);                                    // BillingTimeRemaining
     packet << uint8(0);                                     // BillingPlanFlags
     packet << uint32(0);                                    // BillingTimeRested
-    packet << uint8(GetExpansion());                        // 0 - normal, 1 - TBC, 2 - WotLK. Must be set in database manually for each account.
+
+    // lfm auth always max expansion 
+    //packet << uint8(GetExpansion());                        // 0 - normal, 1 - TBC, 2 - WotLK. Must be set in database manually for each account.
+    packet << uint8(2);
+
     SendPacket(packet);
 }
 

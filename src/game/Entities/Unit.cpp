@@ -377,6 +377,15 @@ Unit::Unit() :
 
     // lfm vendor replacement
     vendorReplaceCheckDelay = urand(10000, 30000);
+
+    // lfm charging 
+    charging = false;
+
+    // lfm melee delay 
+    meleeDealy = 0;
+    meleeVictim = nullptr;
+    meleeType = WeaponAttackType::BASE_ATTACK;
+    cdi = nullptr;
 }
 
 Unit::~Unit()
@@ -552,6 +561,61 @@ void Unit::Update(const uint32 diff)
                                     (*itr)->incrtime = 7200000;
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // lfm charging 
+    if (charging)
+    {
+        if (Unit* victim = GetTarget())
+        {
+            if (CanReachWithMeleeAttack(victim))
+            {
+                if (CanAttackNow(victim))
+                {
+                    Attack(victim, true);
+                }
+                charging = false;
+            }
+        }
+    }
+
+    // lfm melee delay 
+    if (meleeDealy > 0)
+    {
+        meleeDealy -= diff;
+        if (meleeDealy <= 0)
+        {
+            meleeDealy = 0;
+            if (cdi)
+            {
+                if (meleeVictim)
+                {
+                    if (meleeVictim->IsAlive() && meleeVictim->IsInWorld())
+                    {
+                        DealMeleeDamage(cdi, true);
+                        ProcDamageAndSpell(ProcSystemArguments(this, cdi->target, cdi->procAttacker, cdi->procVictim, cdi->procEx, cdi->totalDamage, cdi->attackType));
+
+                        uint32 totalAbsorb = 0;
+                        uint32 totalResist = 0;
+
+                        for (uint8 i = 0; i < m_weaponDamageInfo.weapon[meleeType].lines; i++)
+                        {
+                            totalAbsorb += cdi->subDamage[i].absorb;
+                            totalResist += cdi->subDamage[i].resist;
+                        }
+
+                        if (GetTypeId() == TYPEID_PLAYER)
+                        {
+                            sLog.outDebug("AttackerStateUpdate: (Player) %u attacked %u (TypeId: %u) for %u dmg, absorbed %u, blocked %u, resisted %u.", GetGUIDLow(), meleeVictim->GetGUIDLow(), meleeVictim->GetTypeId(), cdi->totalDamage, totalAbsorb, cdi->blocked_amount, totalResist);
+                        }
+                        else
+                        {
+                            sLog.outDebug("AttackerStateUpdate: (NPC)    %u attacked %u (TypeId: %u) for %u dmg, absorbed %u, blocked %u, resisted %u.", GetGUIDLow(), meleeVictim->GetGUIDLow(), meleeVictim->GetTypeId(), cdi->totalDamage, totalAbsorb, cdi->blocked_amount, totalResist);
                         }
                     }
                 }
@@ -2941,37 +3005,76 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
     if (Unit* magnetTarget = SelectMagnetTarget(pVictim))
         pVictim = magnetTarget;
 
-    CalcDamageInfo meleeDamageInfo;
-    CalculateMeleeDamage(pVictim, &meleeDamageInfo, attType);
+    // lfm melee delay 
+    //CalcDamageInfo meleeDamageInfo;
+    //CalculateMeleeDamage(pVictim, &meleeDamageInfo, attType);
+    //// Send log damage message to client
+    //for (uint8 i = 0; i < m_weaponDamageInfo.weapon[attType].lines; i++)
+    //{
+    //    meleeDamageInfo.totalDamage -= meleeDamageInfo.subDamage[i].damage;
+    //    Unit::DealDamageMods(this, pVictim, meleeDamageInfo.subDamage[i].damage, &meleeDamageInfo.subDamage[i].absorb, DIRECT_DAMAGE);
+    //    meleeDamageInfo.totalDamage += meleeDamageInfo.subDamage[i].damage;
+    //    meleeDamageInfo.absorb += meleeDamageInfo.subDamage[i].absorb;
+    //}
+    //SendAttackStateUpdate(&meleeDamageInfo);
 
-    // Send log damage message to client
+    cdi = nullptr;
+    cdi = new CalcDamageInfo();
+    CalculateMeleeDamage(pVictim, cdi, attType);
     for (uint8 i = 0; i < m_weaponDamageInfo.weapon[attType].lines; i++)
     {
-        meleeDamageInfo.totalDamage -= meleeDamageInfo.subDamage[i].damage;
-        Unit::DealDamageMods(this, pVictim, meleeDamageInfo.subDamage[i].damage, &meleeDamageInfo.subDamage[i].absorb, DIRECT_DAMAGE);
-        meleeDamageInfo.totalDamage += meleeDamageInfo.subDamage[i].damage;
-        meleeDamageInfo.absorb += meleeDamageInfo.subDamage[i].absorb;
+        cdi->totalDamage -= cdi->subDamage[i].damage;
+        Unit::DealDamageMods(this, pVictim, cdi->subDamage[i].damage, &cdi->subDamage[i].absorb, DIRECT_DAMAGE);
+        cdi->totalDamage += cdi->subDamage[i].damage;
+        cdi->absorb += cdi->subDamage[i].absorb;
     }
+    SendAttackStateUpdate(cdi);
 
-    SendAttackStateUpdate(&meleeDamageInfo);
-    DealMeleeDamage(&meleeDamageInfo, true);
-    ProcDamageAndSpell(ProcSystemArguments(this, meleeDamageInfo.target, meleeDamageInfo.procAttacker, meleeDamageInfo.procVictim, meleeDamageInfo.procEx, meleeDamageInfo.totalDamage, meleeDamageInfo.attackType));
-
-    uint32 totalAbsorb = 0;
-    uint32 totalResist = 0;
-
-    for (uint8 i = 0; i < m_weaponDamageInfo.weapon[attType].lines; i++)
+    meleeDealy = 300;
+    if (GetTypeId() == TypeID::TYPEID_PLAYER)
     {
-        totalAbsorb += meleeDamageInfo.subDamage[i].absorb;
-        totalResist += meleeDamageInfo.subDamage[i].resist;
+        if (Player* me = (Player*)this)
+        {
+            if (Item* weapon = me->GetWeaponForAttack(WeaponAttackType::BASE_ATTACK))
+            {
+                if (const ItemPrototype* proto = weapon->GetProto())
+                {
+                    if (proto->SubClass == ItemSubclassWeapon::ITEM_SUBCLASS_WEAPON_AXE2 || proto->SubClass == ItemSubclassWeapon::ITEM_SUBCLASS_WEAPON_MACE2 || proto->SubClass == ItemSubclassWeapon::ITEM_SUBCLASS_WEAPON_POLEARM || proto->SubClass == ItemSubclassWeapon::ITEM_SUBCLASS_WEAPON_SWORD2 || proto->SubClass == ItemSubclassWeapon::ITEM_SUBCLASS_WEAPON_STAFF)
+                    {
+                        meleeDealy = 600;
+                    }
+                }
+            }
+        }
     }
-
-    if (GetTypeId() == TYPEID_PLAYER)
-        DEBUG_FILTER_LOG(LOG_FILTER_COMBAT, "AttackerStateUpdate: (Player) %u attacked %u (TypeId: %u) for %u dmg, absorbed %u, blocked %u, resisted %u.",
-                         GetGUIDLow(), pVictim->GetGUIDLow(), pVictim->GetTypeId(), meleeDamageInfo.totalDamage, totalAbsorb, meleeDamageInfo.blocked_amount, totalResist);
     else
-        DEBUG_FILTER_LOG(LOG_FILTER_COMBAT, "AttackerStateUpdate: (NPC)    %u attacked %u (TypeId: %u) for %u dmg, absorbed %u, blocked %u, resisted %u.",
-                         GetGUIDLow(), pVictim->GetGUIDLow(), pVictim->GetTypeId(), meleeDamageInfo.totalDamage, totalAbsorb, meleeDamageInfo.blocked_amount, totalResist);
+    {
+        
+    }
+    
+    meleeVictim = pVictim;
+    meleeType = attType;
+
+    //DealMeleeDamage(&meleeDamageInfo, true);
+    //ProcDamageAndSpell(ProcSystemArguments(this, meleeDamageInfo.target, meleeDamageInfo.procAttacker, meleeDamageInfo.procVictim, meleeDamageInfo.procEx, meleeDamageInfo.totalDamage, meleeDamageInfo.attackType));
+
+    //uint32 totalAbsorb = 0;
+    //uint32 totalResist = 0;
+
+    //for (uint8 i = 0; i < m_weaponDamageInfo.weapon[attType].lines; i++)
+    //{
+    //    totalAbsorb += meleeDamageInfo.subDamage[i].absorb;
+    //    totalResist += meleeDamageInfo.subDamage[i].resist;
+    //}
+
+    //if (GetTypeId() == TYPEID_PLAYER)
+    //{
+    //    DEBUG_FILTER_LOG(LOG_FILTER_COMBAT, "AttackerStateUpdate: (Player) %u attacked %u (TypeId: %u) for %u dmg, absorbed %u, blocked %u, resisted %u.", GetGUIDLow(), pVictim->GetGUIDLow(), pVictim->GetTypeId(), meleeDamageInfo.totalDamage, totalAbsorb, meleeDamageInfo.blocked_amount, totalResist);
+    //}
+    //else
+    //{
+    //    DEBUG_FILTER_LOG(LOG_FILTER_COMBAT, "AttackerStateUpdate: (NPC)    %u attacked %u (TypeId: %u) for %u dmg, absorbed %u, blocked %u, resisted %u.", GetGUIDLow(), pVictim->GetGUIDLow(), pVictim->GetTypeId(), meleeDamageInfo.totalDamage, totalAbsorb, meleeDamageInfo.blocked_amount, totalResist);
+    //}
 }
 
 void Unit::DoExtraAttacks(Unit* pVictim)
@@ -3006,12 +3109,25 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(const Unit* pVictim, WeaponAttackT
     {
         if (pVictim->CanReactInCombat())
         {
-            if (pVictim->CanDodgeInCombat(this))
-                die.set(UNIT_COMBAT_DIE_DODGE, pVictim->CalculateEffectiveDodgeChance(this, attType));
-            if (pVictim->CanParryInCombat(this))
-                die.set(UNIT_COMBAT_DIE_PARRY, pVictim->CalculateEffectiveParryChance(this, attType));
-            if (pVictim->CanBlockInCombat(this, schoolMask))
-                die.set(UNIT_COMBAT_DIE_BLOCK, pVictim->CalculateEffectiveBlockChance(this, attType));
+            // lfm dodge parry block can not occur when in back or stun 
+            if (!pVictim->IsStunned())
+            {
+                if (pVictim->isInFront(this, ATTACK_DISTANCE))
+                {
+                    if (pVictim->CanDodgeInCombat(this))
+                    {
+                        die.set(UNIT_COMBAT_DIE_DODGE, pVictim->CalculateEffectiveDodgeChance(this, attType));
+                    }
+                    if (pVictim->CanParryInCombat(this))
+                    {
+                        die.set(UNIT_COMBAT_DIE_PARRY, pVictim->CalculateEffectiveParryChance(this, attType));
+                    }
+                    if (pVictim->CanBlockInCombat(this, schoolMask))
+                    {
+                        die.set(UNIT_COMBAT_DIE_BLOCK, pVictim->CalculateEffectiveBlockChance(this, attType));
+                    }
+                }
+            }
         }
         if (CanGlanceInCombat(pVictim))
             die.set(UNIT_COMBAT_DIE_GLANCE, CalculateEffectiveGlanceChance(pVictim, attType));
@@ -12144,7 +12260,9 @@ void Unit::SendThreatUpdate()
         for (auto itr : tlist)
         {
             data << itr->getUnitGuid().WriteAsPacked();
-            data << uint32(itr->getThreat());
+            // lfm threat to client should be multipled by 100 
+            //data << uint32(itr->getThreat());
+            data << uint32(itr->getThreat() * 100);
         }
         SendMessageToSet(data, false);
     }
@@ -13384,7 +13502,7 @@ float Unit::OCTRegenHPPerSpirit() const
     float regen = baseSpirit * baseRatio->ratio + moreSpirit * moreRatio->ratio;
 
     // lfm regen  
-    regen = baseSpirit * 0.2f + moreSpirit * 0.2f;
+    regen = baseSpirit * 0.1f + moreSpirit * 0.1f;
     
     return regen;
 }
@@ -13404,9 +13522,6 @@ float Unit::OCTRegenMPPerSpirit() const
     // Formula get from PaperDollFrame script
     float spirit = GetStat(STAT_SPIRIT);
     float regen = spirit * moreRatio->ratio;
-
-    // lfm regen  
-    regen = spirit * 0.2f;
 
     return regen;
 }

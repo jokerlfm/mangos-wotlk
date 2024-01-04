@@ -26,18 +26,30 @@ enum NierState :uint32
     NierState_CheckRedoLogin,
 };
 
+enum OrderType :uint32
+{
+    OrderType_None = 0,
+    OrderType_Tank,
+    OrderType_DPS,
+    OrderType_Revive,
+    OrderType_Move
+};
+
 class Nier_Base
 {
 public:
     Nier_Base();    
-    virtual void Prepare();
+    virtual bool Prepare();
     virtual void Update(uint32 pDiff);
     virtual void Update_Online(uint32 pDiff);
     virtual void InitializeCharacter();
 
+    virtual bool Threating(Unit* pTarget);
     virtual bool Tank(Unit* pTarget);
     virtual bool Heal(Unit* pTarget);
     virtual bool DPS(Unit* pTarget, Unit* pTank, bool pRushing);
+    virtual bool PVP(Unit* pTarget);
+    virtual bool Interrupt(Unit* pTarget);
     virtual bool Buff();
 	virtual bool Cure();
 	virtual bool Revive();
@@ -45,9 +57,8 @@ public:
     virtual bool Wander();
 
     bool Follow(Unit* pTarget);
-
-    void WalkTo(Position dest);
-    void RunTo(Position dest);
+    
+    void MoveTo(Position pDestination, Unit* pTarget = nullptr, uint32 pMoveType = 1);
 
     void LearnTalent(uint32 pmTalentId, uint32 pmMaxRank = 5);
     bool InitializeEquipments(bool pReset = false);
@@ -58,10 +69,12 @@ public:
 	bool CastSpell(Unit* pmTarget, uint32 pmSpellId, bool pmCheckAura = false, bool pmOnlyMyAura = false, uint32 pmMaxAuraStack = 1,bool pmClearShapeShift = false);
 	void CancelAura(uint32 pmSpellID);
 
-	bool Rest();
+    bool Rest(bool pForce = false);
+    bool Drink();
 	
 	void ChooseTarget(Unit* pmTarget);
 	void ClearTarget();
+    void InterruptSpells();
 	bool SpellValid(uint32 pmSpellID);
 
 public:
@@ -78,17 +91,24 @@ public:
     uint32 target_specialty;
 
     uint32 entityState;
+    uint32 orderType;
 
     int updateDelay;
-    int movementDelay;
     int actionDelay;
     int prepareDelay;
     int assembleDelay;
     int reviveDelay;
     int wanderDelay;
     int restDelay;
+    int drinkDelay;    
     int helpDelay;
     int orderDelay;
+    int interruptDelay;
+
+    int pvpDelay;
+    bool pvp;
+
+    int combatDuration;
 
     float dpsDistance;
     float followDistance;

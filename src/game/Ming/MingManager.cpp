@@ -14,7 +14,7 @@ MingManager::MingManager()
     vendorEquipsMap.clear();
     flyingCreatureEntrySet.clear();
 
-    checkDelay = 0;
+    checkDelay = 0;    
 }
 
 void MingManager::InitializeManager()
@@ -404,7 +404,7 @@ bool MingManager::NearHerb(uint32 pmMapId, Position pmPos, float pmDistance)
         {
             if (eachSO->mapId == pmMapId)
             {
-                float distance = eachSO->pos.GetDistance(pmPos);
+                float distance = sqrt(eachSO->pos.GetDistance(pmPos));
                 if (distance < pmDistance)
                 {
                     return true;
@@ -449,7 +449,7 @@ bool MingManager::NearVein(uint32 pmMapId, Position pmPos, float pmDistance)
         {
             if (eachSO->mapId == pmMapId)
             {
-                float distance = eachSO->pos.GetDistance(pmPos);
+                float distance = sqrt(eachSO->pos.GetDistance(pmPos));
                 if (distance < pmDistance)
                 {
                     return true;

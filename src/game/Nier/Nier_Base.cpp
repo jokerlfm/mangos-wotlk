@@ -5,6 +5,9 @@
 #include "Accounts/AccountMgr.h"
 #include "Entities/ObjectGuid.h"
 #include "World/World.h"
+#include "MotionGenerators/PointMovementGenerator.h"
+#include "Movement/MoveSpline.h"
+#include "Movement/MoveSplineInit.h"
 
 Nier_Base::Nier_Base()
 {
@@ -17,8 +20,7 @@ Nier_Base::Nier_Base()
 	target_level = 0;
 	target_specialty = 0;
 	entityState = NierState::NierState_OffLine;
-
-	movementDelay = 0;
+	orderType = OrderType::OrderType_None;
 	actionDelay = 0;
 	updateDelay = 5 * IN_MILLISECONDS;
 	prepareDelay = 5 * IN_MILLISECONDS;
@@ -26,8 +28,15 @@ Nier_Base::Nier_Base()
 	reviveDelay = 0;
 	wanderDelay = 0;
 	restDelay = 0;
+	drinkDelay = 0;
+	interruptDelay = 0;
 	helpDelay = 0;
 	orderDelay = 0;
+
+	pvpDelay = 0;
+	pvp = true;
+
+	combatDuration = 0;
 
 	dpsDistance = CONTACT_DISTANCE;
 	followDistance = INTERACTION_DISTANCE;
@@ -35,7 +44,7 @@ Nier_Base::Nier_Base()
 	freezing = false;
 }
 
-void Nier_Base::Prepare()
+bool Nier_Base::Prepare()
 {
 	if (me)
 	{
@@ -54,6 +63,8 @@ void Nier_Base::Prepare()
 			}
 		}
 	}
+
+	return true;
 }
 
 void Nier_Base::Update(uint32 pDiff)
@@ -310,6 +321,7 @@ void Nier_Base::Update(uint32 pDiff)
 			if (me->IsInWorld())
 			{
 				me->isNier = true;
+				me->_nier = this;
 				//sCharacterCache->AddCharacterCacheEntry(me->GetGUID(), account_id, me->GetName(), me->getGender(), me->getRace(), me->getClass(), me->getLevel());
 				std::ostringstream replyStream;
 				replyStream << "nier character logged in : account - " << account_id << " character - " << character_id;
@@ -483,14 +495,6 @@ void Nier_Base::Update(uint32 pDiff)
 
 void Nier_Base::Update_Online(uint32 pDiff)
 {
-	if (movementDelay > 0)
-	{
-		movementDelay -= pDiff;
-	}
-	else
-	{
-		movementDelay = 500;
-	}
 	if (actionDelay > 0)
 	{
 		actionDelay -= pDiff;
@@ -503,18 +507,97 @@ void Nier_Base::Update_Online(uint32 pDiff)
 	{
 		wanderDelay -= pDiff;
 	}
-	if (restDelay > 0)
-	{
-		restDelay -= pDiff;
-	}
 	if (helpDelay > 0)
 	{
 		helpDelay -= pDiff;
 	}
+	if (pvpDelay > 0)
+	{
+		pvpDelay -= pDiff;
+	}
+	else
+	{
+		pvp = !pvp;
+		pvpDelay = urand(300000, 2400000);
+	}
+	if (restDelay > 0)
+	{
+		restDelay -= pDiff;
+		if (drinkDelay > 0)
+		{
+			drinkDelay -= pDiff;
+			if (drinkDelay <= 0)
+			{
+				Drink();
+			}
+		}
+	}
+	if (me->IsInCombat())
+	{
+		combatDuration += pDiff;
+		restDelay = 0;
+		drinkDelay = 0;
+	}
+	else
+	{
+		if (combatDuration > 0)
+		{
+			combatDuration = 0;
+			ClearTarget();
+			//me->SetStandState(UnitStandStateType::UNIT_STAND_STATE_SIT);
+			//standDelay = 500;
+		}
+	}
 	if (orderDelay > 0)
 	{
 		orderDelay -= pDiff;
+		switch (orderType)
+		{
+		case OrderType::OrderType_None:
+		{
+			orderDelay = 0;
+			break;
+		}
+		case OrderType::OrderType_Tank:
+		{
+			bool ordering = false;
+			if (Group* myGroup = me->GetGroup())
+			{
+				Unit* skull = ObjectAccessor::GetUnit(*me, myGroup->GetGuidByTargetIcon(7));
+				if (Tank(skull))
+				{
+					ordering = true;
+				}
+			}
+			if (!ordering)
+			{
+				orderType = OrderType::OrderType_None;
+				orderDelay = 0;
+			}
+			break;
+		}
+		case OrderType::OrderType_DPS:
+		{
+			break;
+		}
+		case OrderType::OrderType_Revive:
+		{
+			break;
+		}
+		case OrderType::OrderType_Move:
+		{
+			break;
+		}
+		default:
+		{
+			break;
+		}
+		}
 		return;
+	}
+	if (interruptDelay > 0)
+	{
+		interruptDelay -= pDiff;
 	}
 	if (prepareDelay > 0)
 	{
@@ -571,11 +654,14 @@ void Nier_Base::InitializeCharacter()
 	{
 		return;
 	}
-	if (me->GetLevel() == target_level)
+	if (me->GetLevel() != target_level)
+	{
+		me->GiveLevel(target_level);
+	}
+	if (me->GetFreeTalentPoints() == 0)
 	{
 		return;
 	}
-	me->GiveLevel(target_level);
 
 	// talents
 	me->resetTalents(true);
@@ -783,13 +869,148 @@ void Nier_Base::InitializeCharacter()
 		}
 		}
 	}
+	else if (target_class == Classes::CLASS_WARLOCK)
+	{
+		switch (target_specialty)
+		{
+		case 0:
+		{
+			break;
+		}
+		case 1:
+		{
+			break;
+		}
+		case 2:
+		{
+			// destruction 
+			LearnTalent(944);
+			LearnTalent(943);
+			LearnTalent(982);
+			LearnTalent(941);
+			LearnTalent(983);
+			LearnTalent(963);
+			LearnTalent(967);
+			LearnTalent(964);
+			LearnTalent(961);
+			LearnTalent(981);
+			LearnTalent(966);
+			LearnTalent(968);
+			LearnTalent(986);
+			LearnTalent(1677);
+			LearnTalent(1888);
+			LearnTalent(1676);
+			LearnTalent(2045);
+			LearnTalent(1890);
+			LearnTalent(1891);
+			break;
+		}
+		default:
+		{
+			break;
+		}
+		}
+	}
+	else if (target_class == Classes::CLASS_WARRIOR)
+	{
+		switch (target_specialty)
+		{
+		case 0:
+		{
+			break;
+		}
+		case 1:
+		{
+			break;
+		}
+		case 2:
+		{
+			// 163 protection 
+			LearnTalent(1601);
+			LearnTalent(138);
+			LearnTalent(147);
+			LearnTalent(153);
+			LearnTalent(1654);
+			LearnTalent(146);
+			LearnTalent(140);
+			LearnTalent(152);
+			LearnTalent(151);
+			LearnTalent(702);
+			LearnTalent(1652);
+			LearnTalent(148);
+			LearnTalent(1660);
+			LearnTalent(1653);
+			LearnTalent(1893);
+			LearnTalent(1666);
+			LearnTalent(2236);
+			LearnTalent(1871);
+			LearnTalent(2246);
+			LearnTalent(1872);
+			break;
+		}
+		default:
+		{
+			break;
+		}
+		}
+	}
+	else if (target_class == Classes::CLASS_HUNTER)
+	{
+		switch (target_specialty)
+		{
+		case 0:
+		{
+			break;
+		}
+		case 1:
+		{
+			// 363 Marksmanship
+			LearnTalent(1344);
+			LearnTalent(1349);
+			LearnTalent(1818);
+			LearnTalent(1346);
+			LearnTalent(1342);
+			LearnTalent(1353);
+			LearnTalent(1819);
+			LearnTalent(1341);
+			LearnTalent(1804);
+			LearnTalent(1362);
+			LearnTalent(1361);
+			LearnTalent(1348);
+			LearnTalent(1345);
+			LearnTalent(1807);
+			LearnTalent(1808);
+			LearnTalent(1343);
+			LearnTalent(1806);
+			LearnTalent(2132);
+			LearnTalent(2135);
+			LearnTalent(2134);
+			LearnTalent(2197);
+
+			LearnTalent(1382);
+
+			LearnTalent(2130);
+			LearnTalent(2131);
+
+			LearnTalent(1624);
+			break;
+		}
+		case 2:
+		{
+			break;
+		}
+		default:
+		{
+			break;
+		}
+		}
+	}
+
 	me->SendTalentsInfoData(false);
 
 	// spells 
 	me->LearnDefaultSkills();
 	me->learnDefaultSpells();
-	me->learnQuestRewardedSpells();
-	me->LearnDefaultSkills();
 	me->learnQuestRewardedSpells();
 	me->UpdateSkillsForLevel(true);
 
@@ -1101,48 +1322,53 @@ bool Nier_Base::EuipRandom(uint32 pmEquipSlot, uint32 pmInventoryType, uint32 pm
 	return false;
 }
 
-bool Nier_Base::Tank(Unit* pmTarget)
+bool Nier_Base::Threating(Unit* pTarget)
 {
-	return false;
-}
-
-bool Nier_Base::Heal(Unit* pmTarget)
-{
-	return true;
-}
-
-bool Nier_Base::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
-{
-	if (movementDelay > 0)
-	{
-		return true;
-	}
 	if (!pTarget)
 	{
-		ClearTarget();
 		return false;
 	}
 	else if (!pTarget->IsAlive())
 	{
-		ClearTarget();
 		return false;
 	}
 	else if (!me->CanAttack(pTarget))
 	{
-		ClearTarget();
 		return false;
 	}
-	ChooseTarget(pTarget);
+	if (!me->CanReachWithMeleeAttack(pTarget))
+	{
+		return false;
+	}
+
+	return true;
+}
+
+bool Nier_Base::Tank(Unit* pTarget)
+{
+	if (!pTarget)
+	{
+		return false;
+	}
+	else if (!pTarget->IsAlive())
+	{
+		return false;
+	}
+	else if (!me->CanAttack(pTarget))
+	{
+		return false;
+	}
 	float targetDistance = sNierManager->GetExactDistance(me->GetPosition(), pTarget->GetPosition());
 	targetDistance = targetDistance - pTarget->GetObjectBoundingRadius();
 	if (targetDistance > VISIBILITY_DISTANCE_NORMAL)
 	{
 		return false;
 	}
+	ChooseTarget(pTarget);
 	if (dpsDistance < ATTACK_DISTANCE)
 	{
 		// melee 
-		float meReach = me->GetCombatReach() + MELEE_LEEWAY;
+		float meReach = me->GetCombatReach() + MELEE_LEEWAY / 2.0f;
 		float minDistance = meReach / 5.0f;
 		if (minDistance < 0.5f)
 		{
@@ -1151,32 +1377,118 @@ bool Nier_Base::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 
 		if (targetDistance > minDistance && targetDistance < meReach)
 		{
-			if (me->IsMoving())
+			if (!me->isInFront(pTarget, INTERACTION_DISTANCE, M_PI / 4))
 			{
-				me->StopMoving();
-				//me->GetMotionMaster()->Clear();
-			}
-			if (!me->isInFront(pTarget, INTERACTION_DISTANCE))
-			{
+				me->GetMotionMaster()->Clear(true);
 				me->SetFacingToObject(pTarget);
+				return true;
+			}
+			else if (me->IsMoving())
+			{
+				me->UpdateSplinePosition();
+				me->movespline->_Finalize();
+				me->GetMotionMaster()->Clear(true);
 			}
 			return true;
 		}
 
 		// destination check 
 		float destDistance = sNierManager->GetExactDistance(pTarget->GetPosition(), destination);
-		if (targetDistance < minDistance || targetDistance > meReach)
+		if (destDistance < minDistance || destDistance > meReach)
 		{
-			meReach = meReach - CONTACT_DISTANCE;
 			float angle = pTarget->GetAngle(me->GetPositionX(), me->GetPositionY());
 			angle = frand(angle - 0.1f, angle + 0.1f);
-			pTarget->GetNearPoint(pTarget, destination.x, destination.y, destination.z, 0.0f, meReach, angle, me->IsInWater());
-			me->StopMoving();
+			pTarget->GetNearPoint(pTarget, destination.x, destination.y, destination.z, 0.0f, CONTACT_DISTANCE, angle, me->IsInWater());
+			MoveTo(destination, pTarget);
+			return true;
 		}
 
 		if (!me->IsMoving())
 		{
-			RunTo(destination);
+			MoveTo(destination, pTarget);
+			return true;
+		}
+	}
+
+	return true;
+}
+
+bool Nier_Base::Heal(Unit* pTarget)
+{
+	if (!pTarget)
+	{
+		return false;
+	}
+	else if (!pTarget->IsAlive())
+	{
+		return false;
+	}
+
+	return true;
+}
+
+bool Nier_Base::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
+{
+	if (!pTarget)
+	{
+		return false;
+	}
+	else if (!pTarget->IsAlive())
+	{
+		return false;
+	}
+	else if (!me->CanAttack(pTarget))
+	{
+		return false;
+	}
+	float targetDistance = sNierManager->GetExactDistance(me->GetPosition(), pTarget->GetPosition());
+	targetDistance = targetDistance - pTarget->GetObjectBoundingRadius();
+	if (targetDistance > VISIBILITY_DISTANCE_NORMAL)
+	{
+		return false;
+	}
+	ChooseTarget(pTarget);
+	if (dpsDistance < ATTACK_DISTANCE)
+	{
+		// melee 
+		float meReach = me->GetCombatReach() + MELEE_LEEWAY / 2.0f;
+		float minDistance = meReach / 5.0f;
+		if (minDistance < 0.5f)
+		{
+			minDistance = 0.5f;
+		}
+
+		if (targetDistance > minDistance && targetDistance < meReach)
+		{
+			if (!me->isInFront(pTarget, INTERACTION_DISTANCE, M_PI / 4))
+			{
+				me->GetMotionMaster()->Clear(true);
+				me->SetFacingToObject(pTarget);
+				return true;
+			}
+			else if (me->IsMoving())
+			{
+				me->UpdateSplinePosition();
+				me->movespline->_Finalize();
+				me->GetMotionMaster()->Clear(true);
+			}
+			return true;
+		}
+
+		// destination check 
+		float destDistance = sNierManager->GetExactDistance(pTarget->GetPosition(), destination);
+		if (destDistance < minDistance || destDistance > meReach)
+		{
+			float angle = pTarget->GetAngle(me->GetPositionX(), me->GetPositionY());
+			angle = frand(angle - 0.1f, angle + 0.1f);
+			pTarget->GetNearPoint(pTarget, destination.x, destination.y, destination.z, 0.0f, CONTACT_DISTANCE, angle, me->IsInWater());
+			MoveTo(destination, pTarget);
+			return true;
+		}
+
+		if (!me->IsMoving())
+		{
+			MoveTo(destination, pTarget);
 			return true;
 		}
 	}
@@ -1187,14 +1499,17 @@ bool Nier_Base::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 		{
 			if (pTarget->IsWithinLOS(me->GetPositionX(), me->GetPositionY(), me->GetPositionZ()))
 			{
-				if (me->IsMoving())
+				if (!me->isInFront(pTarget, dpsDistance, M_PI / 4))
 				{
-					me->StopMoving();
-					//me->GetMotionMaster()->Clear();
-				}
-				if (!me->isInFront(pTarget, INTERACTION_DISTANCE))
-				{
+					me->GetMotionMaster()->Clear(true);
 					me->SetFacingToObject(pTarget);
+					return true;
+				}
+				else if (me->IsMoving())
+				{
+					me->UpdateSplinePosition();
+					me->movespline->_Finalize();
+					me->GetMotionMaster()->Clear(true);
 				}
 				return true;
 			}
@@ -1214,29 +1529,146 @@ bool Nier_Base::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 
 		if (adjust)
 		{
-			float dist = dpsDistance - CONTACT_DISTANCE;
 			float angle = pTarget->GetAngle(me->GetPositionX(), me->GetPositionY());
 			angle = frand(angle - 0.1f, angle + 0.1f);
-			while (dist > CONTACT_DISTANCE)
-			{
-				pTarget->GetNearPoint(pTarget, destination.x, destination.y, destination.z, 0.0f, dist, angle, pTarget->IsInWater());
-				if (pTarget->IsWithinLOS(destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ()))
-				{
-					break;
-				}
-				dist -= 1.0f;
-			}
-			me->StopMoving();
+			pTarget->GetNearPoint(pTarget, destination.x, destination.y, destination.z, 0.0f, CONTACT_DISTANCE, angle, pTarget->IsInWater());
+			MoveTo(destination, pTarget);
+			return true;
 		}
 
 		if (!me->IsMoving())
 		{
-			RunTo(destination);
+			MoveTo(destination, pTarget);
 			return true;
 		}
 	}
 
 	return true;
+}
+
+bool Nier_Base::PVP(Unit* pTarget)
+{
+	if (!pTarget)
+	{
+		return false;
+	}
+	else if (!pTarget->IsAlive())
+	{
+		return false;
+	}
+	else if (!me->CanAttack(pTarget))
+	{
+		return false;
+	}
+	float targetDistance = sNierManager->GetExactDistance(me->GetPosition(), pTarget->GetPosition());
+	targetDistance = targetDistance - pTarget->GetObjectBoundingRadius();
+	if (targetDistance > VISIBILITY_DISTANCE_NORMAL)
+	{
+		ClearTarget();
+		return false;
+	}
+	ChooseTarget(pTarget);
+	if (dpsDistance < ATTACK_DISTANCE)
+	{
+		// melee 
+		float meReach = me->GetCombatReach() + MELEE_LEEWAY / 2.0f;
+		float minDistance = meReach / 5.0f;
+		if (minDistance < 0.5f)
+		{
+			minDistance = 0.5f;
+		}
+
+		if (targetDistance > minDistance && targetDistance < meReach)
+		{
+			if (!me->isInFront(pTarget, INTERACTION_DISTANCE, M_PI / 4))
+			{
+				me->GetMotionMaster()->Clear(true);
+				me->SetFacingToObject(pTarget);
+				return true;
+			}
+			else if (me->IsMoving())
+			{
+				me->UpdateSplinePosition();
+				me->movespline->_Finalize();
+				me->GetMotionMaster()->Clear(true);
+			}
+			return true;
+		}
+
+		// destination check 
+		float destDistance = sNierManager->GetExactDistance(pTarget->GetPosition(), destination);
+		if (destDistance < minDistance || destDistance > meReach)
+		{
+			float angle = pTarget->GetAngle(me->GetPositionX(), me->GetPositionY());
+			angle = frand(angle - 0.1f, angle + 0.1f);
+			pTarget->GetNearPoint(pTarget, destination.x, destination.y, destination.z, 0.0f, CONTACT_DISTANCE, angle, me->IsInWater());
+			MoveTo(destination, pTarget);
+			return true;
+		}
+
+		if (!me->IsMoving())
+		{
+			MoveTo(destination, pTarget);
+			return true;
+		}
+	}
+	else
+	{
+		// ranged 
+		if (targetDistance < dpsDistance)
+		{
+			if (pTarget->IsWithinLOS(me->GetPositionX(), me->GetPositionY(), me->GetPositionZ()))
+			{
+				if (!me->isInFront(pTarget, dpsDistance, M_PI / 4))
+				{
+					me->GetMotionMaster()->Clear(true);
+					me->SetFacingToObject(pTarget);
+					return true;
+				}
+				else if (me->IsMoving())
+				{
+					me->UpdateSplinePosition();
+					me->movespline->_Finalize();
+					me->GetMotionMaster()->Clear(true);
+				}
+				return true;
+			}
+		}
+
+		bool adjust = false;
+		// destination check 
+		float destDistance = sNierManager->GetExactDistance(pTarget->GetPosition(), destination);
+		if (destDistance > dpsDistance)
+		{
+			adjust = true;
+		}
+		else if (!pTarget->IsWithinLOS(destination.x, destination.y, destination.z))
+		{
+			adjust = true;
+		}
+
+		if (adjust)
+		{
+			float angle = pTarget->GetAngle(me->GetPositionX(), me->GetPositionY());
+			angle = frand(angle - 0.1f, angle + 0.1f);
+			pTarget->GetNearPoint(pTarget, destination.x, destination.y, destination.z, 0.0f, CONTACT_DISTANCE, angle, pTarget->IsInWater());
+			MoveTo(destination, pTarget);
+			return true;
+		}
+
+		if (!me->IsMoving())
+		{
+			MoveTo(destination, pTarget);
+			return true;
+		}
+	}
+
+	return true;
+}
+
+bool Nier_Base::Interrupt(Unit* pTarget)
+{
+	return false;
 }
 
 bool Nier_Base::Buff()
@@ -1254,42 +1686,44 @@ bool Nier_Base::Revive()
 	return false;
 }
 
-void Nier_Base::WalkTo(Position dest)
+void Nier_Base::MoveTo(Position pDestination, Unit* pTarget, uint32 pMoveType)
 {
 	if (me->getStandState() != UnitStandStateType::UNIT_STAND_STATE_STAND)
 	{
 		me->SetStandState(UnitStandStateType::UNIT_STAND_STATE_STAND);
 	}
-	me->GetMotionMaster()->MovePoint(0, dest, ForcedMovement::FORCED_MOVEMENT_WALK);
-}
+	me->m_movementInfo.RemoveMovementFlag(MovementFlags::MOVEFLAG_SPLINE_ELEVATION);
+	float runSpeed = me->GetSpeed((UnitMoveType)pMoveType);
 
-void Nier_Base::RunTo(Position dest)
-{
-	if (me->getStandState() != UnitStandStateType::UNIT_STAND_STATE_STAND)
+	Movement::MoveSplineInit init(*me);
+	init.SetWalk(false);
+	init.SetVelocity(runSpeed);
+	if (pTarget)
 	{
-		me->SetStandState(UnitStandStateType::UNIT_STAND_STATE_STAND);
+		init.SetFacing(pTarget);
 	}
-	me->GetMotionMaster()->MovePoint(0, dest, ForcedMovement::FORCED_MOVEMENT_RUN);
+	init.MoveTo(pDestination.x, pDestination.y, pDestination.z, true);
+	init.Launch();
+
+	//me->GetMotionMaster()->MovePoint(0, pDestination, ForcedMovement::FORCED_MOVEMENT_RUN, runSpeed);
 }
 
 bool Nier_Base::Follow(Unit* pTarget)
 {
-	if (movementDelay > 0)
-	{
-		return true;
-	}
-	ClearTarget();
 	float targetDistance = sNierManager->GetExactDistance(me->GetPosition(), pTarget->GetPosition());
 	targetDistance = targetDistance - pTarget->GetObjectBoundingRadius();
 	if (targetDistance > VISIBILITY_DISTANCE_NORMAL)
 	{
 		return false;
 	}
+	//ChooseTarget(pTarget);
 	if (targetDistance < followDistance)
 	{
 		if (me->IsMoving())
 		{
-			me->StopMoving();
+			me->UpdateSplinePosition();
+			me->movespline->_Finalize();
+			me->GetMotionMaster()->Clear(true);
 			return true;
 		}
 		return false;
@@ -1302,12 +1736,13 @@ bool Nier_Base::Follow(Unit* pTarget)
 		float angle = pTarget->GetAngle(me->GetPositionX(), me->GetPositionY());
 		angle = frand(angle - 0.1f, angle + 0.1f);
 		pTarget->GetNearPoint(pTarget, destination.x, destination.y, destination.z, 0.0f, CONTACT_DISTANCE, angle);
-		me->StopMoving();
+		MoveTo(destination, pTarget);
+		return true;
 	}
 
 	if (!me->IsMoving())
 	{
-		RunTo(destination);
+		MoveTo(destination, pTarget);
 	}
 
 	return true;
@@ -1324,7 +1759,7 @@ bool Nier_Base::Wander()
 		float distance = frand(5.0f, 30.0f);
 		float angle = frand(0.0f, M_PI * 2.0f);
 		me->GetNearPoint(me, destination.x, destination.y, destination.z, 0.0f, distance, angle);
-		WalkTo(destination);
+		MoveTo(destination, nullptr, UnitMoveType::MOVE_WALK);
 		wanderDelay = urand(10000, 30000);
 	}
 	return true;
@@ -1341,7 +1776,7 @@ bool Nier_Base::UseItem(Item* pmItem, Unit* pmTarget)
 		return false;
 	}
 
-	if (me->IsNonMeleeSpellCasted(false, false, true))
+	if (sNierManager->SpellCasting(me))
 	{
 		return false;
 	}
@@ -1377,7 +1812,7 @@ bool Nier_Base::UseItem(Item* pmItem, Item* pmTarget)
 	{
 		return false;
 	}
-	if (me->IsNonMeleeSpellCasted(false, false, true))
+	if (sNierManager->SpellCasting(me))
 	{
 		return false;
 	}
@@ -1416,7 +1851,7 @@ bool Nier_Base::CastSpell(Unit* pmTarget, uint32 pmSpellId, bool pmCheckAura, bo
 	{
 		return false;
 	}
-	if (me->IsNonMeleeSpellCasted(false, false, true))
+	if (sNierManager->SpellCasting(me))
 	{
 		return true;
 	}
@@ -1473,9 +1908,11 @@ bool Nier_Base::CastSpell(Unit* pmTarget, uint32 pmSpellId, bool pmCheckAura, bo
 					return false;
 				}
 			}
-			if (!me->isInFront(pmTarget, M_PI / 2))
+			if (!me->isInFront(pmTarget, VISIBILITY_DISTANCE_NORMAL, M_PI / 2))
 			{
+				me->GetMotionMaster()->Clear(true);
 				me->SetFacingToObject(pmTarget);
+				return true;
 			}
 			if (me->GetSelectionGuid() != pmTarget->GetObjectGuid())
 			{
@@ -1492,12 +1929,23 @@ bool Nier_Base::CastSpell(Unit* pmTarget, uint32 pmSpellId, bool pmCheckAura, bo
 				}
 			}
 		}
+		if (SpellRangeEntry const* spellRange = sSpellRangeStore.LookupEntry(pS->rangeIndex))
+		{
+			float maxRange = GetSpellMaxRange(spellRange);
+			float targetDistance = me->GetDistance(pmTarget);
+			if (targetDistance < maxRange)
+			{
+				if (me->IsMoving())
+				{
+					me->StopMoving(true);
+					me->GetMotionMaster()->Clear(true);
+				}
+			}
+		}
 		if (me->getStandState() != UnitStandStateType::UNIT_STAND_STATE_STAND)
 		{
 			me->SetStandState(UNIT_STAND_STATE_STAND);
 		}
-		//me->CastSpell(pmTarget, pS, TriggerCastFlags::TRIGGERED_NONE);
-		//return true;
 
 		SpellCastResult scr = me->CastSpell(pmTarget, pS->Id, TriggerCastFlags::TRIGGERED_NONE);
 		if (scr == SpellCastResult::SPELL_CAST_OK)
@@ -1536,7 +1984,7 @@ void Nier_Base::LearnTalent(uint32 pmTalentId, uint32 pmMaxRank)
 	}
 }
 
-bool Nier_Base::Rest()
+bool Nier_Base::Rest(bool pForce)
 {
 	if (!me)
 	{
@@ -1551,7 +1999,8 @@ bool Nier_Base::Rest()
 		return false;
 	}
 	float hpPercent = me->GetHealthPercent();
-	if (hpPercent < 60.0f)
+	float manaPercent = me->GetPower(Powers::POWER_MANA) * 100.0f / me->GetMaxPower(Powers::POWER_MANA);
+	if (hpPercent < 60.0f || manaPercent < 60.0f || pForce)
 	{
 		uint32 foodEntry = 0;
 		uint32 myLevel = me->GetLevel();
@@ -1595,88 +2044,12 @@ bool Nier_Base::Rest()
 		{
 			me->StoreNewItemInBestSlots(foodEntry, 20);
 		}
-		me->CombatStop(true);
-		me->StopMoving();
-		me->GetMotionMaster()->Clear();
-		ClearTarget();
 
 		Item* pFood = me->GetItemByEntry(foodEntry);
 		if (pFood && !pFood->IsInTrade())
 		{
 			if (UseItem(pFood, me))
 			{
-				me->StopMoving();
-				me->GetMotionMaster()->Clear();
-				restDelay = 20000;
-			}
-		}
-	}
-
-	float manaPercent = me->GetPower(Powers::POWER_MANA) * 100.0f / me->GetMaxPower(Powers::POWER_MANA);
-	if (manaPercent < 60.0f)
-	{
-		uint32 drinkEntry = 0;
-		uint32 myLevel = me->GetLevel();
-		if (myLevel >= 75)
-		{
-			drinkEntry = 33445;
-		}
-		else if (myLevel >= 70)
-		{
-			drinkEntry = 33444;
-		}
-		else if (myLevel >= 65)
-		{
-			drinkEntry = 27860;
-		}
-		else if (myLevel >= 60)
-		{
-			drinkEntry = 28399;
-		}
-		else if (myLevel >= 55)
-		{
-			drinkEntry = 18300;
-		}
-		else if (myLevel >= 45)
-		{
-			drinkEntry = 8766;
-		}
-		else if (myLevel >= 35)
-		{
-			drinkEntry = 1645;
-		}
-		else if (myLevel >= 25)
-		{
-			drinkEntry = 1708;
-		}
-		else if (myLevel >= 15)
-		{
-			drinkEntry = 1205;
-		}
-		else if (myLevel >= 5)
-		{
-			drinkEntry = 1179;
-		}
-		else
-		{
-			drinkEntry = 159;
-		}
-
-		if (!me->HasItemCount(drinkEntry, 1))
-		{
-			me->StoreNewItemInBestSlots(drinkEntry, 20);
-		}
-		me->CombatStop(true);
-		me->StopMoving();
-		me->GetMotionMaster()->Clear();
-		ClearTarget();
-		Item* pDrink = me->GetItemByEntry(drinkEntry);
-		if (pDrink && !pDrink->IsInTrade())
-		{
-			if (UseItem(pDrink, me))
-			{
-				me->StopMoving();
-				me->GetMotionMaster()->Clear();
 				restDelay = 20000;
 			}
 		}
@@ -1684,7 +2057,73 @@ bool Nier_Base::Rest()
 
 	if (restDelay > 0)
 	{
+		drinkDelay = 1000;
 		return true;
+	}
+
+	return false;
+}
+
+bool Nier_Base::Drink()
+{
+	uint32 drinkEntry = 0;
+	uint32 myLevel = me->GetLevel();
+	if (myLevel >= 75)
+	{
+		drinkEntry = 33445;
+	}
+	else if (myLevel >= 70)
+	{
+		drinkEntry = 33444;
+	}
+	else if (myLevel >= 65)
+	{
+		drinkEntry = 27860;
+	}
+	else if (myLevel >= 60)
+	{
+		drinkEntry = 28399;
+	}
+	else if (myLevel >= 55)
+	{
+		drinkEntry = 18300;
+	}
+	else if (myLevel >= 45)
+	{
+		drinkEntry = 8766;
+	}
+	else if (myLevel >= 35)
+	{
+		drinkEntry = 1645;
+	}
+	else if (myLevel >= 25)
+	{
+		drinkEntry = 1708;
+	}
+	else if (myLevel >= 15)
+	{
+		drinkEntry = 1205;
+	}
+	else if (myLevel >= 5)
+	{
+		drinkEntry = 1179;
+	}
+	else
+	{
+		drinkEntry = 159;
+	}
+
+	if (!me->HasItemCount(drinkEntry, 1))
+	{
+		me->StoreNewItemInBestSlots(drinkEntry, 20);
+	}
+	Item* pDrink = me->GetItemByEntry(drinkEntry);
+	if (pDrink && !pDrink->IsInTrade())
+	{
+		if (UseItem(pDrink, me))
+		{
+			return true;
+		}
 	}
 
 	return false;
@@ -1706,18 +2145,49 @@ void Nier_Base::ClearTarget()
 {
 	if (me)
 	{
-		me->AttackStop();
-		me->InterruptNonMeleeSpells(true);
+		me->AttackStop(true, true, true, true);
+		//me->CastStop();
+		InterruptSpells();
 		me->SetSelectionGuid(ObjectGuid());
 		me->SetTarget(nullptr);
 		if (Pet* myPet = me->GetPet())
 		{
-			myPet->AttackStop();
+			myPet->AttackStop(true, true, true, true);
 			if (CharmInfo* pci = myPet->GetCharmInfo())
 			{
 				pci->SetCommandState(COMMAND_FOLLOW);
 			}
 		}
+		me->GetMotionMaster()->Clear(true);
+	}
+}
+
+void Nier_Base::InterruptSpells()
+{
+	if (me)
+	{
+		if (Spell* spell = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
+		{
+			WorldPacket wp(CMSG_CANCEL_CAST, 5);
+			wp << uint8(0);
+			wp << spell->m_spellInfo->Id;
+			me->GetSession()->HandleCancelCastOpcode(wp);
+		}
+		if (Spell* spell = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_CHANNELED_SPELL))
+		{
+			WorldPacket wp(CMSG_CANCEL_CAST, 5);
+			wp << uint8(0);
+			wp << spell->m_spellInfo->Id;
+			me->GetSession()->HandleCancelCastOpcode(wp);
+		}
+		if (Spell* spell = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_GENERIC_SPELL))
+		{
+			WorldPacket wp(CMSG_CANCEL_CAST, 5);
+			wp << uint8(0);
+			wp << spell->m_spellInfo->Id;
+			me->GetSession()->HandleCancelCastOpcode(wp);
+		}
+		me->SetStandState(MAX_UNIT_STAND_STATE);
 	}
 }
 

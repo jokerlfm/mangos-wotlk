@@ -6,9 +6,14 @@ Nier_Druid::Nier_Druid() :Nier_Base()
 
 }
 
-void Nier_Druid::Prepare()
+bool Nier_Druid::Prepare()
 {
-    Nier_Base::Prepare();
+    if (Nier_Base::Prepare())
+    {
+
+    }
+
+    return false;
 }
 
 void Nier_Druid::Update(uint32 pDiff)

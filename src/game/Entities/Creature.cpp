@@ -2222,6 +2222,7 @@ bool Creature::CanAssistTo(const Unit* u, const Unit* enemy, bool checkfaction /
         {
             return false;
         }
+        return true;
     }
 
     // skip non hostile to caster enemy creatures

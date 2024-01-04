@@ -440,7 +440,7 @@ void Spell::EffectSchoolDMG(SpellEffectIndex eff_idx)
                 {
                     // lfm revenge bonus 
                     // Revenge ${$m1+$AP*0.310} to ${$M1+$AP*0.310}
-                    damage += uint32(m_caster->GetTotalAttackPowerValue(BASE_ATTACK) * 0.1f);
+                    damage = uint32(m_caster->GetTotalAttackPowerValue(BASE_ATTACK) * 0.05f);
                 }                    
                 // Heroic Throw ${$m1+$AP*.50}
                 else if (m_spellInfo->SpellFamilyFlags & uint64(0x0000000100000000))
@@ -459,7 +459,8 @@ void Spell::EffectSchoolDMG(SpellEffectIndex eff_idx)
                 // Thunder Clap
                 else if (m_spellInfo->SpellFamilyFlags & uint64(0x0000000000000080))
                 {
-                    damage += int32(m_caster->GetTotalAttackPowerValue(BASE_ATTACK) * 12 / 100);
+                    // lfm thunder clap damage 
+                    damage = int32(m_caster->GetTotalAttackPowerValue(BASE_ATTACK) * 0.2f);
                 }
                 break;
             }
@@ -11813,9 +11814,14 @@ void Spell::EffectCharge(SpellEffectIndex /*eff_idx*/)
 
     m_caster->GetMotionMaster()->MoveCharge(*unitTarget, speed, m_spellInfo->Id);
 
+    // lfm movecharge will attack when close enough 
     // TODO: This is executed after spell effects. Verify if this should be executed before spell effects
-    if (m_caster->CanAttackNow(unitTarget) && m_caster->CanAttackSpell(unitTarget, m_spellInfo) && m_spellInfo->HasAttribute(SPELL_ATTR_EX7_ATTACK_ON_CHARGE_TO_UNIT))
-        m_caster->Attack(unitTarget, !m_spellInfo->HasAttribute(SPELL_ATTR_USES_RANGED_SLOT));
+    //if (m_caster->CanAttackNow(unitTarget) && m_caster->CanAttackSpell(unitTarget, m_spellInfo) && m_spellInfo->HasAttribute(SPELL_ATTR_EX7_ATTACK_ON_CHARGE_TO_UNIT))
+    //{
+    //    m_caster->Attack(unitTarget, !m_spellInfo->HasAttribute(SPELL_ATTR_USES_RANGED_SLOT));
+    //}
+    m_caster->charging = true;
+
 }
 
 void Spell::EffectChargeDest(SpellEffectIndex /*eff_idx*/)

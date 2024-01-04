@@ -4864,19 +4864,39 @@ void Spell::WriteSpellGoTargets(WorldPacket& data)
 
 void Spell::SendInterrupted(SpellCastResult result) const
 {
-    WorldPacket data(SMSG_SPELL_FAILURE, (8 + 4 + 1));
-    data << m_trueCaster->GetPackGUID();
-    data << uint8(m_cast_count);
-    data << uint32(m_spellInfo->Id);
-    data << uint8(result);
-    m_trueCaster->SendMessageToSet(data, true);
+    // lfm send interrupt from azerothcore 
+    //WorldPacket data(SMSG_SPELL_FAILURE, (8 + 4 + 1));
+    //data << m_trueCaster->GetPackGUID();
+    //data << uint8(m_cast_count);
+    //data << uint32(m_spellInfo->Id);
+    //data << uint8(result);
+    //m_trueCaster->SendMessageToSet(data, true);
 
-    data.Initialize(SMSG_SPELL_FAILED_OTHER, (8 + 4));
-    data << m_trueCaster->GetPackGUID();
+    //data.Initialize(SMSG_SPELL_FAILED_OTHER, (8 + 4));
+    //data << m_trueCaster->GetPackGUID();
+    //data << uint8(m_cast_count);
+    //data << uint32(m_spellInfo->Id);
+    //data << uint8(result);
+    //m_trueCaster->SendMessageToSet(data, true);
+
+    if (m_caster->GetTypeId() == TypeID::TYPEID_PLAYER)
+    {
+        bool breakPoint = true;
+    }
+
+    WorldPacket data(SMSG_SPELL_FAILURE, (8 + 1 + 4 + 1));
+    data << m_caster->GetPackGUID();
     data << uint8(m_cast_count);
     data << uint32(m_spellInfo->Id);
     data << uint8(result);
-    m_trueCaster->SendMessageToSet(data, true);
+    m_caster->SendMessageToSet(data, true);
+
+    data.Initialize(SMSG_SPELL_FAILED_OTHER, (8 + 1 + 4 + 1));
+    data << m_caster->GetPackGUID();
+    data << uint8(m_cast_count);
+    data << uint32(m_spellInfo->Id);
+    data << uint8(result);
+    m_caster->SendMessageToSet(data, true);
 }
 
 void Spell::SendChannelUpdate(uint32 time, uint32 lastTick) const

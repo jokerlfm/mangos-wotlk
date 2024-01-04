@@ -31,15 +31,17 @@ public:
     void InitializeManager();
     void LogoutNiers(bool pmInstant = false);
     void DeleteNiers();
-    void AddNier(Player* pMaster, uint32 pCareer);
+    void AddNier(Player* pMaster, uint32 pCareer, uint32 pNierType = 0);
     bool IsPolymorphed(Unit* pmTarget);
 
     void RandomTeleport(Player* me, Player* target);
 
+    bool SpellCasting(Player* me);
     float GetExactDistance(Position p1, Position p2);
     Position PredictPosition(Unit* target);
 
     void HandleChatCommand(Player* pCommander, std::string pContent, Player* pTargetPlayer = nullptr);
+    std::unordered_set<Nier_Base*> GenerateTargetNierSet(Player* pCommander, Player* pTargetPlayer = nullptr);
     void HandlePacket(const WorldSession* pmSession, WorldPacket pmPacket);
 
     static NierManager* instance();
@@ -52,6 +54,7 @@ public:
     std::unordered_map<uint32, std::string> groupRoleNameMap;
 
     std::unordered_map<uint32, uint32> trainerMap;
+    std::unordered_map<uint32, uint32> tamableBeastMap;
 };
 
 #define sNierManager NierManager::instance()

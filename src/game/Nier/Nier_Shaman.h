@@ -8,7 +8,7 @@ class Nier_Shaman :public Nier_Base
 public:
     Nier_Shaman();
 
-    void Prepare();
+    bool Prepare();
     void Update(uint32 pDiff);
     void Update_Online(uint32 pDiff);
     void InitializeCharacter();

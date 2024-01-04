@@ -6,9 +6,14 @@ Nier_Paladin::Nier_Paladin() :Nier_Base()
 
 }
 
-void Nier_Paladin::Prepare()
+bool Nier_Paladin::Prepare()
 {
-    Nier_Base::Prepare();
+    if (Nier_Base::Prepare())
+    {
+
+    }
+
+    return false;
 }
 
 void Nier_Paladin::Update(uint32 pDiff)

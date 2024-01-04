@@ -6729,9 +6729,18 @@ void Aura::HandleAuraModTotalManaPercentRegen(bool apply, bool /*Real*/)
 void Aura::HandleModRegen(bool apply, bool /*Real*/)        // eating
 {
     if (m_modifier.periodictime == 0)
+    {
         m_modifier.periodictime = 5000;
+        // lfm regen will tick every second 
+        if (m_modifier.m_amount > 5)
+        {
+            m_modifier.periodictime = 1000;
+            m_modifier.m_amount = m_modifier.m_amount / 5;
+        }
+    }
 
-    m_periodicTimer = 5000;
+    m_periodicTimer = m_modifier.periodictime;
+
     m_isPeriodic = apply;
 }
 
@@ -8650,6 +8659,12 @@ void Aura::PeriodicTick()
             // don't heal target if not alive, possible death persistent effects
             if (!target->IsAlive())
                 break;
+
+            // lfm debug 
+            if (target->GetTypeId() == TypeID::TYPEID_PLAYER)
+            {
+                bool breakPoint = true;
+            }
 
             int32 gain = target->ModifyHealth(m_modifier.m_amount);
             if (Unit* caster = GetCaster())
