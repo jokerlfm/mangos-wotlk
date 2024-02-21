@@ -170,7 +170,7 @@ void Nier_Base::Update(uint32 pDiff)
 					accountNameStream << NIER_MARK << entry;
 					loginSession = new WorldSession(account_id, nullptr, AccountTypes::SEC_PLAYER, 2, 0, LocaleConstant::LOCALE_enUS, accountNameStream.str(), 0, false, false);
 					loginSession->isNier = true;
-					loginSession->SetNoAnticheat();
+					//loginSession->SetNoAnticheat();
 					sWorld.AddSession(loginSession);
 				}
 				entityState = NierState::NierState_DoEnum;
@@ -252,7 +252,7 @@ void Nier_Base::Update(uint32 pDiff)
 		newPlayer->SetAtLoginFlag(AT_LOGIN_NONE);
 		newPlayer->SaveToDB();
 		character_id = newPlayer->GetGUIDLow();
-		createSession->SetNoAnticheat();
+		//createSession->SetNoAnticheat();
 		createSession->isNier = true;
 		sWorld.AddSession(createSession);
 		std::ostringstream replyStream;
@@ -272,7 +272,7 @@ void Nier_Base::Update(uint32 pDiff)
 		WorldSession* loginSession = sWorld.FindSession(account_id);
 		if (loginSession)
 		{
-			loginSession->SetNoAnticheat();
+			//loginSession->SetNoAnticheat();
 			loginSession->isNier = true;
 			sLog.outBasic("Enum character %d %d ", account_id, character_id);
 			updateDelay = urand(1 * IN_MILLISECONDS, 2 * IN_MILLISECONDS);
@@ -292,7 +292,7 @@ void Nier_Base::Update(uint32 pDiff)
 		WorldSession* loginSession = sWorld.FindSession(account_id);
 		if (loginSession)
 		{
-			loginSession->SetNoAnticheat();
+			//loginSession->SetNoAnticheat();
 			loginSession->isNier = true;
 			WorldPacket wpLogin(CMSG_PLAYER_LOGIN, 16);
 			ObjectGuid playerGuid = ObjectGuid(HighGuid::HIGHGUID_PLAYER, character_id);

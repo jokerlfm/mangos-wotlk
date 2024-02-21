@@ -861,9 +861,10 @@ class Spell
         // OnInit use only
         void SetEffectSkipMask(uint32 mask) { m_effectSkipMask = mask; }
         // OnHit use only
-        uint32 GetTotalTargetDamage() { return m_damage; }
-        uint32 GetTotalTargetAbsorb() { return m_absorb; }
+        uint32 GetTotalTargetDamage() const { return m_damage; }
+        uint32 GetTotalTargetAbsorb() const { return m_absorb; }
         void SetTotalTargetValueModifier(float modifier);
+        int32 GetDamageForEffect(SpellEffectIndex effIdx) const { return m_damagePerEffect[effIdx]; }
         // script initialization hook only setters - use only if dynamic - else use appropriate helper
         void SetMaxAffectedTargets(uint32 newValue) { m_affectedTargetCount = newValue; }
         void SetChainTargetsCount(SpellEffectIndex effIdx, uint32 newValue) { m_chainTargetCount[effIdx] = newValue; }
@@ -887,7 +888,7 @@ class Spell
         static SpellCastResult CheckVehicle(Unit const* caster, SpellEntry const& spellInfo);
 
         // GO casting preparations
-        void SetFakeCaster(Unit* caster) { m_caster = caster; }
+        void SetFakeCaster(Unit* caster) { m_caster = caster; } // also used by dyngo caster emulation
         WorldObject* GetTrueCaster() const { return m_trueCaster; }
         Unit* GetAffectiveCasterOrOwner() const;
 
@@ -900,6 +901,7 @@ class Spell
         void SetIgnoreRoot(bool state) { m_ignoreRoot = state; }
         void SetDamageDoneModifier(float mod, SpellEffectIndex effIdx);
         void SetIgnoreOwnerLevel(bool state) { m_ignoreOwnerLevel = state; }
+        void SetUsableWhileStunned(bool state) { m_usableWhileStunned = state; }
     protected:
         void SendLoot(ObjectGuid guid, LootType loottype, LockType lockType);
         bool IgnoreItemRequirements() const;                // some item use spells have unexpected reagent data
@@ -976,6 +978,7 @@ class Spell
         int32 m_healingPerEffect[MAX_EFFECT_INDEX];
         int32 m_healthLeech;                                // Health leech in effects for all targets count here
         bool m_guaranteedCrit;                              // Used in effect handlers to guarantee crit
+        bool m_usableWhileStunned;
 
         //******************************************
         // Spell trigger system

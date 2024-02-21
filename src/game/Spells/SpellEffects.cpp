@@ -4243,35 +4243,6 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                     m_caster->CastSpell(unitTarget, 52025, TRIGGERED_OLD_TRIGGERED);
                 return;
             }
-            // Healing Stream Totem
-            if (m_spellInfo->SpellFamilyFlags & uint64(0x0000000000002000))
-            {
-                if (unitTarget)
-                {
-                    if (Unit* owner = m_caster->GetOwner())
-                    {
-                        // spell have SPELL_DAMAGE_CLASS_NONE and not get bonuses from owner, use main spell for bonuses
-                        if (m_triggeredBySpellInfo)
-                        {
-                            damage = int32(owner->SpellHealingBonusDone(unitTarget, m_triggeredBySpellInfo, damage, HEAL));
-                            damage = int32(unitTarget->SpellHealingBonusTaken(owner, m_triggeredBySpellInfo, damage, HEAL));
-                        }
-
-                        // Restorative Totems
-                        Unit::AuraList const& mDummyAuras = owner->GetAurasByType(SPELL_AURA_DUMMY);
-                        for (auto mDummyAura : mDummyAuras)
-                            // only its have dummy with specific icon
-                            if (mDummyAura->GetSpellProto()->SpellFamilyName == SPELLFAMILY_SHAMAN && mDummyAura->GetSpellProto()->SpellIconID == 338)
-                                damage += mDummyAura->GetModifier()->m_amount * damage / 100;
-
-                        // Glyph of Healing Stream Totem
-                        if (Aura* dummy = owner->GetDummyAura(55456))
-                            damage += dummy->GetModifier()->m_amount * damage / 100;
-                    }
-                    m_caster->CastCustomSpell(unitTarget, 52042, &damage, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr, nullptr, m_originalCasterGUID);
-                }
-                return;
-            }
             // Mana Spring Totem
             if (m_spellInfo->SpellFamilyFlags & uint64(0x0000000000004000))
             {
@@ -4299,20 +4270,6 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                 else
                     sLog.outError("Spell::EffectDummy: spell %i requires cast Item", m_spellInfo->Id);
 
-                return;
-            }
-            if (m_spellInfo->Id == 39610)                   // Mana Tide Totem effect
-            {
-                if (!unitTarget || unitTarget->GetPowerType() != POWER_MANA)
-                    return;
-
-                // Glyph of Mana Tide
-                if (Unit* owner = m_caster->GetOwner())
-                    if (Aura* dummy = owner->GetDummyAura(55441))
-                        damage += dummy->GetModifier()->m_amount;
-                // Regenerate 6% of Total Mana Every 3 secs
-                int32 EffectBasePoints0 = unitTarget->GetMaxPower(POWER_MANA)  * damage / 100;
-                m_caster->CastCustomSpell(unitTarget, 39609, &EffectBasePoints0, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr, nullptr, m_originalCasterGUID);
                 return;
             }
             break;
@@ -5555,7 +5512,6 @@ void Spell::EffectEnergize(SpellEffectIndex eff_idx)
             break;
         case 48542:                                         // Revitalize (mana restore case)
         case 63375:                                         // Improved Stormstrike
-        case 68082:                                         // Glyph of Seal of Command
             damage = damage * unitTarget->GetCreateMana() / 100;
             break;
         case 67487:                                         // Mana Potion Injector
@@ -6923,6 +6879,9 @@ void Spell::EvaluateResultLists(std::list<std::pair<SpellAuraHolder*, uint32> >&
         {
             int32 heal_amount = m_spellInfo->CalculateSimpleValue(EFFECT_INDEX_1);
             m_caster->CastCustomSpell(nullptr, 19658, &heal_amount, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
+            if (m_caster->HasAura(56249)) // Glyph of Felhunter
+                if (Unit* owner = m_caster->GetOwner())
+                    owner->CastCustomSpell(nullptr, 19658, &heal_amount, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
         }
     }
     // Send fail log to client
@@ -7420,7 +7379,7 @@ void Spell::EffectTameCreature(SpellEffectIndex /*eff_idx*/)
     if (plr->IsPvPSanctuary())
         pet->SetPvPSanctuary(true);
 
-    pet->GetCharmInfo()->SetPetNumber(sObjectMgr.GeneratePetNumber(), true);
+    pet->GetCharmInfo()->SetPetNumber(pet->GetObjectGuid().GetEntry(), true);
 
     // level of hunter pet can't be less owner level at 5 levels
     uint32 cLevel = creatureTarget->GetLevel();
@@ -10095,19 +10054,6 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                     unitTarget->CastSpell(unitTarget, 62382, TRIGGERED_OLD_TRIGGERED);
                     return;
                 }
-                case 62488:                                 // Activate Construct
-                {
-                    if (!unitTarget || !unitTarget->HasAura(62468))
-                        return;
-
-                    unitTarget->RemoveAurasDueToSpell(62468);
-                    unitTarget->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
-                    unitTarget->CastSpell(unitTarget, 64474, TRIGGERED_OLD_TRIGGERED);
-
-                    if (m_caster->GetVictim())
-                        ((Creature*)unitTarget)->AI()->AttackStart(m_caster->GetVictim());
-                    return;
-                }
                 case 62524:                                 // Attuned to Nature 2 Dose Reduction
                 case 62525:                                 // Attuned to Nature 10 Dose Reduction
                 case 62521:                                 // Attuned to Nature 25 Dose Reduction
@@ -10154,14 +10100,6 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                     for (uint32 i = 0; i < 10; ++i)
                         m_caster->CastSpell(m_caster, spellId, TRIGGERED_OLD_TRIGGERED);
 
-                    return;
-                }
-                case 62707:                                 // Grab
-                {
-                    if (!unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)
-                        return;
-
-                    unitTarget->CastSpell(unitTarget, 62708, TRIGGERED_OLD_TRIGGERED);
                     return;
                 }
                 case 63010:                                 // Charge
@@ -10349,14 +10287,6 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                         return;
 
                     unitTarget->CastSpell(unitTarget, m_caster->GetMap()->IsRegularDifficulty() ? 64468 : 64486, TRIGGERED_OLD_TRIGGERED);
-                    return;
-                }
-                case 64475:                                 // Strength of the Creator
-                {
-                    if (!unitTarget)
-                        return;
-
-                    unitTarget->RemoveAuraHolderFromStack(64473);
                     return;
                 }
                 case 64623:                                 // Frost Bomb
@@ -12692,10 +12622,6 @@ void Spell::EffectRedirectThreat(SpellEffectIndex /*eff_idx*/)
 {
     if (!unitTarget)
         return;
-
-    if (m_spellInfo->Id == 59665)                           // Vigilance
-        if (Aura* glyph = unitTarget->GetDummyAura(63326))  // Glyph of Vigilance
-            damage += glyph->GetModifier()->m_amount;
 
     m_caster->getHostileRefManager().SetThreatRedirection(unitTarget->GetObjectGuid(), uint32(damage), m_spellInfo->Id);
 }

@@ -123,7 +123,8 @@ void WorldSession::HandleMoveWorldportAckOpcode()
 
     Difficulty diff = GetPlayer()->GetGroup() ? GetPlayer()->GetGroup()->GetDifficulty(mEntry->IsRaid()) : GetPlayer()->GetDifficulty(mEntry->IsRaid());
     uint32 miscRequirement = 0;
-    if (AreaTrigger const* at = sObjectMgr.GetMapEntranceTrigger(loc.mapid))
+    AreaTrigger const* at = sObjectMgr.GetMapEntranceTrigger(loc.mapid);
+    if (at)
     {
         if (AREA_LOCKSTATUS_OK != GetPlayer()->GetAreaTriggerLockStatus(at, diff, miscRequirement))
         {
@@ -143,6 +144,15 @@ void WorldSession::HandleMoveWorldportAckOpcode()
     // relocate the player to the teleport destination
     if (!map)
         map = sMapMgr.CreateMap(loc.mapid, GetPlayer());
+
+    // if dead player is entering an instance of same id but corpse is not found, likely means entering different instance id
+    if (GetPlayer()->IsDelayedResurrect() && !map->GetCorpse(GetPlayer()->GetObjectGuid()) && at)
+    {
+        // respawn at entrance
+        loc.coord_x = at->target_X;
+        loc.coord_y = at->target_Y;
+        loc.coord_z = at->target_Z;
+    }
 
     GetPlayer()->SetMap(map);
 
@@ -347,6 +357,14 @@ void WorldSession::HandleMovementOpcodes(WorldPacket& recv_data)
     {
         if (guid != mover->GetObjectGuid() && _player->GetObjectGuid() == guid)
             mover = _player;
+    }
+
+    if (opcode == CMSG_MOVE_SET_FLY)
+    {
+        if (plMover)
+            if (Pet* pet = plMover->GetPet())
+                if (pet->isControlled() && plMover->IsMounted())
+                    plMover->UnsummonPetTemporaryIfAny();
     }
 
     if (!ProcessMovementInfo(movementInfo, mover, plMover, recv_data))

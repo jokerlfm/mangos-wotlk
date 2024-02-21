@@ -260,6 +260,8 @@ Unit::Unit() :
     m_charmInfo(nullptr),
     i_motionMaster(this),
     m_regenTimer(0),
+    m_healthRegenTimer(0),
+    m_unitHealth(0),
     m_vehicleInfo(nullptr),
     m_combatData(new CombatData(this)),
     m_guardianPetsIterator(m_guardianPets.end()),
@@ -323,8 +325,13 @@ Unit::Unit() :
         m_createResistance = 0;
 
     m_attacking = nullptr;
-    m_modMeleeHitChance = 0.0f;
-    m_modRangedHitChance = 0.0f;
+
+    for (float& i : m_unitPower)
+        i = 0.0f;
+
+    m_modWeaponHitChance[BASE_ATTACK] = 0.0f;
+    m_modWeaponHitChance[OFF_ATTACK] = 0.0f;
+    m_modWeaponHitChance[RANGED_ATTACK] = 0.0f;
     m_modSpellHitChance = 0.0f;
     for (float& i : m_modSpellCritChance)
         i = 0.0f;
@@ -4285,9 +4292,7 @@ uint32 Unit::CalculateCritAmount(CalcDamageInfo* meleeInfo) const
 
 float Unit::GetHitChance(WeaponAttackType attackType) const
 {
-    if (attackType == RANGED_ATTACK)
-        return m_modRangedHitChance;
-    return m_modMeleeHitChance;
+    return m_modWeaponHitChance[attackType];
 }
 
 float Unit::GetHitChance(SpellSchoolMask schoolMask) const
@@ -5187,7 +5192,7 @@ void Unit::SetFacingTo(float ori)
     init.Launch();
     // orientation change is in-place
     UpdateSplinePosition();
-    movespline->_Finalize();
+    EndSpline();
 }
 
 void Unit::SetFacingToObject(WorldObject* object)
@@ -5201,7 +5206,7 @@ void Unit::SetFacingToObject(WorldObject* object)
     init.Launch();
     // orientation change is in-place
     UpdateSplinePosition();
-    movespline->_Finalize();
+    EndSpline();
 }
 
 bool Unit::isInAccessablePlaceFor(Unit const* unit) const
@@ -6506,6 +6511,14 @@ bool Unit::HasAffectedAura(AuraType auraType, SpellEntry const* spellInfo) const
 Aura* Unit::GetAura(uint32 spellId, SpellEffectIndex effindex)
 {
     SpellAuraHolderBounds bounds = GetSpellAuraHolderBounds(spellId);
+    if (bounds.first != bounds.second)
+        return bounds.first->second->GetAuraByEffectIndex(effindex);
+    return nullptr;
+}
+
+Aura const* Unit::GetAura(uint32 spellId, SpellEffectIndex effindex) const
+{
+    SpellAuraHolderConstBounds bounds = GetSpellAuraHolderBounds(spellId);
     if (bounds.first != bounds.second)
         return bounds.first->second->GetAuraByEffectIndex(effindex);
     return nullptr;
@@ -9256,14 +9269,14 @@ void Unit::HandleExitCombat(bool pvpCombat)
     CallForAllControlledUnits([](Unit* unit) { unit->HandleExitCombat(); }, CONTROLLED_PET | CONTROLLED_GUARDIANS | CONTROLLED_CHARM | CONTROLLED_TOTEMS);
 }
 
-int32 Unit::ModifyHealth(int32 dVal)
+float Unit::ModifyHealth(float dVal)
 {
     if (dVal == 0)
         return 0;
 
-    int32 curHealth = (int32)GetHealth();
+    float curHealth = GetRealHealth();
 
-    int32 val = dVal + curHealth;
+    float val = dVal + curHealth;
     if (val <= 0)
     {
         SetHealth(0);
@@ -9272,7 +9285,7 @@ int32 Unit::ModifyHealth(int32 dVal)
 
     int32 maxHealth = (int32)GetMaxHealth();
 
-    int32 gain;
+    float gain;
     if (val < maxHealth)
     {
         SetHealth(val);
@@ -10102,40 +10115,6 @@ int32 Unit::CalculateAuraDuration(SpellEntry const* spellInfo, uint32 effectMask
             duration = 0;
     }
 
-    if (caster == this)
-    {
-        switch (spellInfo->SpellFamilyName)
-        {
-            case SPELLFAMILY_DRUID:
-                // Thorns
-                if (spellInfo->SpellIconID == 53 && (spellInfo->SpellFamilyFlags & uint64(0x0000000000000100)))
-                {
-                    // Glyph of Thorns
-                    if (Aura* aur = GetAura(57862, EFFECT_INDEX_0))
-                        duration += aur->GetModifier()->m_amount * MINUTE * IN_MILLISECONDS;
-                }
-                break;
-            case SPELLFAMILY_PALADIN:
-                // Blessing of Might
-                if (spellInfo->SpellIconID == 298 && spellInfo->SpellFamilyFlags & uint64(0x0000000000000002))
-                {
-                    // Glyph of Blessing of Might
-                    if (Aura* aur = GetAura(57958, EFFECT_INDEX_0))
-                        duration += aur->GetModifier()->m_amount * MINUTE * IN_MILLISECONDS;
-                }
-                // Blessing of Wisdom
-                else if (spellInfo->SpellIconID == 306 && spellInfo->SpellFamilyFlags & uint64(0x0000000000010000))
-                {
-                    // Glyph of Blessing of Wisdom
-                    if (Aura* aur = GetAura(57979, EFFECT_INDEX_0))
-                        duration += aur->GetModifier()->m_amount * MINUTE * IN_MILLISECONDS;
-                }
-                break;
-            default:
-                break;
-        }
-    }
-
     return duration;
 }
 
@@ -10558,13 +10537,14 @@ void Unit::SetLevel(uint32 lvl)
         ((Player*)this)->SetGroupUpdateFlag(GROUP_UPDATE_FLAG_LEVEL);
 }
 
-void Unit::SetHealth(uint32 val)
+void Unit::SetHealth(float val)
 {
     uint32 maxHealth = GetMaxHealth();
     if (maxHealth < val)
         val = maxHealth;
 
-    SetUInt32Value(UNIT_FIELD_HEALTH, val);
+    SetUInt32Value(UNIT_FIELD_HEALTH, uint32(val));
+    m_unitHealth = val;
 
     // group update
     if (GetTypeId() == TYPEID_PLAYER)
@@ -10608,16 +10588,17 @@ void Unit::SetHealthPercent(float percent)
     SetHealth(newHealth);
 }
 
-void Unit::SetPower(Powers power, uint32 val, bool withPowerUpdate /*= true*/)
+void Unit::SetPower(Powers power, float val, bool withPowerUpdate /*= true*/)
 {
-    if (GetPower(power) == val)
+    if (GetRealPower(power) == val)
         return;
 
     uint32 maxPower = GetMaxPower(power);
     if (maxPower < val)
         val = maxPower;
 
-    SetStatInt32Value(UNIT_FIELD_POWER1 + power, val);
+    SetStatInt32Value(UNIT_FIELD_POWER1 + power, int32(val));
+    m_unitPower[power] = val;
 
     if (withPowerUpdate)
     {
@@ -12706,6 +12687,12 @@ void Unit::DisableSpline()
     movespline->_Interrupt();
 }
 
+void Unit::EndSpline()
+{
+    m_movementInfo.RemoveMovementFlag(MovementFlags(MOVEFLAG_SPLINE_ENABLED | MOVEFLAG_FORWARD));
+    movespline->_Finalize();
+}
+
 void Unit::SendCollisionHeightUpdate(float height)
 {
     if (IsClientControlled())
@@ -13437,8 +13424,8 @@ void Unit::UpdateAllowedPositionZ(float x, float y, float& z, Map* atMap /*=null
     if (!atMap)
         atMap = GetMap();
 
-    // non fly unit don't must be in air
-    // non swim unit must be at ground (mostly speedup, because it don't must be in water and water level check less fast
+    // non flying unit must not be in the air
+    // non swimming unit must be on the ground (mostly speedup, because it can't be in water and water level check less fast)
     if (!CanFly())
     {
         bool canSwim = CanSwim();
@@ -13461,6 +13448,8 @@ void Unit::UpdateAllowedPositionZ(float x, float y, float& z, Map* atMap /*=null
         if (z < groundZ)
             z = groundZ;
     }
+
+    z += GetHoverOffset();
 }
 
 void Unit::AdjustZForCollision(float x, float y, float& z, float halfHeight) const
@@ -14195,6 +14184,23 @@ void Unit::SetHover(bool enable)
             m_movementInfo.AddMovementFlag(MOVEFLAG_HOVER);
         else
             m_movementInfo.RemoveMovementFlag(MOVEFLAG_HOVER);
+    }
+
+    float hoverHeight = GetHoverHeight();
+
+    if (enable)
+    {
+        if (hoverHeight && GetPositionZ() - GetMap()->GetHeight(GetPhaseMask(), GetPositionX(), GetPositionY(), GetPositionZ()) < hoverHeight)
+            Relocate(GetPositionX(), GetPositionY(), GetPositionZ() + hoverHeight);
+    }
+    else
+    {
+        if (IsAlive() || !IsUnit())
+        {
+            float newZ = std::max<float>(GetMap()->GetHeight(GetPhaseMask(), GetPositionX(), GetPositionY(), GetPositionZ()), GetPositionZ() - hoverHeight);
+            UpdateAllowedPositionZ(GetPositionX(), GetPositionY(), newZ);
+            Relocate(GetPositionX(), GetPositionY(), newZ);
+        }
     }
 
     if (!IsInWorld()) // is sent on add to map

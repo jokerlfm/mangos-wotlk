@@ -33,7 +33,7 @@ Pet::Pet(PetType type) :
     m_removed(false), m_happinessTimer(7500), m_petType(type), m_duration(0),
     m_loading(false),
     m_declinedname(nullptr), m_petModeFlags(PET_MODE_DEFAULT), m_originalCharminfo(nullptr), m_inStatsUpdate(false), m_dismissDisabled(false),
-    m_controllableGuardian(false), m_doNotFollowMounted(false)
+    m_controllableGuardian(false), m_doNotFollowMounted(false), m_glyphedStat(false)
 {
     m_name = "Pet";
 
@@ -779,6 +779,8 @@ bool Pet::CanTakeMoreActiveSpells(uint32 spellid)
 
 void Pet::Unsummon(PetSaveMode mode, Unit* owner /*= nullptr*/)
 {
+    MANGOS_ASSERT(!m_removed);
+
     if (!owner)
         owner = GetOwner();
 
@@ -900,7 +902,7 @@ void Pet::GivePetXP(uint32 xp)
     if (level < maxlevel)
     {
 
-        xp *= sWorld.getConfig(CONFIG_FLOAT_RATE_PET_XP_KILL);
+        xp *= GetMap()->GetXPModRate(RateModType::PETKILL);
 
         uint32 nextLvlXP = GetUInt32Value(UNIT_FIELD_PETNEXTLEVELEXP);
         uint32 curXP = GetUInt32Value(UNIT_FIELD_PETEXPERIENCE);
@@ -2508,4 +2510,38 @@ std::vector<uint32> Pet::GetCharmSpells() const
         ++position;
     }
     return spells;
+}
+
+void Pet::Heartbeat()
+{
+    Creature::Heartbeat();
+
+    switch (GetUInt32Value(UNIT_CREATED_BY_SPELL))
+    {
+        case 697: // Voidwalker
+        {
+            bool change = m_glyphedStat;
+            if (Unit* owner = GetOwner())
+                m_glyphedStat = owner->HasAura(56247); // Glyph of Voidwalker
+            if (change != m_glyphedStat)
+                UpdateStats(STAT_STAMINA);
+            break;
+        }
+        case 30146: // Felguard
+        {
+            bool change = m_glyphedStat;
+            if (Unit* owner = GetOwner())
+            {
+                if (!owner->HasSpell(30146)) // unlearned felguard
+                {
+                    Unsummon(PET_SAVE_NOT_IN_SLOT);
+                    return;
+                }
+                m_glyphedStat = owner->HasAura(56246); // Glyph of Felguard
+            }
+            if (change != m_glyphedStat)
+                UpdateAttackPowerAndDamage();
+            break;
+        }
+    }
 }

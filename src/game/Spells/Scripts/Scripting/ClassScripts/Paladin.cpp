@@ -115,7 +115,7 @@ struct PaladinTier6Trinket : public AuraScript
 
 struct IncreasedHolyLightHealing : public AuraScript
 {
-    void OnApply(Aura* aura, bool apply) const
+    void OnApply(Aura* aura, bool apply) const override
     {
         aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_SPELL_HEALING_DONE, apply);
     }
@@ -170,6 +170,7 @@ struct RighteousDefense : public SpellScript
     }
 };
 
+// 53385 - Divine Storm
 struct DivineStorm : public SpellScript
 {
     void OnInit(Spell* spell) const override
@@ -189,6 +190,7 @@ struct DivineStorm : public SpellScript
     }
 };
 
+// 54171 - Divine Storm
 struct DivineStormHeal : public SpellScript
 {
     void OnInit(Spell* spell) const override
@@ -204,6 +206,7 @@ struct DivineStormHeal : public SpellScript
     }
 };
 
+// 70769 - Divine Storm!
 struct DivineStormCooldown : public SpellScript
 {
     void OnEffectExecute(Spell* spell, SpellEffectIndex /*effIdx*/) const override
@@ -213,6 +216,7 @@ struct DivineStormCooldown : public SpellScript
     }
 };
 
+// 31876, 31877, 31878
 struct JudgementsOfTheWise : public AuraScript
 {
     bool OnCheckProc(Aura* /*aura*/, ProcExecutionData& data) const override
@@ -234,6 +238,7 @@ struct JudgementsOfTheWise : public AuraScript
     }
 };
 
+// 31930 - Judgements of the Wise
 struct JudgementsOfTheWiseEnergize : public SpellScript
 {
     void OnEffectExecute(Spell* spell, SpellEffectIndex /*effIdx*/) const override
@@ -242,6 +247,7 @@ struct JudgementsOfTheWiseEnergize : public SpellScript
     }
 };
 
+// 31850, 31851, 31852 - Ardent Defender
 struct ArdentDefender : public AuraScript
 {
     void OnAbsorb(Aura* aura, int32& currentAbsorb, int32& remainingDamage, uint32& /*reflectedSpellId*/, int32& /*reflectDamage*/, bool& preventedDeath, bool& /*dropCharge*/, DamageEffectType /*damageType*/) const override
@@ -317,9 +323,111 @@ struct BlessingOfSanctuary : public AuraScript
     }
 };
 
+// 1038 - Hand of Salvation
+struct HandOfSalvation : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        if (data.caster && data.effIdx == EFFECT_INDEX_1)
+            if (data.caster->GetObjectGuid() == data.target->GetObjectGuid())
+                if (Aura* aur = data.target->GetAura(63225, EFFECT_INDEX_0))
+                    return value - aur->GetModifier()->m_amount;
+        return value;
+    }
+};
+
+// 54925 - Glyph of Seal of Command
+struct GlyphOfSealOfCommand : public AuraScript
+{
+    bool OnCheckProc(Aura* aura, ProcExecutionData& /*data*/) const override
+    {
+        return aura->GetTarget()->HasAura(20375); // must have seal of command active
+    }
+};
+
+// 68082 - Glyph of Seal of Command
+struct GlyphOfSealOfCommandMana : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex /*effIdx*/) const override
+    {
+        if (!spell->GetUnitTarget())
+            return;
+        spell->SetDamage(spell->GetDamage() * spell->GetUnitTarget()->GetCreateMana() / 100);
+    }
+};
+
+// 54939 - Glyph of Divinity
+struct GlyphOfDivinity : public AuraScript
+{
+    SpellAuraProcResult OnProc(Aura* /*aura*/, ProcExecutionData& procData) const override
+    {
+        if (procData.spell)
+        {
+            procData.basepoints[EFFECT_INDEX_1] = procData.spell->GetDamageForEffect(EFFECT_INDEX_1);
+            procData.triggeredSpellId = 54986;
+            procData.triggerTarget = nullptr;
+        }
+
+        return SPELL_AURA_PROC_OK;
+    }
+};
+
+// 54937 - Glyph of Holy Light
+struct GlyphOfHolyLight : public AuraScript
+{
+    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
+    {
+        procData.triggeredSpellId = 54968;
+        procData.basepoints[0] = aura->GetAmount() * procData.damage / 100;
+
+        return SPELL_AURA_PROC_OK;
+    }
+};
+
+// 19740 - Blessing Of Might
+struct BlessingOfMight : public AuraScript
+{
+    virtual int32 OnDurationCalculate(WorldObject const* caster, Unit const* target, int32 duration) const override
+    {
+        if (caster == target)
+            // Glyph of Blessing of Might
+            if (Aura const* aur = target->GetAura(57958, EFFECT_INDEX_0))
+                duration += aur->GetModifier()->m_amount * MINUTE * IN_MILLISECONDS;
+        return duration;
+    }
+};
+
+// 19740 - Blessing Of Wisdom
+struct BlessingOfWisdom : public AuraScript
+{
+    virtual int32 OnDurationCalculate(WorldObject const* caster, Unit const* target, int32 duration) const override
+    {
+        if (caster == target)
+            // Glyph of Blessing of Wisdom
+            if (Aura const* aur = target->GetAura(57979, EFFECT_INDEX_0))
+                duration += aur->GetModifier()->m_amount * MINUTE * IN_MILLISECONDS;
+        return duration;
+    }
+};
+
+// 19752 - Divine Intervention
+struct DivineIntervention : public SpellScript
+{
+    SpellCastResult OnCheckCast(Spell* spell, bool /*strict*/) const override
+    {
+        Unit* target = spell->m_targets.getUnitTarget();
+        if (!target)
+            return SPELL_FAILED_BAD_IMPLICIT_TARGETS;
+        if (target->HasAura(23333) || target->HasAura(23335) || target->HasAura(34976)) // possibly SPELL_ATTR_EX_IMMUNITY_TO_HOSTILE_AND_FRIENDLY_EFFECTS
+            return SPELL_FAILED_TARGET_AURASTATE;
+        return SPELL_CAST_OK;
+    }
+};
+
 void LoadPaladinScripts()
 {
     RegisterSpellScript<IncreasedHolyLightHealing>("spell_increased_holy_light_healing");
+    RegisterSpellScript<DivineIntervention>("spell_divine_intervention");
     RegisterSpellScript<spell_judgement>("spell_judgement");
     RegisterSpellScript<RighteousDefense>("spell_righteous_defense");
     RegisterSpellScript<PaladinTier6Trinket>("spell_paladin_tier_6_trinket");
@@ -329,7 +437,14 @@ void LoadPaladinScripts()
     RegisterSpellScript<JudgementsOfTheWise>("spell_judgements_of_the_wise");
     RegisterSpellScript<JudgementsOfTheWiseEnergize>("spell_judgements_of_the_wise_energize");
     RegisterSpellScript<ArdentDefender>("spell_ardent_defender");
-    RegisterSpellScript<ArdentDefender>("spell_sacred_shield_crit");
+    RegisterSpellScript<SacredShieldCrit>("spell_sacred_shield_crit");
     RegisterSpellScript<ExorcismPaladin>("spell_exorcism_paladin");
     RegisterSpellScript<BlessingOfSanctuary>("spell_blessing_of_sanctuary");
+    RegisterSpellScript<HandOfSalvation>("spell_hand_of_salvation");
+    RegisterSpellScript<GlyphOfSealOfCommand>("spell_glyph_of_seal_of_command");
+    RegisterSpellScript<GlyphOfSealOfCommandMana>("spell_glyph_of_seal_of_command_mana");
+    RegisterSpellScript<GlyphOfDivinity>("spell_glyph_of_divinity");
+    RegisterSpellScript<GlyphOfHolyLight>("spell_glyph_of_holy_light");
+    RegisterSpellScript<BlessingOfMight>("spell_blessing_of_might");
+    RegisterSpellScript<BlessingOfWisdom>("spell_blessing_of_wisdom");
 }

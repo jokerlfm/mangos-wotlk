@@ -215,7 +215,7 @@ void Map::LoadMapAndVMap(int gx, int gy)
 
 Map::Map(uint32 id, time_t expiry, uint32 InstanceId, uint8 SpawnMode)
     : i_mapEntry(sMapStore.LookupEntry(id)), i_spawnMode(SpawnMode),
-      i_id(id), i_InstanceId(InstanceId), m_unloadTimer(0),
+      i_id(id), i_InstanceId(InstanceId), m_unloadTimer(0), m_clientUpdateTimer(0),
       m_VisibleDistance(DEFAULT_VISIBILITY_DISTANCE), m_persistentState(nullptr),
       m_activeNonPlayersIter(m_activeNonPlayers.end()), m_onEventNotifiedIter(m_onEventNotifiedObjects.end()),
       i_gridExpiry(expiry), m_TerrainData(sTerrainMgr.LoadTerrain(id)),
@@ -252,11 +252,7 @@ void Map::Initialize(bool loadInstanceData /*= true*/)
     m_persistentState->SetUsedByMapState(this);
     m_persistentState->InitPools();
 
-    sObjectMgr.LoadActiveEntities(this);
-
     m_graveyardManager.Init(this);
-
-    LoadTransports();
 
     m_variableManager.Initialize(m_persistentState->GetCompletedEncountersMask());
 
@@ -264,6 +260,10 @@ void Map::Initialize(bool loadInstanceData /*= true*/)
 
     // load navmesh
     MMAP::MMapFactory::createOrGetMMapManager()->loadMapData(GetId(), GetInstanceId());
+
+    sObjectMgr.LoadActiveEntities(this);
+
+    LoadTransports();
 }
 
 void Map::InitVisibilityDistance()
@@ -874,7 +874,12 @@ void Map::Update(const uint32& t_diff)
 #endif
 
     // Send world objects and item update field changes
-    SendObjectUpdates();
+    m_clientUpdateTimer += t_diff;
+    if (m_clientUpdateTimer >= 333)
+    {
+        m_clientUpdateTimer -= 333;
+        SendObjectUpdates();
+    }
 
     // Don't unload grids if it's battleground, since we may have manually added GOs,creatures, those doesn't load from DB at grid re-load !
     // This isn't really bother us, since as soon as we have instanced BG-s, the whole map unloads as the BG gets ended
@@ -1258,6 +1263,95 @@ void Map::SetNewDifficultyCooldown(TimePoint const& newCooldown)
 {
     if (m_dynamicDifficultyCooldown < newCooldown)
         m_dynamicDifficultyCooldown = newCooldown;
+}
+
+// This is not retail like
+// Get xp rate for given type
+float Map::GetXPModRate(RateModType type) const
+{
+    float expMod = 1.0f;
+    switch (type)
+    {
+        case RateModType::QUEST:
+        {
+            switch (GetExpansion())
+            {
+                case 0:
+                    expMod = sWorld.getConfig(CONFIG_FLOAT_RATE_XP_QUEST_VANILLA);
+                    break;
+                case 1:
+                    expMod = sWorld.getConfig(CONFIG_FLOAT_RATE_XP_QUEST_BC);
+                    break;
+
+                default:
+                    expMod = sWorld.getConfig(CONFIG_FLOAT_RATE_XP_QUEST_WOTLK);
+                    break;
+            }
+            expMod *= sWorld.getConfig(CONFIG_FLOAT_RATE_XP_QUEST);
+            break;
+
+        }
+        
+        case RateModType::KILL:
+        {
+            switch (GetExpansion())
+            {
+                case 0:
+                    expMod = sWorld.getConfig(CONFIG_FLOAT_RATE_XP_KILL_VANILLA);
+                    break;
+                case 1:
+                    expMod = sWorld.getConfig(CONFIG_FLOAT_RATE_XP_KILL_BC);
+                    break;
+
+                default:
+                    expMod = sWorld.getConfig(CONFIG_FLOAT_RATE_XP_KILL_WOTLK);
+                    break;
+            }
+            expMod *= sWorld.getConfig(CONFIG_FLOAT_RATE_XP_KILL);
+            break;
+        }
+
+        case RateModType::EXPLORE:
+        {
+            switch (GetExpansion())
+            {
+                case 0:
+                    expMod = sWorld.getConfig(CONFIG_FLOAT_RATE_XP_EXPLORE_VANILLA);
+                    break;
+                case 1:
+                    expMod = sWorld.getConfig(CONFIG_FLOAT_RATE_XP_EXPLORE_BC);
+                    break;
+
+                default:
+                    expMod = sWorld.getConfig(CONFIG_FLOAT_RATE_XP_EXPLORE_WOTLK);
+                    break;
+            }
+            expMod *= sWorld.getConfig(CONFIG_FLOAT_RATE_XP_EXPLORE);
+            break;
+        }
+
+        case RateModType::PETKILL:
+        {
+            switch (GetExpansion())
+            {
+                case 0:
+                    expMod = sWorld.getConfig(CONFIG_FLOAT_RATE_PET_XP_KILL_VANILLA);
+                    break;
+                case 1:
+                    expMod = sWorld.getConfig(CONFIG_FLOAT_RATE_PET_XP_KILL_BC);
+                    break;
+
+                default:
+                    expMod = sWorld.getConfig(CONFIG_FLOAT_RATE_PET_XP_KILL_WOTLK);
+                    break;
+            }
+            expMod *= sWorld.getConfig(CONFIG_FLOAT_RATE_PET_XP_KILL);
+            break;
+        }
+        case RateModType::MAX: break;
+    }
+
+    return expMod;
 }
 
 uint32 Map::GetMaxPlayers() const

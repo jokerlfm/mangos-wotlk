@@ -58,31 +58,9 @@ LootStore LootTemplates_Reference("reference_loot_template",    "reference id", 
 LootStore LootTemplates_Skinning("skinning_loot_template",     "creature skinning id",           true);
 LootStore LootTemplates_Spell("spell_loot_template",        "spell id (random item creating)", false);
 
-class LootTemplate::LootGroup                               // A set of loot definitions for items (refs are not allowed)
-{
-    public:
-        void AddEntry(LootStoreItem& item);                 // Adds an entry to the group (at loading stage)
-        bool HasQuestDrop() const;                          // True if group includes at least 1 quest drop entry
-        bool HasQuestDropForPlayer(Player const* player) const;
-        // The same for active quests of the player
-        void Process(Loot& loot, Player const* lootOwner) const; // Rolls an item from the group (if any) and adds the item to the loot
-        float RawTotalChance() const;                       // Overall chance for the group (without equal chanced items)
-        float TotalChance() const;                          // Overall chance for the group
-
-        void Verify(LootStore const& lootstore, uint32 id, uint32 group_id) const;
-        void CheckLootRefs(LootIdSet* ref_set) const;
-    private:
-        LootStoreItemList ExplicitlyChanced;                // Entries with chances defined in DB
-        LootStoreItemList EqualChanced;                     // Zero chances - every entry takes the same chance
-
-        LootStoreItem const* Roll(Loot const& loot, Player const* lootOwner) const; // Rolls an item from the group, returns NULL if all miss their chances
-};
-
 // Remove all data and free all memory
 void LootStore::Clear()
 {
-    for (LootTemplateMap::const_iterator itr = m_LootTemplates.begin(); itr != m_LootTemplates.end(); ++itr)
-        delete itr->second;
     m_LootTemplates.clear();
 }
 
@@ -91,15 +69,66 @@ void LootStore::Clear()
 void LootStore::Verify() const
 {
     for (const auto& m_LootTemplate : m_LootTemplates)
-        m_LootTemplate.second->Verify(*this, m_LootTemplate.first);
+        m_LootTemplate.second.Verify(*this, m_LootTemplate.first);
 }
+
+// check if that loot template does not contain a ref to itself (should be called by CheckLootRefs())
+bool IsValidReference(LootStoreItem& lsi, LootIdSet* refSet, LootIdSet& prevRefs)
+{
+    if (lsi.mincountOrRef < 0)
+    {
+        auto lootRef = LootTemplates_Reference.GetLootFor(-lsi.mincountOrRef);
+        if (!lootRef)
+        {
+            LootTemplates_Reference.ReportNotExistedId(-lsi.mincountOrRef);
+            return false;
+        }
+        else
+        {
+            auto insSuccess = prevRefs.insert(-lsi.mincountOrRef);
+            if (!insSuccess.second)
+            {
+                std::string refsList = "";
+                for (auto id : prevRefs)
+                    refsList += std::to_string(id) + " > ";
+                refsList += std::to_string(-lsi.mincountOrRef) + "!";
+                sLog.outErrorDb("Critical: Table '%s' reference %d (%s) is pointing to itself. Pathway: %s",
+                    LootTemplates_Reference.GetName(), -lsi.mincountOrRef, LootTemplates_Reference.GetEntryName(), refsList.c_str());
+
+                // we can set it as used anyway
+                if (refSet)
+                    refSet->erase(-lsi.mincountOrRef);
+
+                // set it to 0 so it will be ignored from now
+                lsi.mincountOrRef = 0;
+                return false;
+            }
+            else
+            {
+                // recursive call
+                bool success = const_cast<LootTemplate*>(lootRef)->CheckLootRefs(refSet, prevRefs);
+                prevRefs.erase(-lsi.mincountOrRef); // we can now remove this from the callee list
+                if (success)
+                {
+                    // we can set it as used
+                    if (refSet)
+                        refSet->erase(-lsi.mincountOrRef);
+                }
+                else
+                    return false;
+            }
+        }
+    }
+    return true;
+};
 
 // Loads a *_loot_template DB table into loot store
 // All checks of the loaded template are called from here, no error reports at loot generation required
 void LootStore::LoadLootTable()
 {
-    LootTemplateMap::const_iterator tab;
+    LootTemplateMap::const_iterator tplEntriesItr;
     uint32 count = 0;
+    std::map<uint32, uint32> validItems;
 
     // Clearing store (for reloading case)
     Clear();
@@ -146,28 +175,13 @@ void LootStore::LoadLootTable()
                 }
             }
 
-            LootStoreItem storeitem = LootStoreItem(item, chanceOrQuestChance, group, conditionId, mincountOrRef, maxcount);
-
-            if (!storeitem.IsValid(*this, entry))           // Validity checks
+            // Validity checks
+            if (!IsValidItemTemplate(entry, item, group, mincountOrRef, chanceOrQuestChance, maxcount))
                 continue;
 
-            // Looking for the template of the entry
-            // often entries are put together
-            if (m_LootTemplates.empty() || tab->first != entry)
-            {
-                // Searching the template (in case template Id changed)
-                tab = m_LootTemplates.find(entry);
-                if (tab == m_LootTemplates.end())
-                {
-                    std::pair< LootTemplateMap::iterator, bool > pr = m_LootTemplates.insert(LootTemplateMap::value_type(entry, new LootTemplate));
-                    tab = pr.first;
-                }
-            }
-            // else is empty - template Id and iter are the same
-            // finally iter refers to already existing or just created <entry, LootTemplate>
-
-            // Adds current row to the template
-            tab->second->AddEntry(storeitem);
+            // Add the item to the loot store
+            ++validItems[entry];
+            m_LootTemplates[entry].AddEntry(LootStoreItem(validItems[entry], item, chanceOrQuestChance, group, conditionId, mincountOrRef, maxcount));
             ++count;
         }
         while (queryResult->NextRow());
@@ -191,14 +205,14 @@ bool LootStore::HaveQuestLootFor(uint32 loot_id) const
         return false;
 
     // scan loot for quest items
-    return itr->second->HasQuestDrop(m_LootTemplates);
+    return itr->second.HasQuestDrop(m_LootTemplates);
 }
 
 bool LootStore::HaveQuestLootForPlayer(uint32 loot_id, Player* player) const
 {
     LootTemplateMap::const_iterator tab = m_LootTemplates.find(loot_id);
     if (tab != m_LootTemplates.end())
-        if (tab->second->HasQuestDropForPlayer(m_LootTemplates, player))
+        if (tab->second.HasQuestDropForPlayer(m_LootTemplates, player))
             return true;
 
     return false;
@@ -211,7 +225,7 @@ LootTemplate const* LootStore::GetLootFor(uint32 loot_id) const
     if (tab == m_LootTemplates.end())
         return nullptr;
 
-    return tab->second;
+    return &tab->second;
 }
 
 void LootStore::LoadAndCollectLootIds(LootIdSet& ids_set)
@@ -256,10 +270,22 @@ void LootStore::LoadAndCheckReferenceNames()
     }
 }
 
-void LootStore::CheckLootRefs(LootIdSet* ref_set) const
+bool LootStore::CheckLootRefs(LootIdSet* ref_set /*= nullptr*/)
 {
-    for (const auto& m_LootTemplate : m_LootTemplates)
-        m_LootTemplate.second->CheckLootRefs(ref_set);
+    LootIdSet prevRefs;
+    bool noIssue = true;
+    for (auto& lTpl : m_LootTemplates)
+    {
+        prevRefs.clear();
+        if (!lTpl.second.CheckLootRefs(ref_set, prevRefs))
+        {
+            noIssue = false;
+
+            sLog.outErrorDb("Critical error found in '%s' for %s %d!", GetName(), GetEntryName(), lTpl.first);
+        }
+    }
+
+    return noIssue;
 }
 
 void LootStore::ReportUnusedIds(LootIdSet const& ids_set) const
@@ -276,6 +302,87 @@ void LootStore::ReportUnusedIds(LootIdSet const& ids_set) const
 void LootStore::ReportNotExistedId(uint32 id) const
 {
     sLog.outErrorDb("Table '%s' entry %d (%s) not exist but used as loot id in DB.", GetName(), id, GetEntryName());
+}
+
+bool LootStore::HaveLootFor(uint32 loot_id) const
+{
+    return m_LootTemplates.find(loot_id) != m_LootTemplates.end();
+    // lfm equipment drop rate 
+    if (pProto->Class == ItemClass::ITEM_CLASS_WEAPON && pProto->Quality == ItemQualities::ITEM_QUALITY_POOR)
+    {
+        qualityModifier = qualityModifier * 0.25f;
+    }
+    else if (pProto->Class == ItemClass::ITEM_CLASS_WEAPON && pProto->Quality == ItemQualities::ITEM_QUALITY_NORMAL)
+    {
+        qualityModifier = qualityModifier * 0.25f;
+    }
+    else if (pProto->Class == ItemClass::ITEM_CLASS_ARMOR && pProto->Quality == ItemQualities::ITEM_QUALITY_POOR)
+    {
+        qualityModifier = qualityModifier * 0.25f;
+    }
+    else if (pProto->Class == ItemClass::ITEM_CLASS_ARMOR && pProto->Quality == ItemQualities::ITEM_QUALITY_NORMAL)
+    {
+        qualityModifier = qualityModifier * 0.25f;
+    }
+
+}
+
+bool LootStore::IsValidItemTemplate(uint32 entry, uint32 itemId, uint32 group, int32 mincountOrRef, float chanceOrQuestChance, uint32 maxCount) const
+{
+    float chance = fabs(chanceOrQuestChance);
+    if (group >= 1 << 7)                                    // it stored in 7 bit field
+    {
+        sLog.outErrorDb("Table '%s' entry %d item %d: group (%u) must be less %u - skipped", GetName(), entry, itemId, group, 1 << 7);
+        return false;
+    }
+
+    if (mincountOrRef == 0)
+    {
+        sLog.outErrorDb("Table '%s' entry %d item %d: wrong mincountOrRef (%d) - skipped", GetName(), entry, itemId, mincountOrRef);
+        return false;
+    }
+
+    if (mincountOrRef > 0)                                  // item (quest or non-quest) entry, maybe grouped
+    {
+        ItemPrototype const* proto = ObjectMgr::GetItemPrototype(itemId);
+        if (!proto)
+        {
+            sLog.outErrorDb("Table '%s' entry %d item %d: item entry not listed in `item_template` - skipped", GetName(), entry, itemId);
+            return false;
+        }
+
+        if (chance == 0 && group == 0)                      // Zero chance is allowed for grouped entries only
+        {
+            sLog.outErrorDb("Table '%s' entry %d item %d: equal-chanced grouped entry, but group not defined - skipped", GetName(), entry, itemId);
+            return false;
+        }
+
+        if (chance != 0 && chance < 0.000001f)              // loot with low chance
+        {
+            sLog.outErrorDb("Table '%s' entry %d item %d: low chance (%f) - skipped", GetName(), entry, itemId, chance);
+            return false;
+        }
+
+        if (maxCount < uint32(mincountOrRef))                       // wrong max count
+        {
+            sLog.outErrorDb("Table '%s' entry %d item %d: max count (%u) less that min count (%i) - skipped", GetName(), entry, itemId, uint32(maxCount), mincountOrRef);
+            return false;
+        }
+    }
+    else                                                    // mincountOrRef < 0
+    {
+        if (chanceOrQuestChance < 0)
+        {
+            sLog.outErrorDb("Table '%s' entry %d item %d: negative chance is given for a reference, skipped", GetName(), entry, itemId);
+            return false;
+        }
+        if (chance == 0 && group == 0)                      // no chance for the reference
+        {
+            sLog.outErrorDb("Table '%s' entry %d item %d: zero chance is given for a reference, reference will never be used, skipped", GetName(), entry, itemId);
+            return false;
+        }
+    }
+    return true;                                            // Referenced template existence is checked at whole store level
 }
 
 //
@@ -299,83 +406,7 @@ bool LootStoreItem::Roll(bool rate) const
 
     float qualityModifier = pProto && rate ? sWorld.getConfig(qualityToRate[pProto->Quality]) : 1.0f;
 
-    // lfm equipment drop rate 
-    if (pProto->Class == ItemClass::ITEM_CLASS_WEAPON && pProto->Quality == ItemQualities::ITEM_QUALITY_POOR)
-    {
-        qualityModifier = qualityModifier * 0.25f;
-    }
-    else if (pProto->Class == ItemClass::ITEM_CLASS_WEAPON && pProto->Quality == ItemQualities::ITEM_QUALITY_NORMAL)
-    {
-        qualityModifier = qualityModifier * 0.25f;
-    }
-    else if (pProto->Class == ItemClass::ITEM_CLASS_ARMOR && pProto->Quality == ItemQualities::ITEM_QUALITY_POOR)
-    {
-        qualityModifier = qualityModifier * 0.25f;
-    }
-    else if (pProto->Class == ItemClass::ITEM_CLASS_ARMOR && pProto->Quality == ItemQualities::ITEM_QUALITY_NORMAL)
-    {
-        qualityModifier = qualityModifier * 0.25f;
-    }
-
     return roll_chance_f(chance * qualityModifier);
-}
-
-// Checks correctness of values
-bool LootStoreItem::IsValid(LootStore const& store, uint32 entry) const
-{
-    if (group >= 1 << 7)                                    // it stored in 7 bit field
-    {
-        sLog.outErrorDb("Table '%s' entry %d item %d: group (%u) must be less %u - skipped", store.GetName(), entry, itemid, group, 1 << 7);
-        return false;
-    }
-
-    if (mincountOrRef == 0)
-    {
-        sLog.outErrorDb("Table '%s' entry %d item %d: wrong mincountOrRef (%d) - skipped", store.GetName(), entry, itemid, mincountOrRef);
-        return false;
-    }
-
-    if (mincountOrRef > 0)                                  // item (quest or non-quest) entry, maybe grouped
-    {
-        ItemPrototype const* proto = ObjectMgr::GetItemPrototype(itemid);
-        if (!proto)
-        {
-            sLog.outErrorDb("Table '%s' entry %d item %d: item entry not listed in `item_template` - skipped", store.GetName(), entry, itemid);
-            return false;
-        }
-
-        if (chance == 0 && group == 0)                      // Zero chance is allowed for grouped entries only
-        {
-            sLog.outErrorDb("Table '%s' entry %d item %d: equal-chanced grouped entry, but group not defined - skipped", store.GetName(), entry, itemid);
-            return false;
-        }
-
-        if (chance != 0 && chance < 0.000001f)              // loot with low chance
-        {
-            sLog.outErrorDb("Table '%s' entry %d item %d: low chance (%f) - skipped", store.GetName(), entry, itemid, chance);
-            return false;
-        }
-
-        if (maxcount < mincountOrRef)                       // wrong max count
-        {
-            sLog.outErrorDb("Table '%s' entry %d item %d: max count (%u) less that min count (%i) - skipped", store.GetName(), entry, itemid, uint32(maxcount), mincountOrRef);
-            return false;
-        }
-    }
-    else                                                    // mincountOrRef < 0
-    {
-        if (needs_quest)
-        {
-            sLog.outErrorDb("Table '%s' entry %d item %d: negative chance is given for a reference, skipped", store.GetName(), entry, itemid);
-            return false;
-        }
-        if (chance == 0)                               // no chance for the reference
-        {
-            sLog.outErrorDb("Table '%s' entry %d item %d: zero chance is given for a reference, reference will never be used, skipped", store.GetName(), entry, itemid);
-            return false;
-        }
-    }
-    return true;                                            // Referenced template existence is checked at whole store level
 }
 
 //
@@ -1026,7 +1057,7 @@ bool Loot::FillLoot(uint32 loot_id, LootStore const& store, Player* lootOwner, b
 
     m_lootItems.reserve(MAX_NR_LOOT_ITEMS);
 
-    tab->Process(*this, lootOwner, store, store.IsRatesAllowed()); // Processing is done there, callback via Loot::AddItem()
+    tab->Process(*this, lootOwner, store.IsRatesAllowed()); // Processing is done there, callback via Loot::AddItem()
 
     // fill the loot owners right here so its impossible from this point to change loot result
     Player* masterLooter = nullptr;
@@ -2469,7 +2500,7 @@ ByteBuffer& operator<<(ByteBuffer& b, LootItem const& li)
 //
 
 // Adds an entry to the group (at loading stage)
-void LootTemplate::LootGroup::AddEntry(LootStoreItem& item)
+void LootTemplate::LootGroup::AddEntry(LootStoreItem const& item)
 {
     if (item.chance != 0)
         ExplicitlyChanced.push_back(item);
@@ -2554,10 +2585,10 @@ LootStoreItem const* LootTemplate::LootGroup::Roll(Loot const& loot, Player cons
 // True if group includes at least 1 quest drop entry
 bool LootTemplate::LootGroup::HasQuestDrop() const
 {
-    for (auto i : ExplicitlyChanced)
+    for (auto const& i : ExplicitlyChanced)
         if (i.needs_quest)
             return true;
-    for (auto i : EqualChanced)
+    for (auto const& i : EqualChanced)
         if (i.needs_quest)
             return true;
     return false;
@@ -2566,21 +2597,56 @@ bool LootTemplate::LootGroup::HasQuestDrop() const
 // True if group includes at least 1 quest drop entry for active quests of the player
 bool LootTemplate::LootGroup::HasQuestDropForPlayer(Player const* player) const
 {
-    for (auto i : ExplicitlyChanced)
+    for (auto const& i : ExplicitlyChanced)
         if (player->HasQuestForItem(i.itemid))
             return true;
-    for (auto i : EqualChanced)
+    for (auto const& i : EqualChanced)
         if (player->HasQuestForItem(i.itemid))
             return true;
     return false;
 }
 
 // Rolls an item from the group (if any takes its chance) and adds the item to the loot
-void LootTemplate::LootGroup::Process(Loot& loot, Player const* lootOwner) const
+void LootTemplate::LootGroup::Process(Loot& loot, Player const* lootOwner, bool rate, LootStatsData* lootStatsData /*= nullptr*/) const
 {
+    LootStats::GroupStats* groupStats = nullptr;
+    if (lootStatsData)
+    {
+        groupStats = lootStatsData->stats->GetStatsForLootId(lootStatsData->groupIdOrItemId);
+    }
+
     LootStoreItem const* item = Roll(loot, lootOwner);
     if (item != nullptr)
-        loot.AddItem(*item);
+    {
+        if (item->mincountOrRef > 0)
+        {
+            loot.AddItem(*item);
+            // only used if we want some stats
+            if (groupStats)
+                groupStats->IncItemCount(item->group, std::make_pair(item->itemid, item->itemIndex));
+        }
+        else
+        {
+            // we should continue and get next loot reference to process this loot list
+            LootTemplate const* lRef = LootTemplates_Reference.GetLootFor(-item->mincountOrRef);
+
+            if (lRef)
+            {
+                std::unique_ptr<LootStatsData> lsData = nullptr;
+                // only used if we want some stats
+                if (lootStatsData)
+                {
+                    lsData = std::make_unique<LootStatsData>(item->mincountOrRef, lootStatsData->stats);
+
+                    // no need to check groupStats here, if we have a lootStatsPair->first, we have a lootStatsPair->second
+                    groupStats->IncItemCount(item->group, std::make_pair(item->mincountOrRef, item->itemIndex)); // register the reference as a loot
+                }
+
+                for (uint32 loop = 0; loop < item->maxcount; ++loop)
+                    lRef->Process(loot, lootOwner, rate, nullptr);
+            }
+        }
+    }
 }
 
 // Overall chance for the group without equal chanced items
@@ -2588,7 +2654,7 @@ float LootTemplate::LootGroup::RawTotalChance() const
 {
     float result = 0;
 
-    for (auto i : ExplicitlyChanced)
+    for (auto const& i : ExplicitlyChanced)
         if (!i.needs_quest)
             result += i.chance;
 
@@ -2620,29 +2686,22 @@ void LootTemplate::LootGroup::Verify(LootStore const& lootstore, uint32 id, uint
     }
 }
 
-void LootTemplate::LootGroup::CheckLootRefs(LootIdSet* ref_set) const
+// Will try to find invalid reference and looped reference
+// If loop is detected (Reference call itself) the reference will be set to invalid one
+bool LootTemplate::LootGroup::CheckLootRefs(LootIdSet* ref_set, LootIdSet& prevRefs)
 {
-    for (auto ieItr : ExplicitlyChanced)
+    for (auto& lsi : ExplicitlyChanced)
     {
-        if (ieItr.mincountOrRef < 0)
-        {
-            if (!LootTemplates_Reference.GetLootFor(-ieItr.mincountOrRef))
-                LootTemplates_Reference.ReportNotExistedId(-ieItr.mincountOrRef);
-            else if (ref_set)
-                ref_set->erase(-ieItr.mincountOrRef);
-        }
+        if (!IsValidReference(lsi, ref_set, prevRefs))
+            return false;
     }
 
-    for (auto ieItr : EqualChanced)
+    for (auto& lsi : EqualChanced)
     {
-        if (ieItr.mincountOrRef < 0)
-        {
-            if (!LootTemplates_Reference.GetLootFor(-ieItr.mincountOrRef))
-                LootTemplates_Reference.ReportNotExistedId(-ieItr.mincountOrRef);
-            else if (ref_set)
-                ref_set->erase(-ieItr.mincountOrRef);
-        }
+        if (!IsValidReference(lsi, ref_set, prevRefs))
+            return false;
     }
+    return true;
 }
 
 //
@@ -2650,9 +2709,9 @@ void LootTemplate::LootGroup::CheckLootRefs(LootIdSet* ref_set) const
 //
 
 // Adds an entry to the group (at loading stage)
-void LootTemplate::AddEntry(LootStoreItem& item)
+void LootTemplate::AddEntry(LootStoreItem const& item)
 {
-    if (item.group > 0 && item.mincountOrRef > 0)           // Group
+    if (item.group > 0)           // Group
     {
         if (item.group >= Groups.size())
             Groups.resize(item.group);                      // Adds new group the the loot template if needed
@@ -2663,19 +2722,16 @@ void LootTemplate::AddEntry(LootStoreItem& item)
 }
 
 // Rolls for every item in the template and adds the rolled items the the loot
-void LootTemplate::Process(Loot& loot, Player const* lootOwner, LootStore const& store, bool rate, uint8 groupId) const
+void LootTemplate::Process(Loot& loot, Player const* lootOwner, bool rate, LootStatsData* lootStatsData /*= nullptr*/) const
 {
-    if (groupId)                                            // Group reference uses own processing of the group
+    LootStats::GroupStats* groupStats = nullptr;
+    if (lootStatsData)
     {
-        if (groupId > Groups.size())
-            return;                                         // Error message already printed at loading stage
-
-        Groups[groupId - 1].Process(loot, lootOwner);
-        return;
+        groupStats = lootStatsData->stats->GetStatsForLootId(lootStatsData->groupIdOrItemId);
     }
 
     // Rolling non-grouped items
-    for (auto Entrie : Entries)
+    for (auto const& Entrie : Entries)
     {
         // Check condition
         if (Entrie.conditionId && lootOwner && !PlayerOrGroupFulfilsCondition(loot, lootOwner, Entrie.conditionId))
@@ -2691,16 +2747,31 @@ void LootTemplate::Process(Loot& loot, Player const* lootOwner, LootStore const&
             if (!Referenced)
                 continue;                                   // Error message already printed at loading stage
 
+            std::unique_ptr<LootStatsData> lsData = nullptr;
+            // only used if we want some stats
+            if (lootStatsData)
+            {
+                lsData = std::make_unique<LootStatsData>(Entrie.mincountOrRef, lootStatsData->stats);
+
+                // no need to check groupStats here, if we have a lootStatsPair->first, we have a lootStatsPair->second
+                groupStats->IncItemCount(0, std::make_pair(Entrie.mincountOrRef, Entrie.itemIndex)); // register the reference as a loot
+            }
+
             for (uint32 loop = 0; loop < Entrie.maxcount; ++loop) // Ref multiplicator
-                Referenced->Process(loot, lootOwner, store, rate, Entrie.group);
+                Referenced->Process(loot, lootOwner, rate, lsData.get());
         }
         else                                                // Plain entries (not a reference, not grouped)
+        {
             loot.AddItem(Entrie);                               // Chance is already checked, just add
+            // only used if we want some stats
+            if (groupStats)
+                groupStats->IncItemCount(0, std::make_pair(Entrie.itemid, Entrie.itemIndex));
+        }
     }
 
     // Now processing groups
-    for (const auto& Group : Groups)
-        Group.Process(loot, lootOwner);
+    for (auto const& Group : Groups)
+        Group.Process(loot, lootOwner, rate, lootStatsData);
 }
 
 // True if template includes at least 1 quest drop entry
@@ -2713,14 +2784,14 @@ bool LootTemplate::HasQuestDrop(LootTemplateMap const& store, uint8 groupId) con
         return Groups[groupId - 1].HasQuestDrop();
     }
 
-    for (auto Entrie : Entries)
+    for (auto const& Entrie : Entries)
     {
         if (Entrie.mincountOrRef < 0)                           // References
         {
             LootTemplateMap::const_iterator Referenced = store.find(-Entrie.mincountOrRef);
             if (Referenced == store.end())
                 continue;                                   // Error message [should be] already printed at loading stage
-            if (Referenced->second->HasQuestDrop(store, Entrie.group))
+            if (Referenced->second.HasQuestDrop(store, Entrie.group))
                 return true;
         }
         else if (Entrie.needs_quest)
@@ -2728,7 +2799,7 @@ bool LootTemplate::HasQuestDrop(LootTemplateMap const& store, uint8 groupId) con
     }
 
     // Now processing groups
-    for (const auto& Group : Groups)
+    for (auto const& Group : Groups)
         if (Group.HasQuestDrop())
             return true;
 
@@ -2746,14 +2817,14 @@ bool LootTemplate::HasQuestDropForPlayer(LootTemplateMap const& store, Player co
     }
 
     // Checking non-grouped entries
-    for (auto Entrie : Entries)
+    for (auto const& Entrie : Entries)
     {
         if (Entrie.mincountOrRef < 0)                           // References processing
         {
             LootTemplateMap::const_iterator Referenced = store.find(-Entrie.mincountOrRef);
             if (Referenced == store.end())
                 continue;                                   // Error message already printed at loading stage
-            if (Referenced->second->HasQuestDropForPlayer(store, player, Entrie.group))
+            if (Referenced->second.HasQuestDropForPlayer(store, player, Entrie.group))
                 return true;
         }
         else if (player->HasQuestForItem(Entrie.itemid))
@@ -2761,7 +2832,7 @@ bool LootTemplate::HasQuestDropForPlayer(LootTemplateMap const& store, Player co
     }
 
     // Now checking groups
-    for (const auto& Group : Groups)
+    for (auto const& Group : Groups)
         if (Group.HasQuestDropForPlayer(player))
             return true;
 
@@ -2794,21 +2865,23 @@ void LootTemplate::Verify(LootStore const& lootstore, uint32 id) const
     // TODO: References validity checks
 }
 
-void LootTemplate::CheckLootRefs(LootIdSet* ref_set) const
+// Will try to find invalid reference and looped reference
+// If loop is detected (Reference call itself) the reference will be set to invalid one
+bool LootTemplate::CheckLootRefs(LootIdSet* ref_set, LootIdSet& prevRefs)
 {
-    for (auto Entrie : Entries)
+    for (auto& Entrie : Entries)
     {
-        if (Entrie.mincountOrRef < 0)
-        {
-            if (!LootTemplates_Reference.GetLootFor(-Entrie.mincountOrRef))
-                LootTemplates_Reference.ReportNotExistedId(-Entrie.mincountOrRef);
-            else if (ref_set)
-                ref_set->erase(-Entrie.mincountOrRef);
-        }
+        if (!IsValidReference(Entrie, ref_set, prevRefs))
+            return false;
     }
 
-    for (const auto& Group : Groups)
-        Group.CheckLootRefs(ref_set);
+    for (auto& Group : Groups)
+    {
+        if (!Group.CheckLootRefs(ref_set, prevRefs))
+            return false;
+    }
+
+    return true;
 }
 
 void LoadLootTemplates_Creature()
@@ -3213,7 +3286,7 @@ Loot* LootMgr::GetLoot(Player* player, ObjectGuid const& targetGuid) const
     return loot;
 }
 
-void LootMgr::CheckDropStats(ChatHandler& chat, uint32 amountOfCheck, uint32 lootId, std::string lootStore) const
+void LootMgr::CheckDropStats(ChatHandler& chat, uint32 amountOfCheck, uint32 lootId, std::string lootStore, bool full) const
 {
     // choose correct loot template
     LootStore* store = &LootTemplates_Creature;
@@ -3233,12 +3306,16 @@ void LootMgr::CheckDropStats(ChatHandler& chat, uint32 amountOfCheck, uint32 loo
             store = &LootTemplates_Disenchant;
         else if (lootStore == "prospecting")
             store = &LootTemplates_Prospecting;
-        else if (lootStore == "mail")
-            store = &LootTemplates_Mail;
         else if (lootStore == "milling")
             store = &LootTemplates_Milling;
+        else if (lootStore == "mail")
+            store = &LootTemplates_Mail;
         else if (lootStore == "spell")
             store = &LootTemplates_Spell;
+        else if (lootStore == "reference")
+            store = &LootTemplates_Reference;
+        else
+            return;
     }
 
     if (amountOfCheck < 1)
@@ -3250,15 +3327,20 @@ void LootMgr::CheckDropStats(ChatHandler& chat, uint32 amountOfCheck, uint32 loo
     LootTemplate const* lootTable = store->GetLootFor(lootId);
     if (!lootTable)
     {
-        chat.PSendSysMessage("No table loot found for lootId(%u) in table loot table '%s'.", lootId, store->GetName());
+        if (chat.GetSession())
+            chat.PSendSysMessage("No table loot found for lootId(%u) in table loot table '%s'.", lootId, store->GetName());
+        sLog.outError("No table loot found for lootId(%u) in table loot table '%s'.", lootId, store->GetName());
         return;
     }
+
+    LootStats lootStats;
+    LootStatsData lootStatsData(lootId, &lootStats);
 
     // do the loot drop simulation
     std::unordered_map<uint32, uint32> itemStatsMap;
     for (uint32 i = 1; i <= amountOfCheck; ++i)
     {
-        lootTable->Process(*loot, nullptr, *store, store->IsRatesAllowed());
+        lootTable->Process(*loot, nullptr, store->IsRatesAllowed(), &lootStatsData);
         for (auto lootItem : loot->m_lootItems)
             ++itemStatsMap[lootItem->itemId];
         loot->Clear();
@@ -3266,29 +3348,217 @@ void LootMgr::CheckDropStats(ChatHandler& chat, uint32 amountOfCheck, uint32 loo
 
     // sort the result
     auto comp = [](std::pair<uint32, uint32> const& a, std::pair<uint32, uint32> const& b) { return a.second > b.second; };
-    std::set<std::pair<uint32, uint32>, decltype(comp)> sortedResult(
-        itemStatsMap.begin(), itemStatsMap.end(), comp);
+    std::set<std::pair<uint32, uint32>, decltype(comp)> sortedResult(itemStatsMap.begin(), itemStatsMap.end(), comp);
 
-    // report the result in both chat client and console
-    chat.PSendSysMessage("Results for %u drops simulation of loot id(%u) in %s:", amountOfCheck, lootId, store->GetName());
-    sLog.outString("Results for %u drops simulation of loot id(%u) in %s:", amountOfCheck, lootId, store->GetName());
-    std::stringstream ss;
-    for (auto itemStat : sortedResult)
+    if (full)
     {
-        uint32 itemId = itemStat.first;
-        ItemPrototype const* pProto = sItemStorage.LookupEntry<ItemPrototype >(itemId);
-        if (!pProto)
-            continue;
+        struct LootStatsInfo
+        {
+            using ItemStats = std::pair<int32, uint32>;
+            using GroupStats = std::map<uint32, std::list<ItemStats>>;
 
-        std::string name = pProto->Name1;
-        sObjectMgr.GetItemLocaleStrings(itemId, -1, &name);
-        float computedStats = itemStat.second / float(amountOfCheck) * 100;
-        ss.str("");
-        ss.clear();
-        ss << std::fixed << std::setprecision(4) << computedStats;
-        ss << '%';
-        chat.PSendSysMessage(LANG_ITEM_LIST_CHAT, itemId, itemId, name.c_str(), ss.str().c_str());
-        sLog.outString("%6u - %-45s \tfound %6u/%-6u \tso %8s%% drop", itemStat.first, name.c_str(), itemStat.second, amountOfCheck, ss.str().c_str());
+            int32 lootIdOrRef = 0;
+            GroupStats groupStats;
+        };
+
+        std::list<LootStatsInfo> sortedStats;
+
+        for (auto& lootRef : lootStats.groupStatsMap)
+        {
+            int32 lootIdOrRef = lootRef.first;
+
+            LootStatsInfo* lootStatsInfo = nullptr;
+            if (lootIdOrRef < 0)
+            {
+                auto& lsi = sortedStats.emplace_back();
+                lootStatsInfo = &lsi;
+            }
+            else
+            {
+                auto& lsi = sortedStats.emplace_front();
+                lootStatsInfo = &lsi;
+            }
+
+            lootStatsInfo->lootIdOrRef = lootIdOrRef;
+
+            // set the items stats and sort them for each group
+            for (auto& group : lootRef.second.groups)
+            {
+                uint32 groupId = group.first;
+                auto& groupStats = group.second;
+                auto& fullGroupStats = lootStatsInfo->groupStats[groupId];
+
+                // fill the group stats with the items stats
+                for (const auto& kv : groupStats)
+                {
+                    const auto& itemId = kv.first;
+                    const auto& count = kv.second;
+                    fullGroupStats.emplace_back(itemId.first, count);
+                }
+
+                // sort the items stats
+                fullGroupStats.sort(
+                    [](LootStatsInfo::ItemStats const& a, LootStatsInfo::ItemStats const& b)
+                    { return a.second > b.second; }
+                );
+            }
+        }
+
+        // SELECT `name`, `entry` FROM reference_loot_template_names WHERE `entry` in (50502, 50600, 50601, 50650);
+        std::ostringstream stream;
+        std::string refIds;
+        for (auto const& lsi : sortedStats)
+        {
+            int32 lootIdOrRef = lsi.lootIdOrRef;
+            if (lootIdOrRef < 0)
+            {
+                if (refIds.empty())
+                    refIds += std::to_string(-lootIdOrRef);
+                else
+                    refIds += ", " + std::to_string(-lootIdOrRef);
+            }
+
+        }
+        stream << "SELECT `name`, `entry` FROM reference_loot_template_names WHERE `entry` in (" << refIds << ");";
+
+        auto queryResult = WorldDatabase.Query(stream.str().c_str());
+
+        std::map<int32, std::string> refNames;
+        if (queryResult)
+        {
+            do
+            {
+                Field* fields = queryResult->Fetch();
+
+                int32 entry = fields[1].GetInt32();
+                std::string name = fields[0].GetString();
+
+                refNames[entry] = name;
+            } while (queryResult->NextRow());
+        }
+
+        if (store == &LootTemplates_Reference)
+        {
+            if (chat.GetSession())
+                chat.PSendSysMessage("Results for %u drops simulation of loot reference id[%u] in %s:", amountOfCheck, lootId, LootTemplates_Reference.GetName());
+            sLog.outString("Results for %u drops simulation of loot reference id[%u] in %s:", amountOfCheck, lootId, LootTemplates_Reference.GetName());
+        }
+        else
+        {
+            if (chat.GetSession())
+                chat.PSendSysMessage("Results for %u drops simulation of loot id[%u] in %s:", amountOfCheck, lootId, store->GetName());
+            sLog.outString("Results for %u drops simulation of loot id[%u] in %s:", amountOfCheck, lootId, store->GetName());
+        }
+
+        std::string const defaultRefName = "No name assigned to this ref!";
+
+        for (auto& lInfo : sortedStats)
+        {
+            int32 lootIdOrRef = lInfo.lootIdOrRef;
+
+            if (lootIdOrRef < 0 || store == &LootTemplates_Reference)
+            {
+                std::string const* refName = &defaultRefName;
+                auto refNameItr = refNames.find(-lootIdOrRef);
+                if (refNameItr != refNames.end())
+                    refName = &refNameItr->second;
+
+                if (chat.GetSession())
+                    chat.PSendSysMessage("In %s[%d] '%s':", LootTemplates_Reference.GetName(), -lootIdOrRef, (*refName).c_str());
+                sLog.outString("In %s[%d] '%s':", LootTemplates_Reference.GetName(), -lootIdOrRef, (*refName).c_str());
+            }
+            else
+            {
+                if (chat.GetSession())
+                    chat.PSendSysMessage("In %s[%d]:", store->GetName(), lootIdOrRef);
+                sLog.outString("In %s[%d]:", store->GetName(), lootIdOrRef);
+            }
+
+            // use stringstream to format item name with color
+            for (auto& groupStats : lInfo.groupStats)
+            {
+                uint32 groupId = groupStats.first;
+                auto& itemsStats = groupStats.second;
+
+                if (chat.GetSession())
+                    chat.PSendSysMessage("Group %u:", groupId);
+                sLog.outString("Group %u:", groupId);
+
+                for (auto& stats : itemsStats)
+                {
+                    int32 itemId = stats.first;
+                    uint32 count = stats.second;
+                    float computedStats = count / float(amountOfCheck) * 100;
+                    stream.str("");
+
+                    ItemPrototype const* pProto = sItemStorage.LookupEntry<ItemPrototype>(itemId);
+                    if (pProto)
+                    {
+                        std::string name = pProto->Name1;
+                        sObjectMgr.GetItemLocaleStrings(itemId, -1, &name);
+                        uint32 color = ItemQualityColors[pProto->Quality];
+
+                        // Build the format string -> "%d - |cffffffff|Hitem:%d :0:0:0:0:0:0:0|h[%s]|h|r %s"
+                        stream << "  - |cffffffff" << std::fixed << std::setprecision(4) << std::setw(8) << std::setfill(' ') << computedStats << "%%|r";
+                        stream << " - [" << std::dec << itemId << "] - |c";
+                        stream << std::hex << std::setw(8) << std::setfill('0') << color;
+                        stream << "|Hitem:" << std::dec << itemId << ":0:0:0:0:0:0:0|h[" << name << "]|h|r ";
+
+                        if (chat.GetSession())
+                            chat.PSendSysMessage("%s", stream.str().c_str());
+                        sLog.outString("%8d - %-45s \tfound %6u/%-6u \tso %8s%% drop", itemId, name.c_str(), count, amountOfCheck, std::to_string(computedStats).c_str());
+                    }
+                    else
+                    {
+                        std::string const* refName = &defaultRefName;
+                        auto refNameItr = refNames.find(-itemId);
+                        if (refNameItr != refNames.end())
+                            refName = &refNameItr->second;
+                        // Build the format string -> "%d - Reference [%d] %f%%"
+                        stream << "  - |cffffffff" << std::fixed << std::setprecision(4) << std::setw(8) << std::setfill(' ') << computedStats << "%%|r - [";
+                        stream << std::dec << -itemId << "] - " << *refName;
+                        if (chat.GetSession())
+                            chat.PSendSysMessage("%s", stream.str().c_str());
+                        sLog.outString("%8d - %-45s \tfound %6u/%-6u \tso %8s%% drop", itemId, (*refName).c_str(), count, amountOfCheck, std::to_string(computedStats).c_str());
+                    }
+                }
+            }
+
+            if (chat.GetSession())
+                chat.PSendSysMessage("----------------------");
+            sLog.outString("----------------------");
+        }
+    }
+    else
+    {
+        // report the result in both chat client and console
+        if (chat.GetSession())
+            chat.PSendSysMessage("Results for %u drops simulation of loot id(%u) in %s:", amountOfCheck, lootId, store->GetName());
+        sLog.outString("Results for %u drops simulation of loot id(%u) in %s:", amountOfCheck, lootId, store->GetName());
+        std::stringstream ss;
+        for (auto itemStat : sortedResult)
+        {
+            uint32 itemId = itemStat.first;
+            ItemPrototype const* pProto = sItemStorage.LookupEntry<ItemPrototype >(itemId);
+            if (!pProto)
+                continue;
+
+            ss.str("");
+            std::string name = pProto->Name1;
+            sObjectMgr.GetItemLocaleStrings(itemId, -1, &name);
+            float computedStats = itemStat.second / float(amountOfCheck) * 100;
+            uint32 color = ItemQualityColors[pProto->Quality];
+
+            // Build the format string -> "%d - |cffffffff|Hitem:%d :0:0:0:0:0:0:0|h[%s]|h|r %s"
+            ss << "  - |cffffffff" << std::fixed << std::setprecision(4) << std::setw(8) << std::setfill(' ') << computedStats << "%%|r";
+            ss << " - [" << std::dec << itemId << "] - |c";
+            ss << std::hex << std::setw(8) << std::setfill('0') << color;
+            ss << "|Hitem:" << std::dec << itemId << ":0:0:0:0:0:0:0|h[" << name << "]|h|r ";
+
+            if (chat.GetSession())
+                chat.PSendSysMessage("%s", ss.str().c_str());
+            sLog.outString("%6u - %-45s \tfound %6u/%-6u \tso %8s%% drop", itemStat.first, name.c_str(), itemStat.second, amountOfCheck, ss.str().c_str());
+        }
     }
 }
 

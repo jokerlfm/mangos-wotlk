@@ -701,6 +701,9 @@ Player::Player(WorldSession* session): Unit(), m_taxiTracker(*this), m_mover(thi
 
     m_fishingSteps = 0;
 
+    m_lastDbGuid = 0;
+    m_lastGameObject = false;
+    
     // lfm mana regen 
     manaRegen = 0.0f;
 
@@ -1653,8 +1656,13 @@ void Player::Update(const uint32 diff)
     if (IsAlive())
     {
         m_regenTimer += diff;
+        m_healthRegenTimer += diff;
+        
         // lfm regen every 1 second
-        //if (m_regenTimer >= REGEN_TIME_FULL)
+        //if (m_regenTimer >= REGEN_TIME_PRECISE)
+        //{
+        //    RegenerateAll(m_regenTimer);
+        //}        
         if (m_regenTimer >= 1000)
         {
             RegenerateAll(m_regenTimer * 100 / 100);
@@ -2012,16 +2020,19 @@ bool Player::Mount(uint32 displayid, const Aura* aura/* = nullptr*/)
     if (!Unit::Mount(displayid, aura))
         return false;
 
+    bool keepPetOnMount = !sWorld.getConfig(CONFIG_BOOL_PET_UNSUMMON_AT_MOUNT);
+    bool keepPetOnFlyingMount = !keepPetOnMount ? false : sWorld.getConfig(CONFIG_BOOL_KEEP_PET_ON_FLYING_MOUNT);
     // Custom mount (non-aura such as taxi or command) or in flight: unsummon any pet
-    if (!aura || IsFreeFlying() || IsSpellHaveAura(aura->GetSpellProto(), SPELL_AURA_MOD_FLIGHT_SPEED_MOUNTED))
+    if (!aura || (!keepPetOnFlyingMount && (IsFreeFlying() || IsSpellHaveAura(aura->GetSpellProto(), SPELL_AURA_MOD_FLIGHT_SPEED_MOUNTED))))
+    {
         UnsummonPetTemporaryIfAny();
+    }
     // Land mount aura: unsummon only permanent pet
     else if (aura)
     {
         if (Pet* pet = GetPet())
         {
-            if (pet->isControlled() && (!(pet->isTemporarySummoned() || InArena())
-                                        || sWorld.getConfig(CONFIG_BOOL_PET_UNSUMMON_AT_MOUNT)))
+            if (pet->isControlled() && (!(pet->isTemporarySummoned() || InArena() || keepPetOnMount)))
                 UnsummonPetTemporaryIfAny();
             else
                 pet->SetModeFlags(PET_MODE_DISABLE_ACTIONS);
@@ -2518,32 +2529,40 @@ void Player::RewardRage(uint32 damage, uint32 weaponSpeedHitFactor, bool attacke
 
 void Player::RegenerateAll(uint32 diff)
 {
-    // Not in combat or they have regeneration
-    if (!IsInCombat() || HasAuraType(SPELL_AURA_MOD_REGEN_DURING_COMBAT) ||
-            HasAuraType(SPELL_AURA_MOD_HEALTH_REGEN_IN_COMBAT))
+    if (m_healthRegenTimer >= REGEN_TIME_FULL)
     {
-        RegenerateHealth(diff);
-        if (!IsInCombat() && !HasAuraType(SPELL_AURA_INTERRUPT_REGEN))
-        {
-            Regenerate(POWER_RAGE, diff);
-            if (getClass() == CLASS_DEATH_KNIGHT)
-                Regenerate(POWER_RUNIC_POWER, diff);
-        }
+        if (!IsInCombat() || HasAuraType(SPELL_AURA_MOD_REGEN_DURING_COMBAT) || HasAuraType(SPELL_AURA_MOD_HEALTH_REGEN_IN_COMBAT))
+            RegenerateHealth(REGEN_TIME_FULL);
+        m_healthRegenTimer -= REGEN_TIME_FULL;
     }
 
-    Regenerate(POWER_ENERGY, diff);
-
-    Regenerate(POWER_MANA, diff);
-
-    if (getClass() == CLASS_DEATH_KNIGHT)
-        Regenerate(POWER_RUNE, diff);
+    switch (getClass())
+    {
+        case CLASS_DRUID:
+            Regenerate(POWER_ENERGY, diff);
+            Regenerate(POWER_MANA, diff);
+        case CLASS_WARRIOR:
+            if (!IsInCombat() && !HasAuraType(SPELL_AURA_INTERRUPT_REGEN))
+                Regenerate(POWER_RAGE, diff);
+            break;
+        case CLASS_ROGUE:
+            Regenerate(POWER_ENERGY, diff);
+            break;
+        case CLASS_DEATH_KNIGHT:
+            if (!IsInCombat() && !HasAuraType(SPELL_AURA_INTERRUPT_REGEN))
+                Regenerate(POWER_RUNIC_POWER, diff);
+            Regenerate(POWER_RUNE, diff);
+            break;
+        default:
+            Regenerate(POWER_MANA, diff);
+    }
 
     m_regenTimer -= diff;
 }
 
 void Player::Regenerate(Powers power, uint32 diff)
 {
-    uint32 curValue = GetPower(power);
+    float curValue = GetRealPower(power);
     uint32 maxValue = GetMaxPower(power);
 
     float addvalue = 0.0f;
@@ -2560,19 +2579,19 @@ void Player::Regenerate(Powers power, uint32 diff)
             if (recentCast)
             {
                 // Mangos Updates Mana in intervals of 2s, which is correct
-                addvalue = GetFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER) *  ManaIncreaseRate * uint32(float(diff) / 1000);
+                addvalue = GetFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER) *  ManaIncreaseRate * (float(diff) / 1000);
             }
             else
             {
                 // lfm mana regen 
-                //addvalue = GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER) * ManaIncreaseRate * uint32(float(diff) / 1000);
+                //addvalue = GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER) * ManaIncreaseRate * (float(diff) / 1000);
                 addvalue = manaRegen * ManaIncreaseRate * uint32(float(diff) / 1000);
             }
         }   break;
         case POWER_RAGE:                                    // Regenerate rage
         {
             float RageDecreaseRate = sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_RAGE_LOSS);
-            addvalue = uint32(float(diff) / 200) * 2.5 * RageDecreaseRate; // decay 2.5 rage per 2 seconds
+            addvalue = (float(diff) / 200) * 2.5 * RageDecreaseRate; // decay 2.5 rage per 2 seconds
 
             AuraList const& ModPowerRegenPCTAuras = GetAurasByType(SPELL_AURA_MOD_POWER_REGEN_PERCENT);
             for (auto ModPowerRegenPCTAura : ModPowerRegenPCTAuras)
@@ -2582,13 +2601,13 @@ void Player::Regenerate(Powers power, uint32 diff)
         case POWER_ENERGY:                                  // Regenerate energy
         {
             float EnergyRate = sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_ENERGY);
-            addvalue = uint32(float(diff) / 100) * EnergyRate * m_energyRegenRate;
+            addvalue = (float(diff) / 100) * EnergyRate * m_energyRegenRate;
             break;
         }
         case POWER_RUNIC_POWER:
         {
             float RunicPowerDecreaseRate = sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_RUNICPOWER_LOSS);
-            addvalue = uint32(float(diff) / 200) * 2.5 * RunicPowerDecreaseRate; // decay 2.5 runic power per 2 seconds
+            addvalue = (float(diff) / 200) * 2.5 * RunicPowerDecreaseRate; // decay 2.5 runic power per 2 seconds
         }   break;
         case POWER_RUNE:
         {
@@ -2617,23 +2636,23 @@ void Player::Regenerate(Powers power, uint32 diff)
 
     if (power != POWER_RAGE && power != POWER_RUNIC_POWER)
     {
-        curValue += uint32(addvalue);
+        curValue += addvalue;
         if (curValue > maxValue)
             curValue = maxValue;
     }
     else
     {
-        if (curValue <= uint32(addvalue))
-            curValue = 0;
+        if (curValue <= addvalue)
+            curValue = 0.f;
         else
-            curValue -= uint32(addvalue);
+            curValue -= addvalue;
     }
     SetPower(power, curValue, false);
 }
 
 void Player::RegenerateHealth(uint32 diff)
 {
-    uint32 curValue = GetHealth();
+    float curValue = GetRealHealth();
     uint32 maxValue = GetMaxHealth();
 
     if (curValue >= maxValue) return;
@@ -2665,7 +2684,7 @@ void Player::RegenerateHealth(uint32 diff)
     if (addvalue < 0)
         addvalue = 0;
 
-    ModifyHealth(int32(addvalue * float(diff) / 1000));
+    ModifyHealth(addvalue * float(diff) / 1000);
 }
 
 Creature* Player::GetNPCIfCanInteractWith(ObjectGuid guid, uint32 npcflagmask)
@@ -5701,10 +5720,11 @@ void Player::UpdateRating(CombatRating cr)
             UpdateBlockPercentage();
             break;
         case CR_HIT_MELEE:
-            UpdateMeleeHitChances();
+            UpdateWeaponHitChances(BASE_ATTACK);
+            UpdateWeaponHitChances(OFF_ATTACK);
             break;
         case CR_HIT_RANGED:
-            UpdateRangedHitChances();
+            UpdateWeaponHitChances(RANGED_ATTACK);
             break;
         case CR_HIT_SPELL:
             UpdateSpellHitChances();
@@ -6031,7 +6051,7 @@ void Player::UpdateCombatSkills(Unit* /*pVictim*/, WeaponAttackType attType, boo
         return;
 
     // The farther player is from the cap, the easier it gets to level up the skill
-    float chance = ((float(std::max(1, (room / 5))) / (cap / 5)) * 100);
+    float chance = ((float(std::max(1, (room / 5))) / (cap / 5.f)) * 100);
 
     // Weapon skills: increase chance by intellect
     if (!defence)
@@ -6821,6 +6841,9 @@ bool Player::SetPosition(float x, float y, float z, float orientation, bool tele
         if (GetGroup() && (old_x != x || old_y != y))
             SetGroupUpdateFlag(GROUP_UPDATE_FLAG_POSITION);
 
+        if (GetTrader() && !IsWithinDistInMap(GetTrader(), INTERACTION_DISTANCE))
+            TradeCancel(true, TRADE_STATUS_TARGET_TO_FAR);
+
         if (m_needsZoneUpdate)
         {
             // Get server side data
@@ -6963,7 +6986,7 @@ void Player::CheckAreaExploreAndOutdoor()
             {
                 if (!spellInfo || !IsNeedCastSpellAtOutdoor(spellInfo) || HasAura(spellInfo->Id))
                     continue;
-                if ((spellInfo->Stances || spellInfo->StancesNot) && !IsNeedCastSpellAtFormApply(spellInfo, GetShapeshiftForm()))
+                if ((spellInfo->Stances[0] || spellInfo->StancesNot[0]) && !IsNeedCastSpellAtFormApply(spellInfo, GetShapeshiftForm()))
                     continue;
                 CastSpell(this, spellInfo, TRIGGERED_OLD_TRIGGERED);
             }
@@ -7011,7 +7034,7 @@ void Player::CheckAreaExploreAndOutdoor()
                 uint32 XP;
                 if (diff < -5)
                 {
-                    XP = uint32(sObjectMgr.GetBaseXP(GetLevel() + 5) * sWorld.getConfig(CONFIG_FLOAT_RATE_XP_EXPLORE));
+                    XP = uint32(sObjectMgr.GetBaseXP(GetLevel() + 5) * GetMap()->GetXPModRate(RateModType::EXPLORE));
                 }
                 else if (diff > 5)
                 {
@@ -7021,11 +7044,11 @@ void Player::CheckAreaExploreAndOutdoor()
                     else if (exploration_percent < 0)
                         exploration_percent = 0;
 
-                    XP = uint32(sObjectMgr.GetBaseXP(p->area_level) * exploration_percent / 100 * sWorld.getConfig(CONFIG_FLOAT_RATE_XP_EXPLORE));
+                    XP = uint32(sObjectMgr.GetBaseXP(p->area_level) * exploration_percent / 100 * GetMap()->GetXPModRate(RateModType::EXPLORE));
                 }
                 else
                 {
-                    XP = uint32(sObjectMgr.GetBaseXP(p->area_level) * sWorld.getConfig(CONFIG_FLOAT_RATE_XP_EXPLORE));
+                    XP = uint32(sObjectMgr.GetBaseXP(p->area_level) * GetMap()->GetXPModRate(RateModType::EXPLORE));
                 }
 
                 GiveXP(XP, nullptr);
@@ -11682,15 +11705,11 @@ Item* Player::EquipItem(uint16 pos, Item* pItem, bool update)
         ApplyEquipCooldown(pItem);
 
         if (slot == EQUIPMENT_SLOT_MAINHAND)
-        {
-            UpdateExpertise(BASE_ATTACK);
-            UpdateArmorPenetration();
-        }
+            UpdateWeaponDependantStats(BASE_ATTACK);
         else if (slot == EQUIPMENT_SLOT_OFFHAND)
-        {
-            UpdateExpertise(OFF_ATTACK);
-            UpdateArmorPenetration();
-        }
+            UpdateWeaponDependantStats(OFF_ATTACK);
+        else if (slot == EQUIPMENT_SLOT_RANGED)
+            UpdateWeaponDependantStats(RANGED_ATTACK);
     }
     else
     {
@@ -11842,14 +11861,10 @@ void Player::RemoveItem(uint8 bag, uint8 slot, bool update)
                             pItem->ClearEnchantment(PROP_ENCHANTMENT_SLOT_1);
                         }
 
-                        UpdateExpertise(BASE_ATTACK);
-                        UpdateArmorPenetration();
+                        UpdateWeaponDependantStats(BASE_ATTACK);
                     }
                     else if (slot == EQUIPMENT_SLOT_OFFHAND)
-                    {
-                        UpdateExpertise(OFF_ATTACK);
-                        UpdateArmorPenetration();
-                    }
+                        UpdateWeaponDependantStats(OFF_ATTACK);
                 }
             }
             // need update known currency
@@ -11981,17 +11996,13 @@ void Player::DestroyItem(uint8 bag, uint8 slot, bool update)
                 // remove item dependent auras and casts (only weapon and armor slots)
                 RemoveItemDependentAurasAndCasts(pItem);
 
-                // update expertise
+                // update weapon dependant stats
                 if (slot == EQUIPMENT_SLOT_MAINHAND)
-                {
-                    UpdateExpertise(BASE_ATTACK);
-                    UpdateArmorPenetration();
-                }
+                    UpdateWeaponDependantStats(BASE_ATTACK);
                 else if (slot == EQUIPMENT_SLOT_OFFHAND)
-                {
-                    UpdateExpertise(OFF_ATTACK);
-                    UpdateArmorPenetration();
-                }
+                    UpdateWeaponDependantStats(OFF_ATTACK);
+                else if (slot == EQUIPMENT_SLOT_RANGED)
+                    UpdateWeaponDependantStats(RANGED_ATTACK);
 
                 // equipment visual show
                 SetVisibleItemSlot(slot, nullptr);
@@ -12839,7 +12850,7 @@ void Player::SendSellError(SellResult msg, Creature* pCreature, ObjectGuid itemG
     GetSession()->SendPacket(data);
 }
 
-void Player::TradeCancel(bool sendback)
+void Player::TradeCancel(bool sendback, TradeStatus status /*= TRADE_STATUS_TRADE_CANCELED*/)
 {
     if (m_trade)
     {
@@ -12847,9 +12858,9 @@ void Player::TradeCancel(bool sendback)
 
         // send yellow "Trade canceled" message to both traders
         if (sendback)
-            GetSession()->SendCancelTrade();
+            GetSession()->SendCancelTrade(status);
 
-        trader->GetSession()->SendCancelTrade();
+        trader->GetSession()->SendCancelTrade(status);
 
         // cleanup
         delete m_trade;
@@ -14620,7 +14631,7 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
     bool rewarded = q_status.m_rewarded && !pQuest->IsDungeonFinderQuest();
 
     // Used for client inform but rewarded only in case not max level
-    uint32 xp = uint32(pQuest->GetXPReward(this) * sWorld.getConfig(CONFIG_FLOAT_RATE_XP_QUEST));
+    uint32 xp = uint32(pQuest->GetXPReward(this) * GetMap()->GetXPModRate(RateModType::QUEST));
 
     if (GetLevel() < GetMaxAttainableLevel())
     {
@@ -25199,7 +25210,7 @@ void Player::ModifyCooldown(uint32 spellId, int32 cooldownModMs)
     {
         auto& cdData = cdItr->second;
         TimePoint expireTime;
-        if (!cdData->GetSpellCDExpireTime(expireTime) && cdData->GetSpellId() == spellId)
+        if (cdData->GetSpellCDExpireTime(expireTime) && cdData->GetSpellId() == spellId)
         {
             if (GetMap()->GetCurrentClockTime() > expireTime + std::chrono::milliseconds(cooldownModMs))
             {
@@ -25215,6 +25226,35 @@ void Player::ModifyCooldown(uint32 spellId, int32 cooldownModMs)
     modifyCooldown << uint32(spellId);
     modifyCooldown << uint64(GetObjectGuid());
     modifyCooldown << int32(cooldownModMs);
+    SendDirectMessage(modifyCooldown);
+}
+
+void Player::ModifyCooldownTo(uint32 spellId, std::chrono::milliseconds remainingCooldown)
+{
+    TimePoint now = GetMap()->GetCurrentClockTime();
+    auto cdItr = m_cooldownMap.begin();
+    std::chrono::milliseconds cdChange;
+    bool found = false;
+    for (; cdItr != m_cooldownMap.end(); ++cdItr)
+    {
+        auto& cdData = cdItr->second;
+        TimePoint expireTime;
+        if (!cdData->GetSpellCDExpireTime(expireTime) && cdData->GetSpellId() == spellId)
+        {
+            auto newCdExpiry = now + remainingCooldown;
+            cdChange = newCdExpiry - expireTime;
+            cdData->SetSpellCDExpireTime(newCdExpiry);
+            found = true;
+        }
+    }
+
+    if (!found)
+        return;
+
+    WorldPacket modifyCooldown(SMSG_MODIFY_COOLDOWN, 4 + 8 + 4);
+    modifyCooldown << uint32(spellId);
+    modifyCooldown << uint64(GetObjectGuid());
+    modifyCooldown << int32(cdChange.count());
     SendDirectMessage(modifyCooldown);
 }
 

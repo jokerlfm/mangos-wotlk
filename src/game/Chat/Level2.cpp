@@ -582,37 +582,57 @@ bool ChatHandler::HandleGoCreatureCommand(char* args)
             {
                 std::string name = pParam1;
                 WorldDatabase.escape_string(name);
-                auto queryResult = WorldDatabase.PQuery("SELECT creature.guid, creature_spawn_entry.guid "
-                  "FROM creature, creature_template, creature_spawn_entry "
-                  "WHERE (creature.id = creature_template.entry "
-                    "OR (creature_spawn_entry.entry = creature_template.entry AND creature.guid = creature_spawn_entry.guid)) "
-                  "AND creature_template.name LIKE '%%%s%%' LIMIT 1;", name.c_str());
-                if (!queryResult)
+                auto getGuid = [&](std::unique_ptr<QueryResult>& queryResult) -> CreatureDataPair const*
                 {
-                    SendSysMessage(LANG_COMMAND_GOCREATNOTFOUND);
-                    SetSentErrorMessage(true);
-                    return false;
+                    if (!queryResult)
+                    {
+                        SendSysMessage(LANG_COMMAND_GOCREATNOTFOUND);
+                        SetSentErrorMessage(true);
+                        return nullptr;
+                    }                        
+
+                    FindCreatureData worker(0, m_session ? m_session->GetPlayer() : nullptr);
+
+                    do
+                    {
+                        Field* fields = queryResult->Fetch();
+                        uint32 guid = fields[0].GetUInt32();
+
+                        CreatureDataPair const* cr_data = sObjectMgr.GetCreatureDataPair(guid);
+                        if (!cr_data)
+                            continue;
+
+                        worker(*cr_data);
+                    } while (queryResult->NextRow());
+
+                    return worker.GetResult();
+                };
+                CreatureDataPair const* dataPair;
+                {
+                    auto queryResult = WorldDatabase.PQuery("SELECT COALESCE(creature.guid, creature_spawn_entry.guid) AS guid "
+                        "FROM creature_template "
+                        "LEFT JOIN creature ON creature.id = creature_template.entry "
+                        "LEFT JOIN creature_spawn_entry ON creature_spawn_entry.entry = creature_template.entry "
+                        "WHERE creature_template.name LIKE '%%%s%%' LIMIT 1;", name.c_str());
+
+                    dataPair = getGuid(queryResult);
+                }
+                if (!dataPair)
+                {
+                    auto queryResult = WorldDatabase.PQuery("SELECT creature.guid FROM creature_template "
+                        "LEFT JOIN spawn_group_entry ON spawn_group_entry.entry = creature_template.entry "
+                        "LEFT JOIN spawn_group ON spawn_group_entry.Id=spawn_group.Id "
+                        "LEFT JOIN spawn_group_spawn ON spawn_group_spawn.Id=spawn_group.Id "
+                        "LEFT JOIN creature ON creature.guid=spawn_group_spawn.Guid "
+                        "WHERE creature_template.name LIKE '%%%s%%' AND spawn_group.type=0 AND creature.Id=0 LIMIT 1;", name.c_str());
+
+                    dataPair = getGuid(queryResult);
+                    if (!dataPair)
+                        break;
                 }
 
-                FindCreatureData worker(0, m_session ? m_session->GetPlayer() : nullptr);
-
-                do
-                {
-                    Field* fields = queryResult->Fetch();
-                    uint32 guid = fields[0].GetUInt32();
-
-                    CreatureDataPair const* cr_data = sObjectMgr.GetCreatureDataPair(guid);
-                    if (!cr_data)
-                        continue;
-
-                    worker(*cr_data);
-                } while (queryResult->NextRow());
-
-                CreatureDataPair const* dataPair = worker.GetResult();
-                if (!dataPair)
-                    break;
-
                 data = &dataPair->second;
+                dbGuid = dataPair->first;
             }
             break;
         }
@@ -666,12 +686,12 @@ bool ChatHandler::HandleGoCreatureCommand(char* args)
             Creature* creature = nullptr;
             if (dbGuid)
             {
-                // check static creature store
-                creature = map->GetCreature(ObjectGuid(HIGHGUID_UNIT, dbGuid));
+                // check creature with dynamic guid
+                creature = map->GetCreature(dbGuid);
                 if (!creature)
                 {
-                    // check creature with dynamic guid
-                    creature = map->GetCreature(dbGuid);
+                    // check static creature store
+                    creature = map->GetCreature(ObjectGuid(HIGHGUID_UNIT, dbGuid));
                 }
             }
             /*else
@@ -853,7 +873,7 @@ bool ChatHandler::HandleGameObjectTargetCommand(char* args)
         uint32 id;
         if (ExtractUInt32(&cId, id))
         {
-            queryResult = WorldDatabase.PQuery("SELECT guid, id, position_x, position_y, position_z, orientation, map, (POW(position_x - '%f', 2) + POW(position_y - '%f', 2) + POW(position_z - '%f', 2)) AS order_ FROM gameobject WHERE map = '%i' AND guid = '%u' ORDER BY order_ ASC LIMIT 1",
+            queryResult = WorldDatabase.PQuery("SELECT guid, id, position_x, position_y, position_z, orientation, map, (POW(position_x - %f, 2) + POW(position_y - %f, 2) + POW(position_z - %f, 2)) AS order_ FROM gameobject WHERE map = '%i' AND guid = '%u' ORDER BY order_ ASC LIMIT 1",
                                           pl->GetPositionX(), pl->GetPositionY(), pl->GetPositionZ(), pl->GetMapId(), id);
         }
         else
@@ -1025,18 +1045,14 @@ bool ChatHandler::HandleGameObjectDeleteCommand(char* args)
 bool ChatHandler::HandleGameObjectTurnCommand(char* args)
 {
     // number or [name] Shift-click form |color|Hgameobject:go_id|h[name]|h|r
-    uint32 lowguid;
-    if (!ExtractUint32KeyFromLink(&args, "Hgameobject", lowguid))
+    uint32 lowguid, entry;
+    if (!ExtractUint32KeysFromLink(&args, "Hgameobject", nullptr, lowguid, entry))
         return false;
 
-    if (!lowguid)
+    if (!lowguid || !entry)
         return false;
 
-    GameObject* obj = nullptr;
-
-    // by DB guid
-    if (GameObjectData const* go_data = sObjectMgr.GetGOData(lowguid))
-        obj = GetGameObjectWithGuid(lowguid, go_data->id);
+    GameObject* obj = GetGameObjectWithGuid(lowguid, entry);
 
     if (!obj)
     {
@@ -1059,18 +1075,14 @@ bool ChatHandler::HandleGameObjectTurnCommand(char* args)
 bool ChatHandler::HandleGameObjectMoveCommand(char* args)
 {
     // number or [name] Shift-click form |color|Hgameobject:go_guid|h[name]|h|r
-    uint32 lowguid;
-    if (!ExtractUint32KeyFromLink(&args, "Hgameobject", lowguid))
+    uint32 lowguid, entry;
+    if (!ExtractUint32KeysFromLink(&args, "Hgameobject", nullptr, lowguid, entry))
         return false;
 
-    if (!lowguid)
+    if (!lowguid || !entry)
         return false;
 
-    GameObject* obj = nullptr;
-
-    // by DB guid
-    if (GameObjectData const* go_data = sObjectMgr.GetGOData(lowguid))
-        obj = GetGameObjectWithGuid(lowguid, go_data->id);
+    GameObject* obj = GetGameObjectWithGuid(lowguid, entry);
 
     if (!obj)
     {
@@ -1208,18 +1220,14 @@ bool ChatHandler::HandleGameObjectAddCommand(char* args)
 bool ChatHandler::HandleGameObjectPhaseCommand(char* args)
 {
     // number or [name] Shift-click form |color|Hgameobject:go_id|h[name]|h|r
-    uint32 lowguid;
-    if (!ExtractUint32KeyFromLink(&args, "Hgameobject", lowguid))
+    uint32 lowguid, entry;
+    if (!ExtractUint32KeysFromLink(&args, "Hgameobject", nullptr, lowguid, entry))
         return false;
 
-    if (!lowguid)
+    if (!lowguid || !entry)
         return false;
 
-    GameObject* obj = nullptr;
-
-    // by DB guid
-    if (GameObjectData const* go_data = sObjectMgr.GetGOData(lowguid))
-        obj = GetGameObjectWithGuid(lowguid, go_data->id);
+    GameObject* obj = GetGameObjectWithGuid(lowguid, entry);
 
     if (!obj)
     {
@@ -1253,8 +1261,8 @@ bool ChatHandler::HandleGameObjectNearCommand(char* args)
 
     Player* pl = m_session->GetPlayer();
     auto queryResult = WorldDatabase.PQuery("SELECT guid, id, position_x, position_y, position_z, map, "
-                          "(POW(position_x - '%f', 2) + POW(position_y - '%f', 2) + POW(position_z - '%f', 2)) AS order_ "
-                          "FROM gameobject WHERE map='%u' AND (POW(position_x - '%f', 2) + POW(position_y - '%f', 2) + POW(position_z - '%f', 2)) <= '%f' ORDER BY order_",
+                          "(POW(position_x - %f, 2) + POW(position_y - %f, 2) + POW(position_z - %f, 2)) AS order_ "
+                          "FROM gameobject WHERE map='%u' AND (POW(position_x - %f, 2) + POW(position_y - %f, 2) + POW(position_z - %f, 2)) <= %f ORDER BY order_",
                           pl->GetPositionX(), pl->GetPositionY(), pl->GetPositionZ(),
                           pl->GetMapId(), pl->GetPositionX(), pl->GetPositionY(), pl->GetPositionZ(), distance * distance);
 
@@ -1320,18 +1328,14 @@ bool ChatHandler::HandleGameObjectRespawnCommand(char* args)
 bool ChatHandler::HandleGameObjectActivateCommand(char* args)
 {
     // number or [name] Shift-click form |color|Hgameobject:go_id|h[name]|h|r
-    uint32 lowguid;
-    if (!ExtractUint32KeyFromLink(&args, "Hgameobject", lowguid))
+    uint32 lowguid, entry;
+    if (!ExtractUint32KeysFromLink(&args, "Hgameobject", nullptr, lowguid, entry))
         return false;
 
-    if (!lowguid)
+    if (!lowguid || !entry)
         return false;
 
-    GameObject* obj = nullptr;
-
-    // by DB guid
-    if (GameObjectData const* go_data = sObjectMgr.GetGOData(lowguid))
-        obj = GetGameObjectWithGuid(lowguid, go_data->id);
+    GameObject* obj = GetGameObjectWithGuid(lowguid, entry);        
 
     if (!obj)
     {
@@ -1405,7 +1409,7 @@ bool ChatHandler::HandleGameObjectNearSpawnedCommand(char* args)
         uint32 spawnGroupId = 0;
         if (SpawnGroupEntry* groupEntry = player->GetMap()->GetMapDataContainer().GetSpawnGroupByGuid(guid, TYPEID_GAMEOBJECT))
             spawnGroupId = groupEntry->Id;
-        PSendSysMessage(LANG_GO_MIXED_LIST_CHAT, guid.GetCounter(), PrepareStringNpcOrGoSpawnInformation<GameObject>(guid).c_str(), entry, guid, goInfo->name, x, y, z, go->GetMapId(), spawnGroupId);
+        PSendSysMessage(LANG_GO_MIXED_LIST_CHAT, guid.GetCounter(), PrepareStringNpcOrGoSpawnInformation<GameObject>(guid).c_str(), entry, guid.GetCounter(), entry, goInfo->name, x, y, z, go->GetMapId(), spawnGroupId);
     }
 
     PSendSysMessage(LANG_COMMAND_NEAROBJMESSAGE, distance, gameobjects.size());
@@ -2066,7 +2070,13 @@ bool ChatHandler::HandleNpcDeleteCommand(char* args)
             unit->CombatStop();
             if (CreatureData const* data = sObjectMgr.GetCreatureData(unit->GetDbGuid()))
             {
-                Creature::AddToRemoveListInMaps(unit->GetDbGuid(), data);
+                // chat commands execute in world thread so should be thread safe for now
+                sMapMgr.DoForAllMapsWithMapId(data->mapid, [&](Map* map)
+                {
+                    map->GetSpawnManager().RemoveSpawn(unit->GetDbGuid(), HIGHGUID_UNIT);
+                    if (Creature* creature = map->GetCreature(unit->GetDbGuid()))
+                        creature->AddObjectToRemoveList();
+                });
                 Creature::DeleteFromDB(unit->GetDbGuid(), data);
             }
             else
@@ -2390,7 +2400,7 @@ bool ChatHandler::HandleNpcSpawnTimeCommand(char* args)
 
     uint32 u_guidlow = pCreature->GetGUIDLow();
 
-    WorldDatabase.PExecuteLog("UPDATE creature SET spawntimesecs=%i WHERE guid=%u", stime, u_guidlow);
+    WorldDatabase.PExecuteLog("UPDATE creature SET spawntimesecsmin=%i, spawntimesecsmax=%i WHERE guid=%u", stime, stime, u_guidlow);
     pCreature->SetRespawnDelay(stime);
     PSendSysMessage(LANG_COMMAND_SPAWNTIME, stime);
 
@@ -5524,4 +5534,103 @@ bool ChatHandler::HandleBattlegroundStopCommand(char* /*args*/)
     PSendSysMessage("Battleground stopped [%s][%u]", bg->GetName(), bg->GetInstanceId());
 
     return true;
+}
+
+bool ChatHandler::LootStatsHelper(char* args, bool full)
+{
+    uint32 amountOfCheck = 100000;
+    uint32 lootId = 0;
+    std::string lootStore = "creature";
+    Creature* target = getSelectedCreature();
+
+    const std::string usageStr = "Usage: if you selected a creature you can do:\n"
+        " -> '.loot stats [#amountOfDropCheck]'\n"
+        " else you have to provide loot type and loot entry\n"
+        " -> '.loot stats lootType #lootEntry [#amountOfDropCheck]\n'"
+        " -> lootType can be 'creature', 'gameobject', 'fishing', 'item', 'pickpocketing', 'skinning', 'disenchanting', 'prospecting', 'milling', 'mail', 'spell', 'reference'\n"
+        " -> ex: '.loot stats c 448' will show Hogger loot table";
+
+    auto showError = [&]()
+    {
+            if (m_session)
+            {
+            SendSysMessage(usageStr.c_str());
+            SetSentErrorMessage(true);
+        }
+
+        // Output to console
+        sLog.outError("%s", usageStr.c_str());
+
+        SetSentErrorMessage(true);
+    };
+
+    if (target)
+    {
+        lootId = target->GetCreatureInfo()->LootId;
+    }
+    else
+    {
+        if (args != nullptr)
+        {
+            auto argsStr = ExtractLiteralArg(&args);
+            if (!argsStr)
+            {
+                showError();
+                return true;
+            }
+            std::string lootType(argsStr);
+
+            // check if lootType start with correct store name
+            if (lootType.rfind("c", 0) == 0)
+                lootStore = "creature";
+            else if (lootType.rfind("g", 0) == 0)
+                lootStore = "gameobject";
+            else if (lootType.rfind("f", 0) == 0)
+                lootStore = "fishing";
+            else if (lootType.rfind("i", 0) == 0)
+                lootStore = "item";
+            else if (lootType.rfind("pi", 0) == 0)
+                lootStore = "pickpocketing";
+            else if (lootType.rfind("sk", 0) == 0)
+                lootStore = "skinning";
+            else if (lootType.rfind("sp", 0) == 0)
+                lootStore = "spell";
+            else if (lootType.rfind("dis", 0) == 0)
+                lootStore = "disenchanting";
+            else if (lootType.rfind("pr", 0) == 0)
+                lootStore = "prospecting";
+            else if (lootType.rfind("mi", 0) == 0)
+                lootStore = "milling";
+            else if (lootType.rfind("m", 0) == 0)
+                lootStore = "mail";
+            else if (lootType.rfind("r", 0) == 0)
+                lootStore = "reference";
+            else
+            {
+                showError();
+                return true;
+            }
+        }
+
+        if (!*args || !ExtractUInt32(&args, lootId))
+        {
+            showError();
+            return true;
+        }
+    }
+
+    ExtractUInt32(&args, amountOfCheck);
+
+    sLootMgr.CheckDropStats(*this, amountOfCheck, lootId, lootStore, full);
+    return  true;
+}
+
+bool ChatHandler::HandleLootStatsCommand(char* args)
+{
+    return LootStatsHelper(args, false);
+}
+
+bool ChatHandler::HandleLootFullStatsCommand(char* args)
+{
+    return LootStatsHelper(args, true);
 }

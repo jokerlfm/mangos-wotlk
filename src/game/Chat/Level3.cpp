@@ -5778,7 +5778,7 @@ bool ChatHandler::HandleBanInfoCharacterCommand(char* args)
 
 bool ChatHandler::HandleBanInfoHelper(uint32 accountid, char const* accountname)
 {
-    auto queryResult = LoginDatabase.PQuery("SELECT FROM_UNIXTIME(banned_at),expires_at-banned_at,active,expires_at,reason,banned_by,unbanned_at,unbanned_by "
+    auto queryResult = LoginDatabase.PQuery("SELECT " _FROM_UNIXTIME_("banned_at") ",expires_at-banned_at,active,expires_at,reason,banned_by,unbanned_at,unbanned_by "
                                             "FROM account_banned WHERE account_id = '%u' ORDER BY banned_at ASC", accountid);
     if (!queryResult)
     {
@@ -5829,7 +5829,7 @@ bool ChatHandler::HandleBanInfoIPCommand(char* args)
     std::string IP = cIP;
 
     LoginDatabase.escape_string(IP);
-    auto queryResult = LoginDatabase.PQuery("SELECT ip, FROM_UNIXTIME(banned_at), FROM_UNIXTIME(expires_at), expires_at-UNIX_TIMESTAMP(), reason,banned_by,expires_at-banned_at"
+    auto queryResult = LoginDatabase.PQuery("SELECT ip, " _FROM_UNIXTIME_("banned_at")", " _FROM_UNIXTIME_("expires_at")", expires_at-" _UNIXTIME_ ", reason,banned_by,expires_at-banned_at"
                                             "FROM ip_banned WHERE ip = '%s'", IP.c_str());
     if (!queryResult)
     {
@@ -5847,7 +5847,7 @@ bool ChatHandler::HandleBanInfoIPCommand(char* args)
 
 bool ChatHandler::HandleBanListCharacterCommand(char* args)
 {
-    LoginDatabase.Execute("DELETE FROM ip_banned WHERE expires_at<=UNIX_TIMESTAMP() AND expires_at<>banned_at");
+    LoginDatabase.Execute("DELETE FROM ip_banned WHERE expires_at<=" _UNIXTIME_ " AND expires_at<>banned_at");
 
     char* cFilter = ExtractLiteralArg(&args);
     if (!cFilter)
@@ -5867,7 +5867,7 @@ bool ChatHandler::HandleBanListCharacterCommand(char* args)
 
 bool ChatHandler::HandleBanListAccountCommand(char* args)
 {
-    LoginDatabase.Execute("DELETE FROM ip_banned WHERE expires_at<=UNIX_TIMESTAMP() AND expires_at<>banned_at");
+    LoginDatabase.Execute("DELETE FROM ip_banned WHERE expires_at<=" _UNIXTIME_ " AND expires_at<>banned_at");
 
     char* cFilter = ExtractLiteralArg(&args);
     std::string filter = cFilter ? cFilter : "";
@@ -5976,7 +5976,7 @@ bool ChatHandler::HandleBanListHelper(std::unique_ptr<QueryResult> queryResult)
 
 bool ChatHandler::HandleBanListIPCommand(char* args)
 {
-    LoginDatabase.Execute("DELETE FROM ip_banned WHERE expires_at<=UNIX_TIMESTAMP() AND expires_at<>banned_at");
+    LoginDatabase.Execute("DELETE FROM ip_banned WHERE expires_at<=" _UNIXTIME_ " AND expires_at<>banned_at");
 
     char* cFilter = ExtractLiteralArg(&args);
     std::string filter = cFilter ? cFilter : "";
@@ -5987,13 +5987,13 @@ bool ChatHandler::HandleBanListIPCommand(char* args)
     if (filter.empty())
     {
         queryResult = LoginDatabase.Query("SELECT ip,banned_at,expires_at,banned_by,reason FROM ip_banned"
-                                          " WHERE (banned_at=expires_at OR expires_at>UNIX_TIMESTAMP())"
+                                          " WHERE (banned_at=expires_at OR expires_at>" _UNIXTIME_ ")"
                                           " ORDER BY expires_at");
     }
     else
     {
         queryResult = LoginDatabase.PQuery("SELECT ip,banned_at,expires_at,banned_by,reason FROM ip_banned"
-                                           " WHERE (banned_at=expires_at OR expires_at>UNIX_TIMESTAMP()) AND ip " _LIKE_ " " _CONCAT3_("'%%'", "'%s'", "'%%'")
+                                           " WHERE (banned_at=expires_at OR expires_at>" _UNIXTIME_ ") AND ip " _LIKE_ " " _CONCAT3_("'%%'", "'%s'", "'%%'")
                                            " ORDER BY expires_at", filter.c_str());
     }
 
@@ -6069,10 +6069,13 @@ bool ChatHandler::HandleRespawnCommand(char* /*args*/)
             Creature* creature = static_cast<Creature*>(target);
             if (target->IsUsingNewSpawningSystem())
             {
-                if (creature->GetMap()->GetMapDataContainer().GetSpawnGroupByGuid(creature->GetDbGuid(), TYPEID_UNIT))
-                    target->GetMap()->GetPersistentState()->SaveCreatureRespawnTime(target->GetDbGuid(), time(nullptr));
-                else
-                    target->GetMap()->GetSpawnManager().RespawnCreature(target->GetDbGuid(), 0);
+                if (!creature->GetCreatureGroup())
+                {
+                    if (creature->GetMap()->GetMapDataContainer().GetSpawnGroupByGuid(creature->GetDbGuid(), TYPEID_UNIT))
+                        target->GetMap()->GetPersistentState()->SaveCreatureRespawnTime(target->GetDbGuid(), time(nullptr));
+                    else
+                        target->GetMap()->GetSpawnManager().RespawnCreature(target->GetDbGuid(), 0);
+                }
             }
             else
                 creature->Respawn();
@@ -8095,4 +8098,75 @@ bool ChatHandler::HandleModifyDodgeCommand(char *args)
 bool ChatHandler::HandleModifyParryCommand(char *args)
 {
     return ModifyStatCommandHelper(args, "Parry Chance", SPELL_MOD_PARRY_CHANCE);
+}
+
+bool ChatHandler::HandleGoNextCommand(char* args)
+{
+    Player* player = m_session->GetPlayer();
+
+    uint32 lastDbguid; uint32 gameobjectUint;
+    bool gameobject;
+    if (!ExtractUInt32(&args, lastDbguid) || !ExtractUInt32(&args, gameobjectUint))
+    {
+        std::tie(lastDbguid, gameobject) = player->GetLastData();
+        ++lastDbguid;
+    }
+    else
+    {
+        gameobject = gameobjectUint;
+        player->SetLastData(lastDbguid, gameobject);
+    }
+
+    uint32 mapId;
+    float x, y, z;
+    if (gameobject)
+    {
+        uint32 maxDbGuid = sObjectMgr.GetMaxGoDbGuid();
+        GameObjectData const* goData = nullptr;
+        uint32 i;
+        for (i = lastDbguid; i < maxDbGuid; ++i)
+        {
+            goData = sObjectMgr.GetGOData(i);
+            if (goData)
+                break;
+        }
+
+        if (goData)
+        {
+            player->SetLastData(i, true);
+            mapId = goData->mapid;
+            x = goData->posX;
+            y = goData->posY;
+            z = goData->posZ;
+            PSendSysMessage("Teleporting to gameobject dbGuid %u", i);
+        }
+        else
+            return false;
+    }
+    else
+    {
+        uint32 maxDbGuid = sObjectMgr.GetMaxCreatureDbGuid();
+        CreatureData const* creatureData = nullptr;
+        uint32 i;
+        for (i = lastDbguid; i < maxDbGuid; ++i)
+        {
+            creatureData = sObjectMgr.GetCreatureData(i);
+            if (creatureData)
+                break;
+        }
+
+        if (creatureData)
+        {
+            player->SetLastData(i, false);
+            mapId = creatureData->mapid;
+            x = creatureData->posX;
+            y = creatureData->posY;
+            z = creatureData->posZ;
+            PSendSysMessage("Teleporting to creature dbGuid %u", i);
+        }
+        else
+            return false;
+    }
+
+    return HandleGoHelper(player, mapId, x, y, &z);
 }

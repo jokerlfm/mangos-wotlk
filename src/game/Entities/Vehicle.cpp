@@ -212,13 +212,9 @@ void VehicleInfo::Initialize()
         SQLMultiStorage::SQLMSIteratorBounds<VehicleAccessory> bounds = sVehicleAccessoryStorage.getBounds<VehicleAccessory>(m_overwriteNpcEntry);
         for (SQLMultiStorage::SQLMultiSIterator<VehicleAccessory> itr = bounds.first; itr != bounds.second; ++itr)
         {
-            if (Creature* summoned = m_owner->SummonCreature(itr->passengerEntry, m_owner->GetPositionX(), m_owner->GetPositionY(), m_owner->GetPositionZ(), 2 * m_owner->GetOrientation(), TEMPSPAWN_DEAD_DESPAWN, 0))
-            {
-                DEBUG_LOG("VehicleInfo(of %s)::Initialize: Load vehicle accessory %s onto seat %u", m_owner->GetGuidStr().c_str(), summoned->GetGuidStr().c_str(), itr->seatId);
-                m_accessoryGuids.insert(summoned->GetObjectGuid());
-                int32 basepoint0 = itr->seatId + 1;
-                summoned->CastCustomSpell((Unit*)m_owner, SPELL_RIDE_VEHICLE_HARDCODED, &basepoint0, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
-            }
+            Position pos = m_owner->GetPosition();
+            pos.o *= 2;
+            SummonPassenger(itr->passengerEntry, pos, itr->seatId);
         }
     }
 
@@ -241,14 +237,6 @@ void VehicleInfo::Initialize()
     if (vehicleFlags & VEHICLE_FLAG_FIXED_POSITION)
         pVehicle->SetImmobilizedState(true);
 
-    // TODO: Guesswork, but it looks correct
-    if (vehicleFlags & VEHICLE_FLAG_PASSIVE)
-    {
-        if (pVehicle->AI())
-            pVehicle->AI()->SetReactState(REACT_PASSIVE);
-        pVehicle->SetCanEnterCombat(false);
-    }
-
     // Initialize power type based on DBC values (creatures only)
     if (pVehicle->GetTypeId() == TYPEID_UNIT)
     {
@@ -257,6 +245,17 @@ void VehicleInfo::Initialize()
     }
 
     m_isInitialized = true;
+}
+
+void VehicleInfo::SummonPassenger(uint32 entry, Position const& pos, uint8 seatId)
+{
+    if (Creature* summoned = m_owner->SummonCreature(entry, pos.x, pos.y, pos.z, pos.o, TEMPSPAWN_DEAD_DESPAWN, 0))
+    {
+        DEBUG_LOG("VehicleInfo(of %s)::Initialize: Load vehicle accessory %s onto seat %u", m_owner->GetGuidStr().c_str(), summoned->GetGuidStr().c_str(), seatId);
+        m_accessoryGuids.insert(summoned->GetObjectGuid());
+        int32 basepoint0 = seatId + 1;
+        summoned->CastCustomSpell((Unit*)m_owner, SPELL_RIDE_VEHICLE_HARDCODED, &basepoint0, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
+    }
 }
 
 /**
@@ -353,6 +352,14 @@ void VehicleInfo::Board(Unit* passenger, uint8 seat)
 
     // Apply passenger modifications
     ApplySeatMods(passenger, seatEntry->m_flags);
+
+    if (Unit* owner = dynamic_cast<Unit*>(m_owner))
+    {
+        if (owner->AI())
+            owner->AI()->OnPassengerRide(passenger, true, seat);
+        if (passenger->AI())
+            passenger->AI()->OnVehicleRide(owner, true, seat);
+    }
 }
 
 void VehicleInfo::ChangeSeat(Unit* passenger, uint8 currentSeat, bool next)
@@ -438,6 +445,14 @@ void VehicleInfo::SwitchSeat(Unit* passenger, uint8 seat)
 
     // Apply passenger modifications of the new seat
     ApplySeatMods(passenger, seatEntry->m_flags);
+
+    if (Unit* owner = dynamic_cast<Unit*>(m_owner))
+    {
+        if (owner->AI())
+            owner->AI()->OnPassengerRide(passenger, true, seat);
+        if (passenger->AI())
+            passenger->AI()->OnVehicleRide(owner, true, seat);
+    }
 }
 
 /**
@@ -457,7 +472,9 @@ void VehicleInfo::UnBoard(Unit* passenger, bool changeVehicle)
 
     DEBUG_LOG("VehicleInfo::Unboard: passenger: %s", passenger->GetGuidStr().c_str());
 
-    VehicleSeatEntry const* seatEntry = GetSeatEntry(itr->second->GetTransportSeat());
+    uint8 seat = itr->second->GetTransportSeat();
+
+    VehicleSeatEntry const* seatEntry = GetSeatEntry(seat);
     MANGOS_ASSERT(seatEntry);
 
     UnBoardPassenger(passenger);                            // Use TransportBase to remove the passenger from storage list
@@ -477,7 +494,7 @@ void VehicleInfo::UnBoard(Unit* passenger, bool changeVehicle)
             passenger->m_movementInfo.ClearTransportData();
         }
 
-        if (passenger->GetTypeId() == TYPEID_PLAYER)
+        if (passenger->IsPlayer())
         {
             Player* pPlayer = (Player*)passenger;
             pPlayer->ResummonPetTemporaryUnSummonedIfAny();
@@ -515,13 +532,12 @@ void VehicleInfo::UnBoard(Unit* passenger, bool changeVehicle)
         init.SetExitVehicle();
         init.Launch();
 
-        // Despawn if passenger was accessory
-        if (passenger->GetTypeId() == TYPEID_UNIT && m_accessoryGuids.find(passenger->GetObjectGuid()) != m_accessoryGuids.end())
+        // Remove from list if passenger was accessory
+        if (passenger->IsCreature() && m_accessoryGuids.find(passenger->GetObjectGuid()) != m_accessoryGuids.end())
         {
             Creature* cPassenger = static_cast<Creature*>(passenger);
             m_accessoryGuids.erase(passenger->GetObjectGuid());
-
-            // Note: Most of the creature accessories have to stay on the map if unboarded; despawn events are handled by Creauture_Linking_Template if needed
+            m_unboardedAccessories.emplace_back(passenger->GetObjectGuid(), seat);
         }
     }
 
@@ -541,6 +557,14 @@ void VehicleInfo::UnBoard(Unit* passenger, bool changeVehicle)
             if (((Creature*)m_owner)->IsTemporarySummon())
                 ((Creature*)m_owner)->ForcedDespawn(1000);
         }
+    }
+
+    if (Unit* owner = dynamic_cast<Unit*>(m_owner))
+    {
+        if (owner->AI())
+            owner->AI()->OnPassengerRide(passenger, false, seat);
+        if (passenger->AI())
+            passenger->AI()->OnVehicleRide(owner, false, seat);
     }
 }
 
@@ -626,6 +650,62 @@ void VehicleInfo::TeleportPassengers(uint32 mapId)
             player->ResurrectPlayer(1.0);
         UnBoard(player, true);
         player->TeleportTo(mapId, pos.x, pos.y, pos.z, pos.o, TELE_TO_NOT_LEAVE_TRANSPORT, nullptr, transport);
+    }
+}
+
+void VehicleInfo::RecallAndRespawnAccessories(float distance, int32 seatIndex)
+{
+    RecallAccessories(distance, seatIndex);
+    RespawnAccessories(seatIndex);
+}
+
+void VehicleInfo::RespawnAccessories(int32 seatIndex)
+{
+    SQLMultiStorage::SQLMSIteratorBounds<VehicleAccessory> bounds = sVehicleAccessoryStorage.getBounds<VehicleAccessory>(m_overwriteNpcEntry);
+    for (SQLMultiStorage::SQLMultiSIterator<VehicleAccessory> itr = bounds.first; itr != bounds.second; ++itr)
+    {
+        if (seatIndex != -1 && seatIndex != itr->seatId)
+            continue;
+        Position pos = m_owner->GetPosition();
+        pos.o *= 2;
+        SummonPassenger(itr->passengerEntry, pos, itr->seatId);
+    }
+}
+
+void VehicleInfo::RecallAccessories(float distance, int32 seatIndex)
+{
+    for (auto itr = m_unboardedAccessories.begin(); itr != m_unboardedAccessories.end();)
+    {
+        ObjectGuid guid = itr->first;
+        uint8 seat = itr->second;
+        if (seatIndex != -1 && seat != seatIndex)
+        {
+            ++itr;
+            continue;
+        }
+        if (Creature* creature = m_owner->GetMap()->GetCreature(guid))
+        {
+            if (!creature->IsAlive())
+            {
+                itr = m_unboardedAccessories.erase(itr);
+                continue;
+            }
+            if (distance != 0.f && creature->GetDistance(m_owner, true, DIST_CALC_NONE) > distance * distance)
+            {
+                ++itr;
+                continue;
+            }
+            if (!IsSeatAvailableFor(creature, seat))
+            {
+                ++itr;
+                continue;
+            }
+            m_accessoryGuids.insert(creature->GetObjectGuid());
+            int32 basepoint0 = seat;
+            creature->CastCustomSpell(static_cast<Unit*>(m_owner), SPELL_RIDE_VEHICLE_HARDCODED, &basepoint0, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
+            itr = m_unboardedAccessories.erase(itr);
+        }
+        else ++itr;
     }
 }
 
@@ -855,9 +935,7 @@ void VehicleInfo::RemoveSeatMods(Unit* passenger, uint32 seatFlags)
                 // reset vehicle faction
                 ((Creature*)pVehicle)->SetFactionTemporary(m_originalFaction, TEMPFACTION_NONE);
 
-                // Reset react state
-                if (!(GetVehicleEntry()->m_flags & VEHICLE_FLAG_PASSIVE))
-                    pVehicle->AI()->SetReactState(REACT_AGGRESSIVE);
+                pVehicle->AI()->SetReactState(REACT_AGGRESSIVE);
             }
         }
 

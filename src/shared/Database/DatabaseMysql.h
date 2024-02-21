@@ -17,6 +17,7 @@
  */
 
 #ifndef DO_POSTGRESQL
+#ifndef DO_SQLITE
 
 #ifndef _DATABASEMYSQL_H
 #define _DATABASEMYSQL_H
@@ -109,5 +110,6 @@ class DatabaseMysql : public Database
         static size_t db_count;
 };
 
+#endif
 #endif
 #endif
