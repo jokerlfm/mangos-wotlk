@@ -1,7 +1,7 @@
-#include "Nier_Hunter.h"
-#include "NierManager.h"
+#include "NierScript_Hunter.h"
+#include "../NierManager.h"
 
-Nier_Hunter::Nier_Hunter() :Nier_Base()
+NierScript_Hunter::NierScript_Hunter(Player* pMe) :NierScript_Base(pMe)
 {
 	spell_TameBeast = 1515;
 
@@ -35,9 +35,9 @@ Nier_Hunter::Nier_Hunter() :Nier_Base()
 	dpsDistance = 15.0f;
 }
 
-bool Nier_Hunter::Prepare()
+bool NierScript_Hunter::Prepare()
 {
-	if (Nier_Base::Prepare())
+	if (NierScript_Base::Prepare())
 	{
 		bool inGroup = false;
 		if (Group* group = me->GetGroup())
@@ -71,20 +71,14 @@ bool Nier_Hunter::Prepare()
 	return false;
 }
 
-void Nier_Hunter::Update(uint32 pDiff)
+void NierScript_Hunter::Update(uint32 pDiff)
 {
-	Nier_Base::Update(pDiff);
+	NierScript_Base::Update(pDiff);
 }
 
-void Nier_Hunter::Update_Online(uint32 pDiff)
+void NierScript_Hunter::InitializeCharacter()
 {
-	Nier_Base::Update_Online(pDiff);
-}
-
-void Nier_Hunter::InitializeCharacter()
-{
-	target_specialty = 1;
-	Nier_Base::InitializeCharacter();
+	NierScript_Base::InitializeCharacter();
 
 	me->groupRole = GroupRole::GroupRole_DPS;
 
@@ -298,14 +292,132 @@ void Nier_Hunter::InitializeCharacter()
 	me->UpdateSkillsForLevel(true);
 }
 
-bool Nier_Hunter::Tank(Unit* pTarget)
+void NierScript_Hunter::LearnTalents()
 {
-	return Nier_Base::Tank(pTarget);
+	NierScript_Base::LearnTalents();
+
+	specialty = 1;
+	switch (specialty)
+	{
+	case 0:
+	{
+		break;
+	}
+	case 1:
+	{
+		// 363 Marksmanship
+		LearnTalent(1344);
+		LearnTalent(1349);
+		LearnTalent(1818);
+		LearnTalent(1346);
+		LearnTalent(1342);
+		LearnTalent(1353);
+		LearnTalent(1819);
+		LearnTalent(1341);
+		LearnTalent(1804);
+		LearnTalent(1362);
+		LearnTalent(1361);
+		LearnTalent(1348);
+		LearnTalent(1345);
+		LearnTalent(1807);
+		LearnTalent(1808);
+		LearnTalent(1343);
+		LearnTalent(1806);
+		LearnTalent(2132);
+		LearnTalent(2135);
+		LearnTalent(2134);
+		LearnTalent(2197);
+
+		LearnTalent(1382);
+
+		LearnTalent(2130);
+		LearnTalent(2131);
+
+		LearnTalent(1624);
+		break;
+	}
+	case 2:
+	{
+		break;
+	}
+	default:
+	{
+		break;
+	}
+	}
+
+	me->SendTalentsInfoData(false);
+
 }
 
-bool Nier_Hunter::Heal(Unit* pTarget)
+void NierScript_Hunter::InitializeEquipments(bool pReset)
 {
-	if (Nier_Base::Heal(pTarget))
+	NierScript_Base::InitializeEquipments(pReset);
+
+	int requiredLevel = me->GetLevel();
+
+	uint32 equipSlot = 0;
+	uint32 inventoryType = 0;
+	uint32 itemClass = 0;
+	uint32 itemSubClass = ItemSubclassArmor::ITEM_SUBCLASS_ARMOR_LEATHER;
+	if (requiredLevel >= 40)
+	{
+		itemSubClass = ItemSubclassArmor::ITEM_SUBCLASS_ARMOR_MAIL;
+	}
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_CHEST;
+	inventoryType = InventoryType::INVTYPE_CHEST;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_FEET;
+	inventoryType = InventoryType::INVTYPE_FEET;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_HANDS;
+	inventoryType = InventoryType::INVTYPE_HANDS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_HEAD;
+	inventoryType = InventoryType::INVTYPE_HEAD;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_LEGS;
+	inventoryType = InventoryType::INVTYPE_LEGS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_SHOULDERS;
+	inventoryType = InventoryType::INVTYPE_SHOULDERS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_WAIST;
+	inventoryType = InventoryType::INVTYPE_WAIST;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_WRISTS;
+	inventoryType = InventoryType::INVTYPE_WRISTS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_MAINHAND;
+	itemClass = ItemClass::ITEM_CLASS_WEAPON;
+	inventoryType = InventoryType::INVTYPE_2HWEAPON;
+	itemSubClass = ItemSubclassWeapon::ITEM_SUBCLASS_WEAPON_AXE2;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_RANGED;
+	itemClass = ItemClass::ITEM_CLASS_WEAPON;
+	inventoryType = InventoryType::INVTYPE_RANGED;
+	itemSubClass = ItemSubclassWeapon::ITEM_SUBCLASS_WEAPON_BOW;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+}
+
+bool NierScript_Hunter::Tank(Unit* pTarget)
+{
+	return NierScript_Base::Tank(pTarget);
+}
+
+bool NierScript_Hunter::Heal(Unit* pTarget)
+{
+	if (NierScript_Base::Heal(pTarget))
 	{
 		if (actionDelay > 0)
 		{
@@ -316,9 +428,9 @@ bool Nier_Hunter::Heal(Unit* pTarget)
 	return false;
 }
 
-bool Nier_Hunter::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
+bool NierScript_Hunter::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 {
-	if (Nier_Base::DPS(pTarget, pTank, pRushing))
+	if (NierScript_Base::DPS(pTarget, pTank, pRushing))
 	{
 		float targetDistance = me->GetDistance(pTarget);
 		if (targetDistance < dpsDistance)
@@ -386,9 +498,9 @@ bool Nier_Hunter::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 	return false;
 }
 
-bool Nier_Hunter::PVP(Unit* pTarget)
+bool NierScript_Hunter::PVP(Unit* pTarget)
 {
-	if (Nier_Base::PVP(pTarget))
+	if (NierScript_Base::PVP(pTarget))
 	{
 		float targetDistance = me->GetDistance(pTarget);
 		if (targetDistance < dpsDistance)
@@ -459,7 +571,7 @@ bool Nier_Hunter::PVP(Unit* pTarget)
 	return false;
 }
 
-bool Nier_Hunter::Buff()
+bool NierScript_Hunter::Buff()
 {
 	if (spell_CallPet > 0)
 	{
@@ -584,12 +696,12 @@ bool Nier_Hunter::Buff()
 	return false;
 }
 
-bool Nier_Hunter::Cure()
+bool NierScript_Hunter::Cure()
 {
-	return Nier_Base::Cure();
+	return NierScript_Base::Cure();
 }
 
-bool Nier_Hunter::Revive()
+bool NierScript_Hunter::Revive()
 {
-	return Nier_Base::Revive();
+	return NierScript_Base::Revive();
 }

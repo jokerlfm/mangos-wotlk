@@ -94,7 +94,7 @@ float NierConfig::GetFloatDefault(const std::string& name, float def) const
 	return std::stof(value);
 }
 
-bool NierConfig::StartNier()
+bool NierConfig::Initialize()
 {
 	SetSource(NIER_CONFIG_FILE_NAME);
 	if (!Reload())
@@ -105,6 +105,9 @@ bool NierConfig::StartNier()
 
 	Enable = GetIntDefault("Enable", 0);
 	Reset = GetIntDefault("Reset", 0);
+	UpdateDelay = GetIntDefault("UpdateDelay", 100);
+	UpdateCount = GetIntDefault("UpdateCount", 10);	
+	NierCount = GetIntDefault("NierCount", 10);
 
 	if (Enable == 0)
 	{

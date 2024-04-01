@@ -339,7 +339,7 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
             // lfm nier 
             if (!_player->GetSession()->isNier)
             {
-                sNierManager->HandleChatCommand(_player, msg);
+                sNierManager->HandleChatCommand(_player, msg, nullptr, group);
             }
 
             break;
@@ -461,7 +461,7 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
             // lfm nier 
             if (!_player->GetSession()->isNier)
             {
-                sNierManager->HandleChatCommand(_player, msg);
+                sNierManager->HandleChatCommand(_player, msg, nullptr, group);
             }
 
         } break;
@@ -548,7 +548,7 @@ void WorldSession::HandleMessagechatOpcode(WorldPacket& recv_data)
             // lfm nier 
             if (!_player->GetSession()->isNier)
             {
-                sNierManager->HandleChatCommand(_player, msg);
+                sNierManager->HandleChatCommand(_player, msg, nullptr, group);
             }
 
         } break;

@@ -1,9 +1,7 @@
-#include "Nier_Rogue.h"
-#include "NierManager.h"
+#include "NierScript_Rogue.h"
+#include "../NierManager.h"
 
-#include "Groups/Group.h"
-
-Nier_Rogue::Nier_Rogue() :Nier_Base()
+NierScript_Rogue::NierScript_Rogue(Player* pMe) :NierScript_Base(pMe)
 {
 	spell_Dismantle = 0;
 	spell_Eviscerate = 0;
@@ -31,9 +29,9 @@ Nier_Rogue::Nier_Rogue() :Nier_Base()
 	item_SlowPoison = 0;
 }
 
-bool Nier_Rogue::Prepare()
+bool NierScript_Rogue::Prepare()
 {
-	if (Nier_Base::Prepare())
+	if (NierScript_Base::Prepare())
 	{
 
 	}
@@ -41,20 +39,14 @@ bool Nier_Rogue::Prepare()
 	return false;
 }
 
-void Nier_Rogue::Update(uint32 pDiff)
+void NierScript_Rogue::Update(uint32 pDiff)
 {
-	Nier_Base::Update(pDiff);
+	NierScript_Base::Update(pDiff);
 }
 
-void Nier_Rogue::Update_Online(uint32 pDiff)
+void NierScript_Rogue::InitializeCharacter()
 {
-	Nier_Base::Update_Online(pDiff);
-}
-
-void Nier_Rogue::InitializeCharacter()
-{
-	target_specialty = 1;
-	Nier_Base::InitializeCharacter();
+	NierScript_Base::InitializeCharacter();
 
 	me->groupRole = GroupRole::GroupRole_DPS;
 
@@ -292,19 +284,135 @@ void Nier_Rogue::InitializeCharacter()
 	me->UpdateSkillsForLevel(true);
 }
 
-bool Nier_Rogue::Tank(Unit* pTarget)
+void NierScript_Rogue::LearnTalents()
 {
-	return Nier_Base::Tank(pTarget);
+	NierScript_Base::LearnTalents();
+
+	specialty = 1;
+	switch (specialty)
+	{
+	case 0:
+	{
+		break;
+	}
+	case 1:
+	{
+		// talent tab : 181 - Combat, 182 - Assassination
+		LearnTalent(221);
+		LearnTalent(181);
+		LearnTalent(182);
+		LearnTalent(1122);
+		LearnTalent(223);
+		LearnTalent(201);
+		LearnTalent(1827);
+		LearnTalent(1703);
+		LearnTalent(186);
+		LearnTalent(205);
+		LearnTalent(1706);
+		LearnTalent(206, 1);
+		LearnTalent(1705);
+		LearnTalent(1825);
+		LearnTalent(1709);
+		LearnTalent(2074);
+		LearnTalent(2075);
+		LearnTalent(2076);
+
+		LearnTalent(276);
+		LearnTalent(270);
+		LearnTalent(273);
+		LearnTalent(269);
+		LearnTalent(682);
+		break;
+	}
+	case 2:
+	{
+		break;
+	}
+	default:
+	{
+		break;
+	}
+	}
+
+	me->SendTalentsInfoData(false);
+
 }
 
-bool Nier_Rogue::Heal(Unit* pTarget)
+void NierScript_Rogue::InitializeEquipments(bool pReset)
 {
-	return Nier_Base::Tank(pTarget);
+	NierScript_Base::InitializeEquipments(pReset);
+
+	int requiredLevel = me->GetLevel();
+
+	uint32 equipSlot = 0;
+	uint32 inventoryType = 0;
+	uint32 itemClass = 0;
+	uint32 itemSubClass = ItemSubclassArmor::ITEM_SUBCLASS_ARMOR_LEATHER;
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_CHEST;
+	inventoryType = InventoryType::INVTYPE_CHEST;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_FEET;
+	inventoryType = InventoryType::INVTYPE_FEET;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_HANDS;
+	inventoryType = InventoryType::INVTYPE_HANDS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_HEAD;
+	inventoryType = InventoryType::INVTYPE_HEAD;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_LEGS;
+	inventoryType = InventoryType::INVTYPE_LEGS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_SHOULDERS;
+	inventoryType = InventoryType::INVTYPE_SHOULDERS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_WAIST;
+	inventoryType = InventoryType::INVTYPE_WAIST;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_WRISTS;
+	inventoryType = InventoryType::INVTYPE_WRISTS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_MAINHAND;
+	itemClass = ItemClass::ITEM_CLASS_WEAPON;
+	inventoryType = InventoryType::INVTYPE_WEAPON;
+	itemSubClass = ItemSubclassWeapon::ITEM_SUBCLASS_WEAPON_DAGGER;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_OFFHAND;
+	itemClass = ItemClass::ITEM_CLASS_WEAPON;
+	inventoryType = InventoryType::INVTYPE_WEAPON;
+	itemSubClass = ItemSubclassWeapon::ITEM_SUBCLASS_WEAPON_DAGGER;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_RANGED;
+	itemClass = ItemClass::ITEM_CLASS_WEAPON;
+	inventoryType = InventoryType::INVTYPE_THROWN;
+	itemSubClass = ItemSubclassWeapon::ITEM_SUBCLASS_WEAPON_THROWN;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
 }
 
-bool Nier_Rogue::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
+bool NierScript_Rogue::Tank(Unit* pTarget)
 {
-	if (Nier_Base::DPS(pTarget, pTank, pRushing))
+	return NierScript_Base::Tank(pTarget);
+}
+
+bool NierScript_Rogue::Heal(Unit* pTarget)
+{
+	return NierScript_Base::Tank(pTarget);
+}
+
+bool NierScript_Rogue::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
+{
+	if (NierScript_Base::DPS(pTarget, pTank, pRushing))
 	{
 		float targetDistance = me->GetDistance(pTarget);
 		if (me->CanReachWithMeleeAttack(pTarget))
@@ -360,6 +468,29 @@ bool Nier_Rogue::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 				}
 			}
 			uint32 comboPoints = me->GetComboPoints();
+			if (myEnergy >= 25)
+			{
+				if (pTarget->IsNonMeleeSpellCasted(true, false, true))
+				{
+					if (spell_Kick > 0)
+					{
+						if (CastSpell(pTarget, spell_Kick))
+						{
+							return true;
+						}
+					}
+					if (spell_KidneyShot > 0)
+					{
+						if (comboPoints > 0)
+						{
+							if (CastSpell(pTarget, spell_KidneyShot))
+							{
+								return true;
+							}
+						}
+					}
+				}
+			}
 			if (pRushing)
 			{
 				if (spell_BladeFlurry > 0)
@@ -450,9 +581,9 @@ bool Nier_Rogue::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 	return false;
 }
 
-bool Nier_Rogue::PVP(Unit* pTarget)
+bool NierScript_Rogue::PVP(Unit* pTarget)
 {
-	if (Nier_Base::PVP(pTarget))
+	if (NierScript_Base::PVP(pTarget))
 	{
 		float targetDistance = me->GetDistance(pTarget);
 		if (me->CanReachWithMeleeAttack(pTarget))
@@ -597,7 +728,7 @@ bool Nier_Rogue::PVP(Unit* pTarget)
 	return false;
 }
 
-bool Nier_Rogue::Interrupt(Unit* pTarget)
+bool NierScript_Rogue::Interrupt(Unit* pTarget)
 {
 	if (actionDelay > 0)
 	{
@@ -645,7 +776,7 @@ bool Nier_Rogue::Interrupt(Unit* pTarget)
 	return false;
 }
 
-bool Nier_Rogue::Buff()
+bool NierScript_Rogue::Buff()
 {
 	if (item_InstantPoison > 0)
 	{
@@ -691,12 +822,12 @@ bool Nier_Rogue::Buff()
 	return false;
 }
 
-bool Nier_Rogue::Cure()
+bool NierScript_Rogue::Cure()
 {
-	return Nier_Base::Cure();
+	return NierScript_Base::Cure();
 }
 
-bool Nier_Rogue::Revive()
+bool NierScript_Rogue::Revive()
 {
-	return Nier_Base::Revive();
+	return NierScript_Base::Revive();
 }

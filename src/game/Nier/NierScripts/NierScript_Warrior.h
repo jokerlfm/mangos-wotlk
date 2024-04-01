@@ -1,19 +1,19 @@
-#ifndef NIER_WARRIOR_H
-#define NIER_WARRIOR_H
+#ifndef NIERSCRIPT_WARRIOR_H
+#define NIERSCRIPT_WARRIOR_H
 
-#include "Nier_Base.h"
+#include "NierScript_Base.h"
 
-class Nier_Warrior :public Nier_Base
+class NierScript_Warrior :public NierScript_Base
 {
 public:
-    Nier_Warrior();
+    NierScript_Warrior(Player* pMe);
 
     bool Prepare();
     void Update(uint32 pDiff);
-    void Update_Online(uint32 pDiff);
     void InitializeCharacter();
+    void LearnTalents();
+    void InitializeEquipments(bool pReset);
 
-    bool Threating(Unit* pTarget);
     bool Tank(Unit* pTarget);
     bool Heal(Unit* pTarget);
     bool DPS(Unit* pTarget, Unit* pTank, bool pRushing);

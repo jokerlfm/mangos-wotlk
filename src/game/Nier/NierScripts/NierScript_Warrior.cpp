@@ -1,7 +1,7 @@
-#include "Nier_Warrior.h"
-#include "NierManager.h"
+#include "NierScript_Warrior.h"
+#include "../NierManager.h"
 
-Nier_Warrior::Nier_Warrior() :Nier_Base()
+NierScript_Warrior::NierScript_Warrior(Player* pMe) :NierScript_Base(pMe)
 {
 	dpsDistance = CONTACT_DISTANCE;
 	followDistance = INTERACTION_DISTANCE;
@@ -21,9 +21,9 @@ Nier_Warrior::Nier_Warrior() :Nier_Base()
 	spell_ShieldWall = 0;
 }
 
-bool Nier_Warrior::Prepare()
+bool NierScript_Warrior::Prepare()
 {
-	if (Nier_Base::Prepare())
+	if (NierScript_Base::Prepare())
 	{
 
 	}
@@ -31,20 +31,14 @@ bool Nier_Warrior::Prepare()
 	return false;
 }
 
-void Nier_Warrior::Update(uint32 pDiff)
+void NierScript_Warrior::Update(uint32 pDiff)
 {
-	Nier_Base::Update(pDiff);
+	NierScript_Base::Update(pDiff);
 }
 
-void Nier_Warrior::Update_Online(uint32 pDiff)
+void NierScript_Warrior::InitializeCharacter()
 {
-	Nier_Base::Update_Online(pDiff);
-}
-
-void Nier_Warrior::InitializeCharacter()
-{
-	target_specialty = 2;
-	Nier_Base::InitializeCharacter();
+	NierScript_Base::InitializeCharacter();
 
 	me->groupRole = GroupRole::GroupRole_Tank;
 
@@ -95,7 +89,7 @@ void Nier_Warrior::InitializeCharacter()
 	}
 	if (myLevel >= 20)
 	{
-		if (target_specialty == 2)
+		if (specialty == 2)
 		{
 			spell_LastStand = 12975;
 		}
@@ -112,7 +106,7 @@ void Nier_Warrior::InitializeCharacter()
 	if (myLevel >= 28)
 	{
 		spell_ShieldWall = 871;
-	}	
+	}
 	if (myLevel >= 30)
 	{
 		spell_Rend = 6548;
@@ -227,44 +221,125 @@ void Nier_Warrior::InitializeCharacter()
 	me->UpdateSkillsForLevel(true);
 }
 
-bool Nier_Warrior::Threating(Unit* pTarget)
+void NierScript_Warrior::LearnTalents()
 {
-	if (Nier_Base::Threating(pTarget))
+	NierScript_Base::LearnTalents();
+
+	specialty = 2;
+	switch (specialty)
 	{
-		if (pTarget->GetSelectionGuid() != me->GetObjectGuid())
-		{
-			return true;
-		}
-		if (spell_SunderArmor > 0)
-		{
-			Unit::SpellAuraHolderMap const& auras = pTarget->GetSpellAuraHolderMap();
-			for (Unit::SpellAuraHolderMap::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
-			{
-				if (SpellAuraHolder* holder = itr->second)
-				{
-					if (const SpellEntry* se = holder->GetSpellProto())
-					{
-						if (se->Id == spell_SunderArmorAura)
-						{
-							if (holder->GetStackAmount() < 2)
-							{
-								return true;
-							}
-							return false;
-						}
-					}
-				}
-			}
-			return true;
-		}
+	case 0:
+	{
+		break;
+	}
+	case 1:
+	{
+		break;
+	}
+	case 2:
+	{
+		// 163 protection 
+		LearnTalent(1601);
+		LearnTalent(138);
+		LearnTalent(147);
+		LearnTalent(153);
+		LearnTalent(1654);
+		LearnTalent(146);
+		LearnTalent(140);
+		LearnTalent(152);
+		LearnTalent(151);
+		LearnTalent(702);
+		LearnTalent(1652);
+		LearnTalent(148);
+		LearnTalent(1660);
+		LearnTalent(1653);
+		LearnTalent(1893);
+		LearnTalent(1666);
+		LearnTalent(2236);
+		LearnTalent(1871);
+		LearnTalent(2246);
+		LearnTalent(1872);
+		break;
+	}
+	default:
+	{
+		break;
+	}
 	}
 
-	return true;
+	me->SendTalentsInfoData(false);
+
 }
 
-bool Nier_Warrior::Tank(Unit* pTarget)
+void NierScript_Warrior::InitializeEquipments(bool pReset)
 {
-	if (Nier_Base::Tank(pTarget))
+	NierScript_Base::InitializeEquipments(pReset);
+
+	int requiredLevel = me->GetLevel();
+
+	uint32 equipSlot = 0;
+	uint32 inventoryType = 0;
+	uint32 itemClass = 0;
+	uint32 itemSubClass = ItemSubclassArmor::ITEM_SUBCLASS_ARMOR_MAIL;
+	if (requiredLevel >= 40)
+	{
+		itemSubClass = ItemSubclassArmor::ITEM_SUBCLASS_ARMOR_PLATE;
+	}
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_CHEST;
+	inventoryType = InventoryType::INVTYPE_CHEST;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_FEET;
+	inventoryType = InventoryType::INVTYPE_FEET;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_HANDS;
+	inventoryType = InventoryType::INVTYPE_HANDS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_HEAD;
+	inventoryType = InventoryType::INVTYPE_HEAD;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_LEGS;
+	inventoryType = InventoryType::INVTYPE_LEGS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_SHOULDERS;
+	inventoryType = InventoryType::INVTYPE_SHOULDERS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_WAIST;
+	inventoryType = InventoryType::INVTYPE_WAIST;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_WRISTS;
+	inventoryType = InventoryType::INVTYPE_WRISTS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_MAINHAND;
+	itemClass = ItemClass::ITEM_CLASS_WEAPON;
+	inventoryType = InventoryType::INVTYPE_WEAPON;
+	itemSubClass = ItemSubclassWeapon::ITEM_SUBCLASS_WEAPON_SWORD;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_OFFHAND;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	inventoryType = InventoryType::INVTYPE_SHIELD;
+	itemSubClass = ItemSubclassArmor::ITEM_SUBCLASS_ARMOR_SHIELD;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_RANGED;
+	itemClass = ItemClass::ITEM_CLASS_WEAPON;
+	inventoryType = InventoryType::INVTYPE_THROWN;
+	itemSubClass = ItemSubclassWeapon::ITEM_SUBCLASS_WEAPON_THROWN;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+}
+
+bool NierScript_Warrior::Tank(Unit* pTarget)
+{
+	if (NierScript_Base::Tank(pTarget))
 	{
 		float targetDistance = me->GetDistance(pTarget);
 		if (me->CanReachWithMeleeAttack(pTarget))
@@ -416,17 +491,17 @@ bool Nier_Warrior::Tank(Unit* pTarget)
 	return false;
 }
 
-bool Nier_Warrior::Heal(Unit* pTarget)
+bool NierScript_Warrior::Heal(Unit* pTarget)
 {
-	return Nier_Base::Tank(pTarget);
+	return NierScript_Base::Tank(pTarget);
 }
 
-bool Nier_Warrior::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
+bool NierScript_Warrior::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 {
-	return Nier_Base::DPS(pTarget, pTank, pRushing);
+	return NierScript_Base::DPS(pTarget, pTank, pRushing);
 }
 
-bool Nier_Warrior::Interrupt(Unit* pTarget)
+bool NierScript_Warrior::Interrupt(Unit* pTarget)
 {
 	if (actionDelay > 0)
 	{
@@ -459,7 +534,7 @@ bool Nier_Warrior::Interrupt(Unit* pTarget)
 	return false;
 }
 
-bool Nier_Warrior::Buff()
+bool NierScript_Warrior::Buff()
 {
 	if (spell_DefensiveStance > 0)
 	{
@@ -474,12 +549,12 @@ bool Nier_Warrior::Buff()
 	return false;
 }
 
-bool Nier_Warrior::Cure()
+bool NierScript_Warrior::Cure()
 {
-	return Nier_Base::Cure();
+	return NierScript_Base::Cure();
 }
 
-bool Nier_Warrior::Revive()
+bool NierScript_Warrior::Revive()
 {
-	return Nier_Base::Revive();
+	return NierScript_Base::Revive();
 }

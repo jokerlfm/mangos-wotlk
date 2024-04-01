@@ -1,30 +1,5 @@
-#ifndef NIER_BASE_H
-#define NIER_BASE_H
-
-enum NierState :uint32
-{
-    NierState_None = 0,
-    NierState_OffLine,
-    NierState_Enter,
-    NierState_CheckAccount,
-    NierState_CreateAccount,
-    NierState_CheckCharacter,
-    NierState_CreateCharacter,
-    NierState_CheckLogin,
-    NierState_DoLogin,
-    NierState_DoEnum,
-    NierState_CheckEnum,
-    NierState_Initialize,
-    NierState_Equip,
-    NierState_LevelUp,
-    NierState_Upgrade,
-    NierState_Online,
-    NierState_Exit,
-    NierState_CheckLogoff,
-    NierState_DoLogoff,
-    NierState_RedoLogin,
-    NierState_CheckRedoLogin,
-};
+#ifndef NIERSCRIPT_BASE_H
+#define NIERSCRIPT_BASE_H
 
 enum OrderType :uint32
 {
@@ -35,16 +10,16 @@ enum OrderType :uint32
     OrderType_Move
 };
 
-class Nier_Base
+class NierScript_Base
 {
 public:
-    Nier_Base();    
+    NierScript_Base(Player* pMe);
     virtual bool Prepare();
     virtual void Update(uint32 pDiff);
-    virtual void Update_Online(uint32 pDiff);
     virtual void InitializeCharacter();
+    virtual void LearnTalents();
+    virtual void InitializeEquipments(bool pReset = false);
 
-    virtual bool Threating(Unit* pTarget);
     virtual bool Tank(Unit* pTarget);
     virtual bool Heal(Unit* pTarget);
     virtual bool DPS(Unit* pTarget, Unit* pTank, bool pRushing);
@@ -59,9 +34,8 @@ public:
     bool Follow(Unit* pTarget);
     
     void MoveTo(Position pDestination, Unit* pTarget = nullptr, uint32 pMoveType = 1);
-
+    void Relocate();    
     void LearnTalent(uint32 pmTalentId, uint32 pmMaxRank = 5);
-    bool InitializeEquipments(bool pReset = false);
     bool EuipRandom(uint32 pmEquipSlot, uint32 pmInventoryType, uint32 pmItemClass, uint32 pmItemSubClass, uint32 pmMaxLevel);
 
 	bool UseItem(Item* pmItem, Unit* pmTarget);
@@ -79,18 +53,9 @@ public:
 
 public:
 	Player* me;
-    std::string account_name;
+    uint32 masterId;
+    uint32 specialty;
 
-    uint32 entry;
-    uint32 master_id;
-    uint32 account_id;
-    uint32 character_id;
-    uint32 target_level;
-    uint32 target_race;
-    uint32 target_class;
-    uint32 target_specialty;
-
-    uint32 entityState;
     uint32 orderType;
 
     int updateDelay;
@@ -105,8 +70,9 @@ public:
     int orderDelay;
     int interruptDelay;
 
-    int pvpDelay;
     bool pvp;
+    int relocateDelay;
+    int repopDelay;
 
     int combatDuration;
 
@@ -114,6 +80,7 @@ public:
     float followDistance;
     bool chasing;
     bool freezing;
+    bool rushing;
 
     Position destination;
 };

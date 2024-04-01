@@ -1430,6 +1430,25 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
 
         unitTarget->CalculateAbsorbResistBlock(affectiveCaster, &spellDamageInfo, m_spellInfo);
 
+        // lfm Righteousness 
+        if (spellDamageInfo.SpellID == 25742)
+        {
+            uint32 realDamage = spellDamageInfo.damage;
+            uint32 remainPower = m_caster->GetPower(Powers::POWER_MANA);
+            if (remainPower < realDamage)
+            {
+                realDamage = remainPower;
+            }
+            if (realDamage < 1)
+            {
+                realDamage = 1;
+                spellDamageInfo.damage = realDamage;
+            }
+            int eachCost = 0 - (realDamage * 1);
+            m_caster->ModifyPower(Powers::POWER_MANA, eachCost);
+            m_caster->SetLastManaUse();
+        }
+
         Unit::DealDamageMods(affectiveCaster, spellDamageInfo.target, spellDamageInfo.damage, &spellDamageInfo.absorb, SPELL_DIRECT_DAMAGE, m_spellInfo);
 
         m_absorb = spellDamageInfo.absorb;
@@ -3664,8 +3683,12 @@ SpellCastResult Spell::cast(bool skipCheck)
             // Hand of Reckoning
             else if (m_spellInfo->Id == 62124)
             {
-                if (!m_targets.getUnitTarget() || !m_targets.getUnitTarget()->HasTarget(m_caster->GetObjectGuid()))
-                    AddPrecastSpell(67485);                 // Hand of Rekoning (no typos in name ;) )
+                // lfm hand of reckoning no damage 
+                //if (!m_targets.getUnitTarget() || !m_targets.getUnitTarget()->HasTarget(m_caster->GetObjectGuid()))
+                //{                 
+                //    // Hand of Rekoning (no typos in name ;) )
+                //    AddPrecastSpell(67485);
+                //}
             }
             // Divine Shield, Divine Protection or Hand of Protection
             else if (m_spellInfo->SpellFamilyFlags & uint64(0x0000000000400080))

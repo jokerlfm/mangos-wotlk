@@ -44,7 +44,7 @@ public:
     bool IsVein(uint32 pmEntry);
     bool NearVein(uint32 pmMapId, Position pmPos, float pmDistance);
     bool AddVein(uint32 pmGuid, uint32 pmMapId, Position pmPos, float pmDistance);
-    void UpdateMingManager(uint32 pmDiff);
+    void UpdateMingManager(uint32 pDiff);
     void ReplaceVendor(Unit* pmVendor);
     bool IsDKSpellsException(uint32 pmSpellId);
     bool IsDKItemException(uint32 pmItemId);

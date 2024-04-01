@@ -1,29 +1,26 @@
-#ifndef NIER_MAGE_H
-#define NIER_MAGE_H
+#ifndef NIERSCRIPT_SHAMAN_H
+#define NIERSCRIPT_SHAMAN_H
 
-#include "Nier_Base.h"
+#include "NierScript_Base.h"
 
-class Nier_Mage :public Nier_Base
+class NierScript_Shaman :public NierScript_Base
 {
 public:
-    Nier_Mage();
+    NierScript_Shaman(Player* pMe);
 
     bool Prepare();
     void Update(uint32 pDiff);
-    void Update_Online(uint32 pDiff);
     void InitializeCharacter();
+    void LearnTalents();
+    void InitializeEquipments(bool pReset);
 
     bool Tank(Unit* pTarget);
     bool Heal(Unit* pTarget);
     bool DPS(Unit* pTarget, Unit* pTank, bool pRushing);
-    bool PVP(Unit* pTarget);
     bool Buff();
     bool Cure();
     bool Revive();
 
 public:
-    uint32 spell_Shoot;
-    uint32 spell_FireBlast;
-    uint32 spell_ArcaneIntellect;
 };
 #endif

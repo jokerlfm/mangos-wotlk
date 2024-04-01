@@ -1,17 +1,18 @@
-#ifndef NIER_ROGUE_H
-#define NIER_ROGUE_H
+#ifndef NIERSCRIPT_ROGUE_H
+#define NIERSCRIPT_ROGUE_H
 
-#include "Nier_Base.h"
+#include "NierScript_Base.h"
 
-class Nier_Rogue :public Nier_Base
+class NierScript_Rogue :public NierScript_Base
 {
 public:
-    Nier_Rogue();
+    NierScript_Rogue(Player* pMe);
 
     bool Prepare();
     void Update(uint32 pDiff);
-    void Update_Online(uint32 pDiff);
     void InitializeCharacter();
+    void LearnTalents();
+    void InitializeEquipments(bool pReset);
 
     bool Tank(Unit* pTarget);
     bool Heal(Unit* pTarget);

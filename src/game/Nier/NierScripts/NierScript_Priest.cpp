@@ -1,11 +1,7 @@
-#include "Nier_Priest.h"
-#include "NierManager.h"
+#include "NierScript_Priest.h"
+#include "../NierManager.h"
 
-#include "NierConfig.h"
-#include "Groups/Group.h"
-#include "Entities/Player.h"
-
-Nier_Priest::Nier_Priest() :Nier_Base()
+NierScript_Priest::NierScript_Priest(Player* pMe) :NierScript_Base(pMe)
 {
 	dpsDistance = TRADE_DISTANCE;
 	followDistance = TRADE_DISTANCE;
@@ -66,9 +62,9 @@ Nier_Priest::Nier_Priest() :Nier_Base()
 	aura_Surge_of_Light = 0;
 }
 
-bool Nier_Priest::Prepare()
+bool NierScript_Priest::Prepare()
 {
-	if (Nier_Base::Prepare())
+	if (NierScript_Base::Prepare())
 	{
 
 	}
@@ -76,20 +72,14 @@ bool Nier_Priest::Prepare()
 	return false;
 }
 
-void Nier_Priest::Update(uint32 pDiff)
+void NierScript_Priest::Update(uint32 pDiff)
 {
-	Nier_Base::Update(pDiff);
+	NierScript_Base::Update(pDiff);
 }
 
-void Nier_Priest::Update_Online(uint32 pDiff)
+void NierScript_Priest::InitializeCharacter()
 {
-	Nier_Base::Update_Online(pDiff);
-}
-
-void Nier_Priest::InitializeCharacter()
-{
-	target_specialty = 1;
-	Nier_Base::InitializeCharacter();
+	NierScript_Base::InitializeCharacter();
 
 	me->groupRole = GroupRole::GroupRole_Healer;
 
@@ -343,14 +333,184 @@ void Nier_Priest::InitializeCharacter()
 	me->UpdateSkillsForLevel(true);
 }
 
-bool Nier_Priest::Tank(Unit* pTarget)
+void NierScript_Priest::LearnTalents()
 {
-	return Nier_Base::Tank(pTarget);
+	NierScript_Base::LearnTalents();
+
+	specialty = 1;
+	// talent tab : 201 - discipline, 202 - holy, 203 - shadow
+	switch (specialty)
+	{
+	case 0:
+	{
+		// discipline
+		LearnTalent(1898);
+
+		LearnTalent(344);
+		LearnTalent(352);
+
+		LearnTalent(348);
+		LearnTalent(343);
+		LearnTalent(347);
+
+		LearnTalent(341);
+
+		LearnTalent(351);
+		LearnTalent(1201);
+
+		LearnTalent(1771);
+		LearnTalent(1772, 2);
+
+		LearnTalent(322);
+		LearnTalent(1772);
+		LearnTalent(1773);
+
+		LearnTalent(2235);
+		LearnTalent(1896);
+
+		LearnTalent(1774);
+		LearnTalent(1894);
+		LearnTalent(1901);
+
+		LearnTalent(1202);
+
+		LearnTalent(1897);
+		LearnTalent(1895);
+
+		LearnTalent(1858);
+
+		LearnTalent(406);
+		LearnTalent(401);
+
+		LearnTalent(1181);
+
+		LearnTalent(442);
+
+		break;
+	}
+	case 1:
+	{
+		// holy
+		LearnTalent(406);
+		LearnTalent(401);
+		LearnTalent(1181);
+		LearnTalent(361);
+		LearnTalent(408);
+		LearnTalent(442);
+		LearnTalent(1561);
+		LearnTalent(402);
+		LearnTalent(1766);
+		LearnTalent(404);
+		LearnTalent(1768);
+		LearnTalent(2279);
+		LearnTalent(1767);
+		LearnTalent(1902);
+		LearnTalent(1815);
+		LearnTalent(1903);
+		LearnTalent(1911);
+		break;
+	}
+	case 2:
+	{
+		// shadow
+		LearnTalent(462);
+		LearnTalent(466);
+		LearnTalent(482);
+		LearnTalent(463);
+		LearnTalent(501);
+		LearnTalent(542);
+		LearnTalent(461);
+		LearnTalent(881);
+		LearnTalent(541);
+		LearnTalent(484);
+		LearnTalent(1777);
+		LearnTalent(1781);
+		LearnTalent(521);
+		LearnTalent(2267);
+		LearnTalent(1778);
+		LearnTalent(1816);
+		LearnTalent(1779);
+		LearnTalent(1908);
+		LearnTalent(1909);
+		LearnTalent(1907);
+		LearnTalent(1910);
+
+		break;
+	}
+	default:
+	{
+		break;
+	}
+	}
+
+	me->SendTalentsInfoData(false);
+
 }
 
-bool Nier_Priest::Heal(Unit* pTarget)
+void NierScript_Priest::InitializeEquipments(bool pReset)
 {
-	if (Nier_Base::Heal(pTarget))
+	NierScript_Base::InitializeEquipments(pReset);
+
+	int requiredLevel = me->GetLevel();
+
+	uint32 equipSlot = 0;
+	uint32 inventoryType = 0;
+	uint32 itemClass = 0;
+	uint32 itemSubClass = ItemSubclassArmor::ITEM_SUBCLASS_ARMOR_CLOTH;
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_CHEST;
+	inventoryType = InventoryType::INVTYPE_CHEST;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_FEET;
+	inventoryType = InventoryType::INVTYPE_FEET;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_HANDS;
+	inventoryType = InventoryType::INVTYPE_HANDS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_HEAD;
+	inventoryType = InventoryType::INVTYPE_HEAD;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_LEGS;
+	inventoryType = InventoryType::INVTYPE_LEGS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_SHOULDERS;
+	inventoryType = InventoryType::INVTYPE_SHOULDERS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_WAIST;
+	inventoryType = InventoryType::INVTYPE_WAIST;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_WRISTS;
+	inventoryType = InventoryType::INVTYPE_WRISTS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_MAINHAND;
+	itemClass = ItemClass::ITEM_CLASS_WEAPON;
+	inventoryType = InventoryType::INVTYPE_2HWEAPON;
+	itemSubClass = ItemSubclassWeapon::ITEM_SUBCLASS_WEAPON_STAFF;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_RANGED;
+	itemClass = ItemClass::ITEM_CLASS_WEAPON;
+	inventoryType = InventoryType::INVTYPE_RANGEDRIGHT;
+	itemSubClass = ItemSubclassWeapon::ITEM_SUBCLASS_WEAPON_WAND;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+}
+
+bool NierScript_Priest::Tank(Unit* pTarget)
+{
+	return NierScript_Base::Tank(pTarget);
+}
+
+bool NierScript_Priest::Heal(Unit* pTarget)
+{
+	if (NierScript_Base::Heal(pTarget))
 	{
 		if (me->IsNonMeleeSpellCasted(false, false, true))
 		{
@@ -470,14 +630,14 @@ bool Nier_Priest::Heal(Unit* pTarget)
 	return false;
 }
 
-bool Nier_Priest::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
+bool NierScript_Priest::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 {
-	if (Nier_Base::DPS(pTarget, pTank, pRushing))
+	if (NierScript_Base::DPS(pTarget, pTank, pRushing))
 	{
 		float targetDistance = me->GetDistance(pTarget);
 		if (targetDistance < dpsDistance)
 		{
-			if (target_specialty == 1)
+			if (specialty == 1)
 			{
 				if (spell_Shoot > 0)
 				{
@@ -501,7 +661,7 @@ bool Nier_Priest::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 	return false;
 }
 
-bool Nier_Priest::Cure()
+bool NierScript_Priest::Cure()
 {
 	if (spell_DispelMagic > 0 || spell_CureDisease > 0)
 	{
@@ -621,7 +781,7 @@ bool Nier_Priest::Cure()
 	return false;
 }
 
-bool Nier_Priest::Buff()
+bool NierScript_Priest::Buff()
 {
 	if (spell_Prayer_of_Fortitude > 0 || spell_PowerWord_Fortitude > 0)
 	{
@@ -678,7 +838,7 @@ bool Nier_Priest::Buff()
 	return false;
 }
 
-bool Nier_Priest::Revive()
+bool NierScript_Priest::Revive()
 {
 	if (helpDelay > 0)
 	{

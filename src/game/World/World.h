@@ -517,6 +517,12 @@ class World
 
         void CleanupsBeforeStop();
 
+        // lfm get all sessions 
+        std::unordered_map<uint32, WorldSession*> GetSessionMap()
+        {
+            return m_sessions;
+        }
+
         WorldSession* FindSession(uint32 id) const;
         void AddSession(WorldSession* s);
         bool RemoveSession(uint32 id);

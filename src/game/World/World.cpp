@@ -980,13 +980,7 @@ void World::SetInitialWorldSettings()
     CharacterDatabase.PExecute("DELETE FROM corpse WHERE corpse_type = '0' OR time < (" _UNIXTIME_ "-'%u')", 3 * DAY);
 
     // lfm ming 
-    if (sMingConfig.StartMing())
-    {
-        if (sMingConfig.Enable == 1)
-        {
-            sMingManager->InitializeManager();
-        }
-    }
+    sMingManager->InitializeManager();
 
     // load SQL dbcs first, other DBCs need them
     sObjectMgr.LoadSQLDBCs();
@@ -1568,13 +1562,7 @@ void World::SetInitialWorldSettings()
 #endif
 
     // lfm nier 
-    if (sNierConfig.StartNier())
-    {
-        if (sNierConfig.Enable == 1)
-        {
-            sNierManager->InitializeManager();
-        }
-    }
+    sNierManager->InitializeManager();
 
     sLog.outString("---------------------------------------");
     sLog.outString("      CMANGOS: World initialized       ");
@@ -1811,6 +1799,12 @@ void World::Update(uint32 diff)
     meas.add_field("singletons", std::to_string(singletons));
     meas.add_field("cleanup", std::to_string(cleanup));
 #endif
+
+    // lfm ming 
+    sMingManager->UpdateMingManager(diff);
+
+    // lfm nier 
+    sNierManager->UpdateNierManager(diff);
 }
 
 namespace MaNGOS

@@ -66,8 +66,7 @@ struct FactionTemplateEntry;
 #endif
 
 // lfm nier 
-#include "Nier/NierStrategies/NierStrategy_Base.h"
-#include "Nier/Nier_Base.h"
+#include "Nier/NierScripts/NierScript_Base.h"
 
 struct AreaTrigger;
 
@@ -1083,15 +1082,8 @@ class Player : public Unit
 
         // lfm nier
         bool isNier;
-        Nier_Base* _nier;
-        uint32 masterId;
         uint32 groupRole;
-
-        std::unordered_set<Nier_Base*> partners;
-        std::unordered_set<Nier_Base*> rivals;
-        std::unordered_set<Nier_Base*> comrades;
-        std::unordered_set<Nier_Base*> enemies;
-        NierStrategy_Base* strategy;
+        NierScript_Base* _nierScript;
 
         void CleanupsBeforeDelete() override;
 

@@ -1,9 +1,7 @@
-#include "Nier_Warlock.h"
-#include "NierManager.h"
+#include "NierScript_Warlock.h"
+#include "../NierManager.h"
 
-#include "Groups/Group.h"
-
-Nier_Warlock::Nier_Warlock() :Nier_Base()
+NierScript_Warlock::NierScript_Warlock(Player* pMe) :NierScript_Base(pMe)
 {
 	spell_Shoot = 0;
 	spell_Corruption = 0;
@@ -18,9 +16,9 @@ Nier_Warlock::Nier_Warlock() :Nier_Base()
 	dpsDistance = 15.0f;
 }
 
-bool Nier_Warlock::Prepare()
+bool NierScript_Warlock::Prepare()
 {
-	if (Nier_Base::Prepare())
+	if (NierScript_Base::Prepare())
 	{
 		if (Pet* myPet = me->GetPet())
 		{
@@ -46,10 +44,9 @@ bool Nier_Warlock::Prepare()
 	return false;
 }
 
-void Nier_Warlock::InitializeCharacter()
+void NierScript_Warlock::InitializeCharacter()
 {
-	target_specialty = 2;
-	Nier_Base::InitializeCharacter();
+	NierScript_Base::InitializeCharacter();
 
 	me->groupRole = GroupRole::GroupRole_DPS;
 
@@ -233,9 +230,114 @@ void Nier_Warlock::InitializeCharacter()
 	me->UpdateSkillsForLevel(true);
 }
 
-bool Nier_Warlock::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
+void NierScript_Warlock::LearnTalents()
 {
-	if (Nier_Base::DPS(pTarget, pTank, pRushing))
+	NierScript_Base::LearnTalents();
+
+	specialty = 2;
+	switch (specialty)
+	{
+	case 0:
+	{
+		break;
+	}
+	case 1:
+	{
+		break;
+	}
+	case 2:
+	{
+		// destruction 
+		LearnTalent(944);
+		LearnTalent(943);
+		LearnTalent(982);
+		LearnTalent(941);
+		LearnTalent(983);
+		LearnTalent(963);
+		LearnTalent(967);
+		LearnTalent(964);
+		LearnTalent(961);
+		LearnTalent(981);
+		LearnTalent(966);
+		LearnTalent(968);
+		LearnTalent(986);
+		LearnTalent(1677);
+		LearnTalent(1888);
+		LearnTalent(1676);
+		LearnTalent(2045);
+		LearnTalent(1890);
+		LearnTalent(1891);
+		break;
+	}
+	default:
+	{
+		break;
+	}
+	}
+
+	me->SendTalentsInfoData(false);
+
+}
+
+void NierScript_Warlock::InitializeEquipments(bool pReset)
+{
+	NierScript_Base::InitializeEquipments(pReset);
+
+	int requiredLevel = me->GetLevel();
+
+	uint32 equipSlot = 0;
+	uint32 inventoryType = 0;
+	uint32 itemClass = 0;
+	uint32 itemSubClass = ItemSubclassArmor::ITEM_SUBCLASS_ARMOR_CLOTH;
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_CHEST;
+	inventoryType = InventoryType::INVTYPE_CHEST;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_FEET;
+	inventoryType = InventoryType::INVTYPE_FEET;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_HANDS;
+	inventoryType = InventoryType::INVTYPE_HANDS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_HEAD;
+	inventoryType = InventoryType::INVTYPE_HEAD;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_LEGS;
+	inventoryType = InventoryType::INVTYPE_LEGS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_SHOULDERS;
+	inventoryType = InventoryType::INVTYPE_SHOULDERS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_WAIST;
+	inventoryType = InventoryType::INVTYPE_WAIST;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_WRISTS;
+	inventoryType = InventoryType::INVTYPE_WRISTS;
+	itemClass = ItemClass::ITEM_CLASS_ARMOR;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_MAINHAND;
+	itemClass = ItemClass::ITEM_CLASS_WEAPON;
+	inventoryType = InventoryType::INVTYPE_2HWEAPON;
+	itemSubClass = ItemSubclassWeapon::ITEM_SUBCLASS_WEAPON_STAFF;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+
+	equipSlot = EquipmentSlots::EQUIPMENT_SLOT_RANGED;
+	itemClass = ItemClass::ITEM_CLASS_WEAPON;
+	inventoryType = InventoryType::INVTYPE_RANGEDRIGHT;
+	itemSubClass = ItemSubclassWeapon::ITEM_SUBCLASS_WEAPON_WAND;
+	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
+}
+
+bool NierScript_Warlock::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
+{
+	if (NierScript_Base::DPS(pTarget, pTank, pRushing))
 	{
 		float targetDistance = me->GetDistance(pTarget);
 		if (targetDistance < dpsDistance)
@@ -316,9 +418,9 @@ bool Nier_Warlock::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 	return false;
 }
 
-bool Nier_Warlock::PVP(Unit* pTarget)
+bool NierScript_Warlock::PVP(Unit* pTarget)
 {
-	if (Nier_Base::PVP(pTarget))
+	if (NierScript_Base::PVP(pTarget))
 	{
 		float targetDistance = me->GetDistance(pTarget);
 		if (targetDistance < dpsDistance)
@@ -399,7 +501,7 @@ bool Nier_Warlock::PVP(Unit* pTarget)
 	return false;
 }
 
-bool Nier_Warlock::Buff()
+bool NierScript_Warlock::Buff()
 {
 	if (Pet* myPet = me->GetPet())
 	{

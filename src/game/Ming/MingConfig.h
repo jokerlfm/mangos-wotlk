@@ -37,7 +37,7 @@ public:
     std::mutex m_configLock;
 
 public:
-    bool StartMing();
+    bool Initialize();
     uint32 Enable;
 };
 

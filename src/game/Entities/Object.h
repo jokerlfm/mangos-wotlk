@@ -896,7 +896,19 @@ class MovementInfo
         uint32 GetTransportTime() const { return t_time; }
         uint32 GetFallTime() const { return fallTime; }
         void ChangeOrientation(float o) { pos.o = o; }
-        void ChangePosition(float x, float y, float z, float o) { pos.x = x; pos.y = y; pos.z = z; pos.o = o; }
+
+        // lfm 0 angle should be ignored 
+        //void ChangePosition(float x, float y, float z, float o) { pos.x = x; pos.y = y; pos.z = z; pos.o = o; }
+        void ChangePosition(float x, float y, float z, float o)
+        {
+            pos.x = x;
+            pos.y = y;
+            pos.z = z;
+            if (o > 0.0f || o < 0.0f)
+            {
+                pos.o = o;
+            }
+        }
 
         struct JumpInfo
         {

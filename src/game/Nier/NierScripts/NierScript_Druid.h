@@ -1,25 +1,24 @@
-#ifndef NIER_PALADIN_H
-#define NIER_PALADIN_H
+#ifndef NIERSCRIPT_DRUID_H
+#define NIERSCRIPT_DRUID_H
 
-#include "Nier_Base.h"
+#include "NierScript_Base.h"
 
-class Nier_Paladin :public Nier_Base
+class NierScript_Druid :public NierScript_Base
 {
 public:
-    Nier_Paladin();
+    NierScript_Druid(Player* pMe);
 
     bool Prepare();
     void Update(uint32 pDiff);
-    void Update_Online(uint32 pDiff);
     void InitializeCharacter();
+    void LearnTalents();
+    void InitializeEquipments(bool pReset);
 
     bool Tank(Unit* pTarget);
     bool Heal(Unit* pTarget);
     bool DPS(Unit* pTarget, Unit* pTank, bool pRushing);
     bool Buff();
     bool Cure();
-    bool Revive();
-
-public:
+    bool Revive();    
 };
 #endif

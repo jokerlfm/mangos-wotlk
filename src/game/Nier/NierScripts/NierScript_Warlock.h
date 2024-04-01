@@ -1,14 +1,18 @@
-#ifndef NIER_WARLOCK_H
-#define NIER_WARLOCK_H
+#ifndef NIERSCRIPT_WARLOCK_H
+#define NIERSCRIPT_WARLOCK_H
 
-#include "Nier_Base.h"
+#include "NierScript_Base.h"
 
-class Nier_Warlock :public Nier_Base
+class NierScript_Warlock :public NierScript_Base
 {
 public:
-    Nier_Warlock();
+    NierScript_Warlock(Player* pMe);
+
     bool Prepare();
     void InitializeCharacter();
+    void LearnTalents();
+    void InitializeEquipments(bool pReset);
+
     bool DPS(Unit* pTarget, Unit* pTank, bool pRushing);
     bool PVP(Unit* pTarget);
     bool Buff();

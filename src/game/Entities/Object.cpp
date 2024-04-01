@@ -1370,7 +1370,13 @@ void WorldObject::Relocate(float x, float y, float z, float orientation)
     m_position.x = x;
     m_position.y = y;
     m_position.z = z;
-    m_position.o = orientation;
+
+    // lfm 0 angle should be ignored 
+    //m_position.o = orientation;
+    if (orientation > 0.0f || orientation < 0.0f)
+    {
+        m_position.o = orientation;
+    }
 
     if (isType(TYPEMASK_UNIT))
         m_movementInfo.ChangePosition(x, y, z, orientation);

@@ -1,17 +1,18 @@
-#ifndef NIER_SHAMAN_H
-#define NIER_SHAMAN_H
+#ifndef NIERSCRIPT_PALADIN_H
+#define NIERSCRIPT_PALADIN_H
 
-#include "Nier_Base.h"
+#include "NierScript_Base.h"
 
-class Nier_Shaman :public Nier_Base
+class NierScript_Paladin :public NierScript_Base
 {
 public:
-    Nier_Shaman();
+    NierScript_Paladin(Player* pMe);
 
     bool Prepare();
     void Update(uint32 pDiff);
-    void Update_Online(uint32 pDiff);
     void InitializeCharacter();
+    void LearnTalents();
+    void InitializeEquipments(bool pReset);
 
     bool Tank(Unit* pTarget);
     bool Heal(Unit* pTarget);

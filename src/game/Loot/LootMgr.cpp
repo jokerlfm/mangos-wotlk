@@ -179,6 +179,35 @@ void LootStore::LoadLootTable()
             if (!IsValidItemTemplate(entry, item, group, mincountOrRef, chanceOrQuestChance, maxcount))
                 continue;
 
+            // lfm creature loot template white equip rate 
+            // lfm debug 
+            //if (entry == 2177 && item == 6506)
+            //{
+            //    bool breakPoint = true;
+            //}
+            if (mincountOrRef == 1)
+            {
+                if (ItemPrototype const* proto = ObjectMgr::GetItemPrototype(item))
+                {
+                    if (proto->Class == ItemClass::ITEM_CLASS_ARMOR || proto->Class == ItemClass::ITEM_CLASS_WEAPON)
+                    {
+                        if (proto->Quality == ItemQualities::ITEM_QUALITY_NORMAL || proto->Quality == ItemQualities::ITEM_QUALITY_POOR)
+                        {
+                            if (conditionId == 0)
+                            {
+                                if (chanceOrQuestChance > 10.0f)
+                                {
+                                    if (m_name == "creature_loot_template")
+                                    {
+                                        chanceOrQuestChance = 10.0f;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Add the item to the loot store
             ++validItems[entry];
             m_LootTemplates[entry].AddEntry(LootStoreItem(validItems[entry], item, chanceOrQuestChance, group, conditionId, mincountOrRef, maxcount));
@@ -307,24 +336,6 @@ void LootStore::ReportNotExistedId(uint32 id) const
 bool LootStore::HaveLootFor(uint32 loot_id) const
 {
     return m_LootTemplates.find(loot_id) != m_LootTemplates.end();
-    // lfm equipment drop rate 
-    if (pProto->Class == ItemClass::ITEM_CLASS_WEAPON && pProto->Quality == ItemQualities::ITEM_QUALITY_POOR)
-    {
-        qualityModifier = qualityModifier * 0.25f;
-    }
-    else if (pProto->Class == ItemClass::ITEM_CLASS_WEAPON && pProto->Quality == ItemQualities::ITEM_QUALITY_NORMAL)
-    {
-        qualityModifier = qualityModifier * 0.25f;
-    }
-    else if (pProto->Class == ItemClass::ITEM_CLASS_ARMOR && pProto->Quality == ItemQualities::ITEM_QUALITY_POOR)
-    {
-        qualityModifier = qualityModifier * 0.25f;
-    }
-    else if (pProto->Class == ItemClass::ITEM_CLASS_ARMOR && pProto->Quality == ItemQualities::ITEM_QUALITY_NORMAL)
-    {
-        qualityModifier = qualityModifier * 0.25f;
-    }
-
 }
 
 bool LootStore::IsValidItemTemplate(uint32 entry, uint32 itemId, uint32 group, int32 mincountOrRef, float chanceOrQuestChance, uint32 maxCount) const

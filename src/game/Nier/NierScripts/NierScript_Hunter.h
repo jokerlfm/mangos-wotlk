@@ -1,17 +1,18 @@
-#ifndef NIER_HUNTER_H
-#define NIER_HUNTER_H
+#ifndef NIERSCRIPT_HUNTER_H
+#define NIERSCRIPT_HUNTER_H
 
-#include "Nier_Base.h"
+#include "NierScript_Base.h"
 
-class Nier_Hunter :public Nier_Base
+class NierScript_Hunter :public NierScript_Base
 {
 public:
-    Nier_Hunter();
+    NierScript_Hunter(Player* pMe);
 
     bool Prepare();
     void Update(uint32 pDiff);
-    void Update_Online(uint32 pDiff);
     void InitializeCharacter();
+    void LearnTalents();
+    void InitializeEquipments(bool pReset);
 
     bool Tank(Unit* pTarget);
     bool Heal(Unit* pTarget);

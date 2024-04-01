@@ -1,9 +1,7 @@
 #ifndef NIER_MANAGER_H
 #define NIER_MANAGER_H
 
-#include <string>
-#include <iostream>
-#include <sstream>
+#include "NierEntity.h"
 
 enum GroupRole :uint32
 {
@@ -30,8 +28,9 @@ class NierManager
 public:
     void InitializeManager();
     void LogoutNiers(bool pmInstant = false);
+    void LoginNiers(uint32 pMasterId = 0);
     void DeleteNiers();
-    void AddNier(Player* pMaster, uint32 pCareer, uint32 pNierType = 0);
+    void AddNier(uint32 pMasterId, uint32 pCareer, bool pAlliance, uint32 pNierType = 0);
     bool IsPolymorphed(Unit* pmTarget);
 
     void RandomTeleport(Player* me, Player* target);
@@ -40,9 +39,10 @@ public:
     float GetExactDistance(Position p1, Position p2);
     Position PredictPosition(Unit* target);
 
-    void HandleChatCommand(Player* pCommander, std::string pContent, Player* pTargetPlayer = nullptr);
-    std::unordered_set<Nier_Base*> GenerateTargetNierSet(Player* pCommander, Player* pTargetPlayer = nullptr);
+    void HandleChatCommand(Player* pCommander, std::string pContent, Player* pTargetPlayer = nullptr, Group* pTargetGroup = nullptr);
     void HandlePacket(const WorldSession* pmSession, WorldPacket pmPacket);
+
+    void UpdateNierManager(uint32 pDiff);
 
     static NierManager* instance();
 
@@ -55,6 +55,9 @@ public:
 
     std::unordered_map<uint32, uint32> trainerMap;
     std::unordered_map<uint32, uint32> tamableBeastMap;
+
+    std::unordered_map<uint32, NierEntity*> nierMap;
+    uint32 updateIndex;
 };
 
 #define sNierManager NierManager::instance()

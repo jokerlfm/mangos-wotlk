@@ -94,7 +94,7 @@ float MingConfig::GetFloatDefault(const std::string& name, float def) const
 	return std::stof(value);
 }
 
-bool MingConfig::StartMing()
+bool MingConfig::Initialize()
 {
 	SetSource(MING_CONFIG_FILE_NAME);
 	if (!Reload())

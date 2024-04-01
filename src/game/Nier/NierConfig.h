@@ -26,6 +26,9 @@ public:
     {
         Enable = 0;
         Reset = 0;
+        UpdateDelay = 0;
+        UpdateCount = 0;
+        NierCount = 0;
     }
 
     bool SetSource(const std::string& file);
@@ -42,9 +45,12 @@ public:
     std::mutex m_configLock;
 
 public:
-    bool StartNier();
+    bool Initialize();
     uint32 Enable;
     uint32 Reset;
+    uint32 UpdateDelay;
+    uint32 UpdateCount;
+    uint32 NierCount;
 };
 
 #define sNierConfig MaNGOS::Singleton<NierConfig>::Instance()

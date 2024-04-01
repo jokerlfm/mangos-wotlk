@@ -78,10 +78,6 @@
 
 #include <cmath>
 
-// lfm nier 
-#include "Nier/NierConfig.h"
-#include "Nier/NierManager.h"
-
 #define ZONE_UPDATE_INTERVAL (1*IN_MILLISECONDS)
 
 #define PLAYER_SKILL_INDEX(x)       (PLAYER_SKILL_INFO_1_1 + ((x)*3))
@@ -501,7 +497,7 @@ void TradeData::SetAccepted(bool state, bool crosssend /*= false*/)
 }
 
 //== Player ====================================================
-Player::Player(WorldSession* session): Unit(), m_taxiTracker(*this), m_mover(this), m_camera(this), m_achievementMgr(this), m_reputationMgr(this), m_launched(false)
+Player::Player(WorldSession* session) : Unit(), m_taxiTracker(*this), m_mover(this), m_camera(this), m_achievementMgr(this), m_reputationMgr(this), m_launched(false)
 {
 #ifdef BUILD_PLAYERBOT
     m_playerbotAI = 0;
@@ -544,7 +540,7 @@ Player::Player(WorldSession* session): Unit(), m_taxiTracker(*this), m_mover(thi
 
     ClearResurrectRequestData();
 
-    memset(m_items, 0, sizeof(Item*)*PLAYER_SLOTS_COUNT);
+    memset(m_items, 0, sizeof(Item*) * PLAYER_SLOTS_COUNT);
 
     m_social = nullptr;
 
@@ -574,7 +570,7 @@ Player::Player(WorldSession* session): Unit(), m_taxiTracker(*this), m_mover(thi
 
     m_cinematic = 0;
 
-    m_playerMenu =  std::make_unique<PlayerMenu>(GetSession());
+    m_playerMenu = std::make_unique<PlayerMenu>(GetSession());
     m_currentBuybackSlot = BUYBACK_SLOT_START;
 
     m_DailyQuestChanged = false;
@@ -593,7 +589,7 @@ Player::Player(WorldSession* session): Unit(), m_taxiTracker(*this), m_mover(thi
 
     for (auto& j : m_bgBattleGroundQueueID)
     {
-        j.bgQueueTypeId  = BATTLEGROUND_QUEUE_NONE;
+        j.bgQueueTypeId = BATTLEGROUND_QUEUE_NONE;
         j.invitedToInstance = 0;
     }
 
@@ -703,7 +699,7 @@ Player::Player(WorldSession* session): Unit(), m_taxiTracker(*this), m_mover(thi
 
     m_lastDbGuid = 0;
     m_lastGameObject = false;
-    
+
     // lfm mana regen 
     manaRegen = 0.0f;
 
@@ -711,15 +707,9 @@ Player::Player(WorldSession* session): Unit(), m_taxiTracker(*this), m_mover(thi
     fishingDelay = 0;
 
     // lfm nier
-    _nier = nullptr;
-    masterId = 0;
-    groupRole = 0;
     isNier = false;
-    partners.clear();
-    rivals.clear();
-    comrades.clear();
-    enemies.clear();
-    strategy = nullptr;
+    groupRole = 0;
+    _nierScript = nullptr;
 }
 
 Player::~Player()
@@ -1778,44 +1768,6 @@ void Player::Update(const uint32 diff)
             {
                 CastSpell(this, 7620, TriggerCastFlags::TRIGGERED_NONE);
                 fishingDelay = 0;
-            }
-        }
-    }
-
-    // lfm nier
-    if (!m_session->isNier)
-    {
-        if (sNierConfig.Enable == 1)
-        {
-            if (!partners.empty())
-            {
-                for (std::unordered_set<Nier_Base*>::iterator nit = partners.begin(); nit != partners.end(); nit++)
-                {
-                    if (Nier_Base* nb = *nit)
-                    {
-                        nb->Update(diff);
-                    }
-                }
-            }
-            if (!rivals.empty())
-            {
-                for (std::unordered_set<Nier_Base*>::iterator nit = rivals.begin(); nit != rivals.end(); nit++)
-                {
-                    if (Nier_Base* nb = *nit)
-                    {
-                        nb->Update(diff);
-                    }
-                }
-            }
-
-            if (strategy)
-            {
-                strategy->UpdatePartners(diff, this, partners);
-                strategy->UpdateRivals(diff, this, rivals);
-            }
-            else
-            {
-                strategy = new NierStrategy_Base();
             }
         }
     }
@@ -3108,25 +3060,6 @@ void Player::GiveLevel(uint32 level)
     // resend quests status directly
     GetSession()->SetCurrentPlayerLevel(level);
     SendQuestGiverStatusMultiple();
-
-    // lfm nier 
-    if (!isNier)
-    {
-        if (level >= 10)
-        {
-            for (std::unordered_set<Nier_Base*>::iterator nit = this->partners.begin(); nit != this->partners.end(); nit++)
-            {
-                if (Nier_Base* nb = *nit)
-                {
-                    if (nb->entityState == NierState::NierState_Online)
-                    {
-                        nb->updateDelay = urand(200, 8000);
-                        nb->entityState = NierState::NierState_LevelUp;
-                    }
-                }
-            }
-        }
-    }
 }
 
 void Player::UpdateFreeTalentPoints(bool resetIfNeed)
