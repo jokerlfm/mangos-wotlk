@@ -4536,12 +4536,14 @@ void ObjectMgr::LoadPlayerInfo()
             Field* fields = queryResult->Fetch();
 
             uint32 current_level = fields[0].GetUInt32();
-            uint32 current_xp    = fields[1].GetUInt32();
+            uint32 current_xp = fields[1].GetUInt32();
 
             if (current_level >= sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
             {
                 if (current_level > STRONG_MAX_LEVEL)       // hardcoded level maximum
+                {
                     sLog.outErrorDb("Wrong (> %u) level %u in `player_xp_for_level` table, ignoring.", STRONG_MAX_LEVEL, current_level);
+                }
                 else
                 {
                     DETAIL_LOG("Unused (> MaxPlayerLevel in mangosd.conf) level %u in `player_xp_for_levels` table, ignoring.", current_level);
@@ -4549,7 +4551,13 @@ void ObjectMgr::LoadPlayerInfo()
                 }
                 continue;
             }
-            // PlayerXPperLevel
+            // PlayerXPperLevel 
+            // lfm player level xp 
+            if (current_level >= 20)
+            {
+                current_xp = current_xp * 3 / 2;
+            }
+
             mPlayerXPperLevel[current_level] = current_xp;
             bar.step();
             ++count;
