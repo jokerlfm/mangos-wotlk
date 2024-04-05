@@ -399,7 +399,9 @@ void NierEntity::Update(uint32 pDiff)
 			entityState = NierState::NierState_Online;
 			std::ostringstream msgStream;
 			msgStream << me->GetName() << " Equiped all slots";
-			sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, msgStream.str().c_str());
+			const char* msg = msgStream.str().c_str();
+			sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, msg);
+			sLog.outBasic(msg);
 			break;
 		}
 		break;
@@ -439,7 +441,9 @@ void NierEntity::Update(uint32 pDiff)
 			entityState = NierState::NierState_Online;
 			std::ostringstream msgStream;
 			msgStream << me->GetName() << " upgrade";
-			sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, msgStream.str().c_str());
+			const char* msg = msgStream.str().c_str();
+			sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, msg);
+			sLog.outBasic(msg);
 			break;
 		}
 		break;

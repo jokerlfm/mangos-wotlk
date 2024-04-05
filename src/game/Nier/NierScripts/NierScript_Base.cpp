@@ -46,10 +46,13 @@ bool NierScript_Base::Prepare()
 {
 	if (me)
 	{
-		Item* currentEquip = me->GetItemByPos(INVENTORY_SLOT_BAG_0, EquipmentSlots::EQUIPMENT_SLOT_HEAD);
+		Item* currentEquip = me->GetItemByPos(INVENTORY_SLOT_BAG_0, EquipmentSlots::EQUIPMENT_SLOT_MAINHAND);
 		if (!currentEquip)
 		{
-			// no head reset 
+			// no weapon, reset 
+			std::ostringstream logStream;
+			logStream << me->GetName() << " - No weapon, reset equipments";
+			sLog.outBasic(logStream.str().c_str());
 			InitializeEquipments(true);
 		}
 		me->SetPvP(true);
@@ -95,21 +98,8 @@ void NierScript_Base::Update(uint32 pDiff)
 		if (prepareDelay <= 0)
 		{
 			Prepare();
-			prepareDelay = urand(60000, 120000);
+			prepareDelay = urand(600000, 1200000);
 		}
-	}
-	if (restDelay > 0)
-	{
-		restDelay -= pDiff;
-		if (drinkDelay > 0)
-		{
-			drinkDelay -= pDiff;
-			if (drinkDelay <= 0)
-			{
-				Drink();
-			}
-		}
-		return;
 	}
 	if (me->IsInCombat())
 	{
@@ -127,7 +117,23 @@ void NierScript_Base::Update(uint32 pDiff)
 			//standDelay = 500;
 		}
 	}
-
+	if (restDelay > 0)
+	{
+		restDelay -= pDiff;
+		if (drinkDelay > 0)
+		{
+			drinkDelay -= pDiff;
+			if (drinkDelay <= 0)
+			{
+				Drink();
+			}
+		}
+		return;
+	}
+	if (!me->CanFreeMove())
+	{
+		return;
+	}
 	// group strategy
 	if (Group* myGroup = me->GetGroup())
 	{
@@ -427,28 +433,7 @@ void NierScript_Base::Update(uint32 pDiff)
 		// solo strategy
 		if (!me->IsAlive())
 		{
-			if (repopDelay > 0)
-			{
-				repopDelay -= pDiff;
-				if (repopDelay <= 0)
-				{
-					if (!me->GetCorpse())
-					{
-						me->SetBotDeathTimer();
-						me->BuildPlayerRepop();
-						WorldLocation loc;
-						Corpse* corpse = me->GetCorpse();
-						corpse->GetPosition(loc);
-						me->TeleportTo(loc.mapid, loc.coord_x, loc.coord_y, loc.coord_z, 0.0f);
-					}
-					reviveDelay = urand(600000, 1800000);
-				}
-			}
-			else if (repopDelay == 0)
-			{
-				repopDelay = urand(120000, 180000);
-			}
-			else
+			if (me->GetCorpse())
 			{
 				if (reviveDelay > 0)
 				{
@@ -458,8 +443,26 @@ void NierScript_Base::Update(uint32 pDiff)
 				{
 					me->ResurrectPlayer(1.0f);
 					me->SpawnCorpseBones();
-					repopDelay = 0;
-					relocateDelay = urand(2000, 5000);
+					relocateDelay = urand(100, 500);
+					wanderDelay = 1000;
+				}
+			}
+			else
+			{
+				if (repopDelay > 0)
+				{
+					repopDelay -= pDiff;
+					if (repopDelay <= 0)
+					{
+						repopDelay = 0;
+						me->SetBotDeathTimer();
+						me->BuildPlayerRepop();
+						reviveDelay = urand(2000, 5000);
+					}
+				}
+				else if (repopDelay == 0)
+				{
+					repopDelay = urand(60000, 120000);
 				}
 			}
 			return;
@@ -467,6 +470,12 @@ void NierScript_Base::Update(uint32 pDiff)
 		if (relocateDelay > 0)
 		{
 			relocateDelay -= pDiff;
+		}
+		else
+		{
+			relocateDelay = urand(600000, 1800000);
+			Relocate();
+			return;
 		}
 		if (me->IsInCombat())
 		{
@@ -537,6 +546,51 @@ void NierScript_Base::Update(uint32 pDiff)
 						}
 					}
 				}
+				if (!victim)
+				{
+					Unit* nearestUnitEnemy = nullptr;
+					float nearestUnitDistance = VISIBILITY_DISTANCE_NORMAL;
+					Unit* nearestPlayerEnemy = nullptr;
+					float nearestPlayerDistance = VISIBILITY_DISTANCE_NORMAL;
+					std::list<Unit*> enemyList;
+					MaNGOS::AnyUnitInObjectRangeCheck unitChecker(me, VISIBILITY_DISTANCE_NORMAL);
+					MaNGOS::UnitListSearcher<MaNGOS::AnyUnitInObjectRangeCheck> unitSearcher(enemyList, unitChecker);
+					Cell::VisitAllObjects(me, unitSearcher, VISIBILITY_DISTANCE_NORMAL);
+					for (Unit* eachEnemy : enemyList)
+					{
+						if (eachEnemy->IsAlive())
+						{
+							if (me->CanAttack(eachEnemy))
+							{
+								float enemyDistance = me->GetDistance(eachEnemy);
+								if (eachEnemy->GetTypeId() == TypeID::TYPEID_PLAYER)
+								{
+									if (enemyDistance < nearestPlayerDistance)
+									{
+										nearestPlayerEnemy = eachEnemy;
+										nearestPlayerDistance = enemyDistance;
+									}
+								}
+								else
+								{
+									if (enemyDistance < nearestUnitDistance)
+									{
+										nearestUnitEnemy = eachEnemy;
+										nearestUnitDistance = enemyDistance;
+									}
+								}
+							}
+						}
+					}
+					if (nearestPlayerEnemy)
+					{
+						victim = nearestPlayerEnemy;
+					}
+					else
+					{
+						victim = nearestUnitEnemy;
+					}
+				}
 			}
 			if (victim)
 			{
@@ -564,12 +618,6 @@ void NierScript_Base::Update(uint32 pDiff)
 			{
 				return;
 			}
-			if (relocateDelay <= 0)
-			{
-				relocateDelay = urand(600000, 1800000);
-				Relocate();
-				return;
-			}
 			if (wanderDelay > 0)
 			{
 				return;
@@ -586,9 +634,9 @@ void NierScript_Base::Update(uint32 pDiff)
 			if (!victim)
 			{
 				std::list<Unit*> enemyList;
-				MaNGOS::AnyUnitInObjectRangeCheck unitChecker(me, VISIBILITY_DISTANCE_GIGANTIC);
+				MaNGOS::AnyUnitInObjectRangeCheck unitChecker(me, VISIBILITY_DISTANCE_LARGE);
 				MaNGOS::UnitListSearcher<MaNGOS::AnyUnitInObjectRangeCheck> unitSearcher(enemyList, unitChecker);
-				Cell::VisitAllObjects(me, unitSearcher, VISIBILITY_DISTANCE_GIGANTIC);
+				Cell::VisitAllObjects(me, unitSearcher, VISIBILITY_DISTANCE_LARGE);
 
 				for (Unit* eachEnemy : enemyList)
 				{
@@ -625,6 +673,7 @@ void NierScript_Base::Relocate()
 		return;
 	}
 	me->ClearInCombat();
+	bool relocated = false;
 	ObjectGuid masterGuid = ObjectGuid(HIGHGUID_PLAYER, masterId);
 	if (Player* master = ObjectAccessor::FindPlayer(masterGuid))
 	{
@@ -640,12 +689,25 @@ void NierScript_Base::Relocate()
 				mapId = masterMap->GetId();
 				float distance = frand(100.0f, 300.0f);
 				float angle = frand(0.0f, M_PI * 2.0f);
-				me->GetNearPoint(nullptr, x, y, z, 0.0f, distance, angle);
 				master->GetNearPoint(nullptr, x, y, z, 0.0f, distance, angle);
+				me->TeleportTo(mapId, x, y, z, 0.0f);
+				relocated = true;
 			}
 		}
-		me->TeleportTo(mapId, x, y, z, 0.0f);
 	}
+	if (!relocated)
+	{
+		uint32 mapId = me->GetMapId();
+		float x = 0.0f;
+		float y = 0.0f;
+		float z = 0.0f;
+		float distance = frand(50.0f, 200.0f);
+		float angle = frand(0.0f, M_PI * 2.0f);
+		me->GetNearPoint(nullptr, x, y, z, 0.0f, distance, angle);
+		me->TeleportTo(mapId, x, y, z, 0.0f);
+		relocated = true;
+	}
+	prepareDelay = 10;
 }
 
 void NierScript_Base::InitializeCharacter()
@@ -1149,6 +1211,10 @@ void NierScript_Base::MoveTo(Position pDestination, Unit* pTarget, uint32 pMoveT
 	if (me->getStandState() != UnitStandStateType::UNIT_STAND_STATE_STAND)
 	{
 		me->SetStandState(UnitStandStateType::UNIT_STAND_STATE_STAND);
+	}
+	if (!me->CanFreeMove())
+	{
+		return;
 	}
 	me->m_movementInfo.RemoveMovementFlag(MovementFlags::MOVEFLAG_SPLINE_ELEVATION);
 	float runSpeed = me->GetSpeed((UnitMoveType)pMoveType);
