@@ -4217,6 +4217,11 @@ void ObjectMgr::LoadPlayerInfo()
                 {
                     continue;
                 }
+                // Faerie Fire (Feral)
+                if (spell_id == 16857)
+                {
+                    continue;
+                }
 
                 PlayerInfo* pInfo = &playerInfo[current_race][current_class];
                 pInfo->spell.push_back(spell_id);
