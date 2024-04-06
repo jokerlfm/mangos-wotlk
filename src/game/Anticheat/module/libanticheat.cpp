@@ -21,7 +21,7 @@
 #include "Chat/Chat.h"
 #include "Tools/Language.h"
 #include "Globals/ObjectMgr.h"
-#include "Log.h"
+#include "Log/Log.h"
 
 #include "Antispam/antispammgr.hpp"
 #include "Antispam/antispam.hpp"
@@ -215,7 +215,7 @@ namespace NamreebAnticheat
 {
 void AnticheatLib::Reload()
 {
-    if (!sAnticheatConfig.SetSource(_LIB_ANTICHEAT_CONFIG))
+    if (!sAnticheatConfig.SetSource(_LIB_ANTICHEAT_CONFIG, "Anticheat_"))
         sLog.outError("[Anticheat] Could not find configuration file %s.", _LIB_ANTICHEAT_CONFIG);
 
     // the configuration setting must be loaded before the database data because the current config settings

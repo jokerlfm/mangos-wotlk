@@ -18,7 +18,7 @@
 
 #include "Entities/Pet.h"
 #include "Database/DatabaseEnv.h"
-#include "Log.h"
+#include "Log/Log.h"
 #include "Server/WorldPacket.h"
 #include "Globals/ObjectMgr.h"
 #include "Spells/SpellMgr.h"
@@ -1366,7 +1366,7 @@ void Pet::_LoadSpellCooldowns()
         {
             WorldPacket data(SMSG_SPELL_COOLDOWN, 8 + 1 + cdData.size());
             data << GetObjectGuid();
-            data << uint8(0x0);                                     // flags (0x1, 0x2)
+            data << uint8(SPELL_COOLDOWN_FLAG_NONE);
             data.append(cdData);
             static_cast<Player*>(GetOwner())->GetSession()->SendPacket(data);
         }
@@ -2451,7 +2451,17 @@ void Pet::ForcedDespawn(uint32 timeMSToDespawn, bool onlyAlive)
     if (IsAlive())
         SetDeathState(JUST_DIED);
 
-    RemoveCorpse(true);                                     // force corpse removal in the same grid
+    if (GetDeathState() == CORPSE) // rest of despawn cleanup meant to be done by Unsummon
+    {
+        if (AI())
+        {
+            uint32 respawnDelay = 0;
+            AI()->CorpseRemoved(respawnDelay);
+        }
+
+        if (InstanceData* mapInstance = GetInstanceData())
+            mapInstance->OnCreatureDespawn(this);
+    }
 
     Unsummon(PET_SAVE_NOT_IN_SLOT, owner);
 }

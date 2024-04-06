@@ -18,7 +18,7 @@
 
 #include "AuctionHouseBot.h"
 #include "Globals/ObjectMgr.h"
-#include "Log.h"
+#include "Log/Log.h"
 #include "Policies/Singleton.h"
 #include "Util/ProgressBar.h"
 #include "SystemConfig.h"
@@ -40,7 +40,7 @@ AuctionHouseBot::~AuctionHouseBot()
 
 void AuctionHouseBot::Initialize()
 {
-    if (!m_ahBotCfg.SetSource(m_configFileName))
+    if (!m_ahBotCfg.SetSource(m_configFileName, "Mangosd_"))
     {
         // set buy/sell chance to 0, this prevents Update() from accessing uninitialized variables
         m_chanceBuy = 0;

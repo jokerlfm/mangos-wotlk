@@ -17,7 +17,7 @@
  */
 
 #include "Common.h"
-#include "Log.h"
+#include "Log/Log.h"
 #include "Server/WorldPacket.h"
 #include "Server/WorldSession.h"
 #include "World/World.h"
@@ -42,7 +42,7 @@
 
 bool WorldSession::CheckChatMessage(std::string& msg, bool addon/* = false*/)
 {
-#ifdef BUILD_PLAYERBOT
+#ifdef BUILD_DEPRECATED_PLAYERBOT
     // bot check can be avoided
     if (_player->GetPlayerbotAI())
         return true;

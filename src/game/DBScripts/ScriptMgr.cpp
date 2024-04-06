@@ -18,7 +18,7 @@
 
 #include "DBScripts/ScriptMgr.h"
 #include "Policies/Singleton.h"
-#include "Log.h"
+#include "Log/Log.h"
 #include "Util/ProgressBar.h"
 #include "Globals/ObjectMgr.h"
 #include "MotionGenerators/WaypointManager.h"
@@ -2086,12 +2086,7 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
 
             if (m_script->changeDoor.goGuid)
             {
-                GameObjectData const* goData = sObjectMgr.GetGOData(m_script->changeDoor.goGuid);
-                if (!goData)                                // checked at load
-                    break;
-
-                // TODO - Was a change, before random map
-                door = m_map->GetGameObject(ObjectGuid(HIGHGUID_GAMEOBJECT, goData->id, m_script->changeDoor.goGuid));
+                door = m_map->GetGameObject(m_script->changeDoor.goGuid);
             }
             else
             {
@@ -2169,7 +2164,9 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
 
             SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
             if (spellInfo->HasAttribute(SPELL_ATTR_EX_EXCLUDE_CASTER) && pTarget == pSource)
-                pTarget = nullptr; // TODO: Add mechanism to opt not sending target
+                pTarget = nullptr;
+            if (m_script->data_flags & SCRIPT_FLAG_COMMAND_ADDITIONAL)
+                pTarget = nullptr;
 
             // TODO: when GO cast implemented, code below must be updated accordingly to also allow GO spell cast
             if (pSource && pSource->IsGameObject())
@@ -3388,6 +3385,9 @@ void ScriptMgr::CollectPossibleEventIds(std::set<uint32>& eventIds)
     {
         switch (itr->type)
         {
+            case GAMEOBJECT_TYPE_CHAIR:
+                eventIds.insert(itr->chair.triggeredEvent);
+                break;
             case GAMEOBJECT_TYPE_GOOBER:
                 eventIds.insert(itr->goober.eventId);
                 break;

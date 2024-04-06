@@ -24,7 +24,7 @@
 #include "Database/DatabaseEnv.h"
 #include "Config/Config.h"
 #include "Util/ProgressBar.h"
-#include "Log.h"
+#include "Log/Log.h"
 #include "Master.h"
 #include "SystemConfig.h"
 #include "AuctionHouseBot/AuctionHouseBot.h"
@@ -74,7 +74,7 @@ int main(int argc, char* argv[])
     desc.add_options()
     ("ahbot,a", boost::program_options::value<std::string>(&auctionBotConfig), "ahbot configuration file")
     ("config,c", boost::program_options::value<std::string>(&configFile)->default_value(_MANGOSD_CONFIG), "configuration file")
-#ifdef BUILD_PLAYERBOT
+#ifdef BUILD_DEPRECATED_PLAYERBOT
     ("playerbot,p", boost::program_options::value<std::string>(&playerBotConfig)->default_value(_D_PLAYERBOT_CONFIG), "playerbot configuration file")
 #endif
     ("help,h", "prints usage")
@@ -116,7 +116,7 @@ int main(int argc, char* argv[])
     if (vm.count("ahbot"))
         sAuctionHouseBot.SetConfigFileName(auctionBotConfig);
 
-#ifdef BUILD_PLAYERBOT
+#ifdef BUILD_DEPRECATED_PLAYERBOT
     if (vm.count("playerbot"))
         _PLAYERBOT_CONFIG = playerBotConfig;
 #endif
@@ -141,7 +141,7 @@ int main(int argc, char* argv[])
     }
 #endif
 
-    if (!sConfig.SetSource(configFile))
+    if (!sConfig.SetSource(configFile, "Mangosd_"))
     {
         sLog.outError("Could not find configuration file %s.", configFile.c_str());
         Log::WaitBeforeContinueIfNeed();

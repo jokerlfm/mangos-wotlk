@@ -27,7 +27,7 @@
 #include "Entities/Player.h"
 #include "Entities/GameObject.h"
 #include "Chat/Chat.h"
-#include "Log.h"
+#include "Log/Log.h"
 #include "Guilds/Guild.h"
 #include "Guilds/GuildMgr.h"
 #include "Globals/ObjectAccessor.h"
@@ -284,7 +284,6 @@ bool ChatHandler::HandleReloadAllSpellCommand(char* /*args*/)
     HandleReloadSpellElixirCommand((char*)"a");
     HandleReloadSpellLearnSpellCommand((char*)"a");
     HandleReloadSpellProcEventCommand((char*)"a");
-    HandleReloadSpellBonusesCommand((char*)"a");
     HandleReloadSpellProcItemEnchantCommand((char*)"a");
     HandleReloadSpellScriptTargetCommand((char*)"a");
     HandleReloadSpellTargetPositionCommand((char*)"a");
@@ -711,14 +710,6 @@ bool ChatHandler::HandleReloadSpellAreaCommand(char* /*args*/)
     sLog.outString("Re-Loading SpellArea Data...");
     sSpellMgr.LoadSpellAreas();
     SendGlobalSysMessage("DB table `spell_area` (spell dependences from area/quest/auras state) reloaded.");
-    return true;
-}
-
-bool ChatHandler::HandleReloadSpellBonusesCommand(char* /*args*/)
-{
-    sLog.outString("Re-Loading Spell Bonus Data...");
-    sSpellMgr.LoadSpellBonuses();
-    SendGlobalSysMessage("DB table `spell_bonus_data` (spell damage/healing coefficients) reloaded.");
     return true;
 }
 
@@ -4147,7 +4138,7 @@ bool ChatHandler::HandleNpcInfoCommand(char* /*args*/)
     if (CreatureGroup* group = target->GetCreatureGroup())
         PSendSysMessage("Creature group: %u", group->GetGroupEntry().Id);
 
-    if (auto vector = sObjectMgr.GetAllRandomCreatureEntries(target->GetGUIDLow()))
+    if (auto vector = sObjectMgr.GetAllRandomCreatureEntries(target->GetDbGuid()))
     {
         std::string output;
         for (uint32 entry : *vector)
@@ -4164,7 +4155,7 @@ bool ChatHandler::HandleNpcInfoCommand(char* /*args*/)
         SendSysMessage(LANG_NPCINFO_TRAINER);
     }
 
-    ShowNpcOrGoSpawnInformation<Creature>(target->GetGUIDLow());
+    ShowNpcOrGoSpawnInformation<Creature>(target->GetDbGuid());
     return true;
 }
 
@@ -6110,6 +6101,21 @@ bool ChatHandler::HandleGMFlyCommand(char* args)
     return true;
 }
 
+bool ChatHandler::HandleGMUnkillableCommand(char* args)
+{
+    bool value;
+    if (!ExtractOnOff(&args, value))
+    {
+        SendSysMessage(LANG_USE_BOL);
+        SetSentErrorMessage(true);
+        return false;
+    }
+    Player* target = m_session->GetPlayer();
+    target->SetDeathPrevention(value);
+    PSendSysMessage("GM Unkillability %s.", value ? "enabled" : "disabled");
+    return true;
+}
+
 bool ChatHandler::HandlePDumpLoadCommand(char* args)
 {
     char* file = ExtractQuotedOrLiteralArg(&args);
@@ -7874,6 +7880,21 @@ bool ChatHandler::HandleExpansionRelease(char* args)
         PSendSysMessage("New Expansion set to %u", param);
     else
         PSendSysMessage("Setting expansion failed. Consult manual.");
+    return true;
+}
+
+bool ChatHandler::HandleSetVariable(char* args)
+{
+    int32 variableId;
+    if (!ExtractInt32(&args, variableId))
+        return false;
+
+    int32 value;
+    if (!ExtractInt32(&args, value))
+        return false;
+
+    Player* player = GetSession()->GetPlayer();
+    player->GetMap()->GetVariableManager().SetVariable(variableId, value);
     return true;
 }
 

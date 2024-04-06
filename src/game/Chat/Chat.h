@@ -364,6 +364,7 @@ class ChatHandler
         bool HandleGMCommand(char* args);
         bool HandleGMChatCommand(char* args);
         bool HandleGMFlyCommand(char* args);
+        bool HandleGMUnkillableCommand(char* args);
         bool HandleGMListFullCommand(char* args);
         bool HandleGMListIngameCommand(char* args);
         bool HandleGMMountUpCommand(char* args);
@@ -635,7 +636,6 @@ class ChatHandler
         bool HandleReloadSpellLearnSpellCommand(char* args);
         bool HandleReloadSpellProcEventCommand(char* args);
         bool HandleReloadSpellProcItemEnchantCommand(char* args);
-        bool HandleReloadSpellBonusesCommand(char* args);
         bool HandleReloadSpellScriptTargetCommand(char* args);
         bool HandleReloadSpellTargetPositionCommand(char* args);
         bool HandleReloadSpellThreatsCommand(char* args);
@@ -797,7 +797,7 @@ class ChatHandler
         bool HandleWaterwalkCommand(char* args);
         bool HandleQuitCommand(char* args);
         bool HandleShowGearScoreCommand(char* args);
-#ifdef BUILD_PLAYERBOT
+#ifdef BUILD_DEPRECATED_PLAYERBOT
         bool HandlePlayerbotCommand(char* args);
 #endif
 
@@ -835,6 +835,7 @@ class ChatHandler
         bool HandleSunwellGateCommand(char* args);
         bool HandleSunwellGateCounterCommand(char* args);
         bool HandleExpansionRelease(char* args);
+        bool HandleSetVariable(char* args);
 
         // Battleground
         bool HandleBattlegroundStartCommand(char* args);

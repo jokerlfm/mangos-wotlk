@@ -358,11 +358,26 @@ enum WorldStateID : int32
     // Tbc
     WORLD_STATE_CUSTOM_SPAWN_MALACRASS = 5680001,
 
+    // Shattered Halls
+    WORLD_STATE_LEGIONNAIRE_001     = 5400001,              // Prevents that shattered hand savage/heathen can respawn when legionnaire 01 is dead
+    WORLD_STATE_LEGIONNAIRE_002     = 5400002,              // Spawns Legionnaire 03 group
+    WORLD_STATE_LEGIONNAIRE_003     = 5400003,              // Spawns Legionnaire 04 and 05 groups
+    WORLD_STATE_CUSTOM_SPAWN_WAVES  = 5400004,              // Spawns initial waves at gauntlet of flame
+
     // Wotlk
     WORLD_STATE_CUSTOM_HEADLESS_HORSEMAN_DUNGEON    = 20000,
     WORLD_STATE_CUSTOM_AHUNE_DUNGEON                = 20001,
     WORLD_STATE_CUSTOM_COREN_DIREBREW_DUNGEON       = 20002,
     WORLD_STATE_CUSTOM_CROWN_CHEMICAL_CO_DUNGEON    = 20003,
+
+    WORLD_STATE_CUSTOM_ICC_GRP_01                   = 350001,
+    WORLD_STATE_CUSTOM_ICC_GRP_02                   = 350002,
+    WORLD_STATE_CUSTOM_ICC_GRP_03                   = 350003,
+    WORLD_STATE_CUSTOM_ICC_GRP_04                   = 350004,
+    WORLD_STATE_CUSTOM_ICC_GRP_05                   = 350005,
+    WORLD_STATE_CUSTOM_ICC_GRP_06                   = 350006,
+    WORLD_STATE_CUSTOM_ICC_GRP_07                   = 350007,
+    WORLD_STATE_CUSTOM_ICC_GRP_08                   = 350008,
 
     // Obsidian Sanctum
     WORLD_STATE_CUSTOM_SPAWN_FLAME_WALL_LEFT    = 20004,

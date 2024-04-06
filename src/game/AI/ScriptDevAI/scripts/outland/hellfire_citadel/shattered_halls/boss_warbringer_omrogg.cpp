@@ -193,8 +193,8 @@ struct boss_warbringer_omroggAI : public CombatAI
 
     void Aggro(Unit* /*who*/) override
     {
-        m_creature->SummonCreature(NPC_LEFT_HEAD, 0.0f, 0.0f, 0.0f, 0.0f, TEMPSPAWN_DEAD_DESPAWN, 0);
-        m_creature->SummonCreature(NPC_RIGHT_HEAD, 0.0f, 0.0f, 0.0f, 0.0f, TEMPSPAWN_DEAD_DESPAWN, 0);
+        m_creature->SummonCreature(NPC_LEFT_HEAD, 374.3786f, 51.28566f, 30.64389f, 0.03490658f, TEMPSPAWN_DEAD_DESPAWN, 0);
+        m_creature->SummonCreature(NPC_RIGHT_HEAD, 374.3565f, 64.50481f, 31.22059f, 6.073746f, TEMPSPAWN_DEAD_DESPAWN, 0);
 
         if (Creature* leftHead = m_creature->GetMap()->GetCreature(m_leftHeadGuid))
         {
@@ -351,7 +351,7 @@ struct Beatdown : public SpellScript
         if (itr == spell->GetTargetList().end())
             return;
 
-        caster->getThreatManager().modifyAllThreatPercent(100);
+        caster->getThreatManager().modifyAllThreatPercent(-100);
         caster->AI()->AttackStart(target);
     }
 };

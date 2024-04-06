@@ -30,7 +30,7 @@
 #include "GameEvents/GameEventMgr.h"
 #include "Pools/PoolManager.h"
 #include "Server/Opcodes.h"
-#include "Log.h"
+#include "Log/Log.h"
 #include "Loot/LootMgr.h"
 #include "Maps/MapManager.h"
 #include "AI/BaseAI/CreatureAI.h"
@@ -2852,7 +2852,7 @@ void Creature::SetBaseRunSpeed(float speed, bool force)
 
 void Creature::LockOutSpells(SpellSchoolMask schoolMask, uint32 duration)
 {
-    if (GetCreatureInfo()->MechanicImmuneMask & (1 << (MECHANIC_SILENCE - 1)))
+    if (m_settings.HasFlag(CreatureStaticFlags2::NO_INTERRUPT_SCHOOL_COOLDOWN))
         return;
 
     WorldObject::LockOutSpells(schoolMask, duration);
@@ -3079,7 +3079,7 @@ void Creature::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* /*
                 // send to client
                 WorldPacket data(SMSG_SPELL_COOLDOWN, 8 + 1 + 4);
                 data << GetObjectGuid();
-                data << uint8(1);
+                data << uint8(SPELL_COOLDOWN_FLAG_INCLUDE_GCD);
                 data << uint32(spellEntry.Id);
                 data << uint32(recTime);
                 player->GetSession()->SendPacket(data);

@@ -20,7 +20,7 @@
 #include "Globals/SharedDefines.h"
 #include "Server/WorldPacket.h"
 #include "Server/Opcodes.h"
-#include "Log.h"
+#include "Log/Log.h"
 #include "World/World.h"
 #include "Entities/Creature.h"
 #include "Entities/Player.h"
@@ -1325,7 +1325,7 @@ void WorldObject::RemoveStringId(std::string& stringId)
         SetStringId(stringIdId, false);
 }
 
-bool WorldObject::HasStringId(std::string& stringId) const
+bool WorldObject::HasStringId(const std::string& stringId) const
 {
     return HasStringId(GetMap()->GetMapDataContainer().GetStringId(stringId));
 }
@@ -3208,7 +3208,7 @@ int32 WorldObject::CalculateSpellEffectValue(Unit const* target, SpellEntry cons
         }
     }
 
-    if (unitCaster && spellProto->HasAttribute(SPELL_ATTR_SCALES_WITH_CREATURE_LEVEL) && spellProto->spellLevel)
+    if (unitCaster && unitCaster->IsCreature() && spellProto->HasAttribute(SPELL_ATTR_SCALES_WITH_CREATURE_LEVEL) && spellProto->spellLevel)
     {
         // TODO: Drastically beter than before, but still needs some additional aura scaling research
         bool damage = false;
@@ -3249,10 +3249,15 @@ int32 WorldObject::CalculateSpellEffectValue(Unit const* target, SpellEntry cons
 
         if (damage)
         {
-            GtNPCManaCostScalerEntry const* spellScaler = sGtNPCManaCostScalerStore.LookupEntry(spellProto->spellLevel - 1);
-            GtNPCManaCostScalerEntry const* casterScaler = sGtNPCManaCostScalerStore.LookupEntry(unitCaster->GetLevel() - 1);
-            if (spellScaler && casterScaler)
-                value *= casterScaler->ratio / spellScaler->ratio;
+            CreatureInfo const* cInfo = static_cast<Creature const*>(unitCaster)->GetCreatureInfo();
+            CreatureClassLvlStats const* casterCLS = sObjectMgr.GetCreatureClassLvlStats(unitCaster->GetLevel(), cInfo->UnitClass, cInfo->Expansion);
+            CreatureClassLvlStats const* spellCLS = sObjectMgr.GetCreatureClassLvlStats(spellProto->spellLevel, cInfo->UnitClass, cInfo->Expansion);
+            if (casterCLS && spellCLS)
+            {
+                float CLSPowerCreature = casterCLS->BaseDamage;
+                float CLSPowerSpell = spellCLS->BaseDamage;
+                value = value * (CLSPowerCreature / CLSPowerSpell);
+            }
         }
     }
 

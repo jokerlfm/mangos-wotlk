@@ -20,7 +20,7 @@
 #include "Database/DatabaseEnv.h"
 #include "Server/WorldPacket.h"
 #include "Server/Opcodes.h"
-#include "Log.h"
+#include "Log/Log.h"
 #include "World/World.h"
 #include "Globals/ObjectMgr.h"
 #include "Spells/SpellMgr.h"
@@ -332,13 +332,6 @@ void Spell::EffectSchoolDMG(SpellEffectIndex eff_idx)
                         damage = (20 - m_caster->GetDistance(x, y, z, DIST_CALC_COMBAT_REACH))*(damage / 20);
                         break;
                     }
-                    // Intercept (warrior spell trigger)
-                    case 20253:
-                    case 61491:
-                    {
-                        damage += uint32(m_caster->GetTotalAttackPowerValue(BASE_ATTACK) * 0.12f);
-                        break;
-                    }
                     // percent max target health
                     case 29142:                             // Eyesore Blaster
                     case 35139:                             // Throw Boom's Doom
@@ -405,10 +398,6 @@ void Spell::EffectSchoolDMG(SpellEffectIndex eff_idx)
                         damage = unitTarget->GetMaxHealth() / 10;
                         break;
                     }
-                    // Hand of Rekoning (name not have typos ;) )
-                    case 67485:
-                        damage += uint32(0.5f * m_caster->GetTotalAttackPowerValue(BASE_ATTACK));
-                        break;
                     // Magic Bane normal (Forge of Souls - Bronjahm)
                     case 68793:
                     {
@@ -435,19 +424,15 @@ void Spell::EffectSchoolDMG(SpellEffectIndex eff_idx)
                 }
                 // Shield Slam
                 else if ((m_spellInfo->SpellFamilyFlags & uint64(0x0000020000000000)) && m_spellInfo->Category == 1209)
+                {
                     damage += int32(m_caster->GetShieldBlockValue());                
-                else if (m_spellInfo->SpellFamilyFlags & uint64(0x0000000000000400))
+                }
+		else if (m_spellInfo->SpellFamilyFlags & uint64(0x0000000000000400))
                 {
                     // lfm revenge bonus 
                     // Revenge ${$m1+$AP*0.310} to ${$M1+$AP*0.310}
                     damage = uint32(m_caster->GetTotalAttackPowerValue(BASE_ATTACK) * 0.05f);
                 }                    
-                // Heroic Throw ${$m1+$AP*.50}
-                else if (m_spellInfo->SpellFamilyFlags & uint64(0x0000000100000000))
-                    damage += uint32(m_caster->GetTotalAttackPowerValue(BASE_ATTACK) * 0.5f);
-                // Shattering Throw ${$m1+$AP*.50}
-                else if (m_spellInfo->SpellFamilyFlags & uint64(0x0040000000000000))
-                    damage += uint32(m_caster->GetTotalAttackPowerValue(BASE_ATTACK) * 0.5f);
                 // Shockwave ${$m3/100*$AP}
                 else if (m_spellInfo->SpellFamilyFlags & uint64(0x0000800000000000))
                 {
@@ -727,24 +712,6 @@ void Spell::EffectSchoolDMG(SpellEffectIndex eff_idx)
                     if (stacks)
                         damage += damage * stacks * 10 / 100;
                 }
-                // Avenger's Shield ($m1+0.07*$SPH+0.07*$AP) - ranged sdb for future
-                else if (m_spellInfo->SpellFamilyFlags & uint64(0x0000000000004000))
-                {
-                    float ap = m_caster->GetTotalAttackPowerValue(BASE_ATTACK);
-                    int32 holy = m_caster->SpellBaseDamageBonusDone(GetSpellSchoolMask(m_spellInfo));
-                    if (holy < 0)
-                        holy = 0;
-                    damage += int32(ap * 0.07f) + int32(holy * 7 / 100);
-                }
-                // Hammer of Wrath ($m1+0.15*$SPH+0.15*$AP) - ranged type sdb future fix
-                else if (m_spellInfo->SpellFamilyFlags & uint64(0x0000008000000000))
-                {
-                    float ap = m_caster->GetTotalAttackPowerValue(BASE_ATTACK);
-                    int32 holy = m_caster->SpellBaseDamageBonusDone(GetSpellSchoolMask(m_spellInfo));
-                    if (holy < 0)
-                        holy = 0;
-                    damage += int32(ap * 0.15f) + int32(holy * 15 / 100);
-                }
                 // Hammer of the Righteous
                 else if (m_spellInfo->SpellFamilyFlags & uint64(0x0004000000000000))
                 {
@@ -786,7 +753,7 @@ void Spell::EffectSchoolDMG(SpellEffectIndex eff_idx)
         }
 
         if (damage >= 0)
-            m_damagePerEffect[eff_idx] = CalculateSpellEffectDamage(unitTarget, damage, m_damageDoneMultiplier[eff_idx]);
+            m_damagePerEffect[eff_idx] = CalculateSpellEffectDamage(unitTarget, damage, m_damageDoneMultiplier[eff_idx], eff_idx);
     }
 }
 
@@ -1374,13 +1341,6 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                 {
                     if (m_CastItem)
                         m_caster->CastSpell(m_caster, 13166, TRIGGERED_OLD_TRIGGERED, m_CastItem);
-
-                    return;
-                }
-                case 23134:                                 // Goblin Bomb Dispenser
-                {
-                    if (m_CastItem)
-                        m_caster->CastSpell(m_caster, 13258, TRIGGERED_OLD_TRIGGERED, m_CastItem);
 
                     return;
                 }
@@ -4279,7 +4239,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                                         + unitTarget->SpellBaseDamageBonusTaken(GetSpellSchoolMask(m_spellInfo));
                     // Does Amplify Magic/Dampen Magic influence flametongue? If not, the above addition must be removed.
                     float weaponSpeed = float(m_CastItem->GetProto()->Delay) / IN_MILLISECONDS;
-                    bonusDamage = m_caster->SpellBonusWithCoeffs(m_spellInfo, 0, bonusDamage, 0, SPELL_DIRECT_DAMAGE, false); // apply spell coeff
+                    bonusDamage = m_caster->SpellBonusWithCoeffs(m_spellInfo, eff_idx, 0, bonusDamage, 0, SPELL_DIRECT_DAMAGE, false); // apply spell coeff
                     int32 totalDamage = ((damage + bonusDamage) * 0.01 * weaponSpeed);
 
                     m_caster->CastCustomSpell(unitTarget, 10444, &totalDamage, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, m_CastItem);
@@ -5026,8 +4986,8 @@ void Spell::EffectPowerDrain(SpellEffectIndex eff_idx)
     uint32 curPower = unitTarget->GetPower(powerType);
 
     // add spell damage bonus
-    damage = m_caster->SpellDamageBonusDone(unitTarget, m_spellSchoolMask, m_spellInfo, uint32(damage), SPELL_DIRECT_DAMAGE);
-    damage = unitTarget->SpellDamageBonusTaken(m_caster, m_spellSchoolMask, m_spellInfo, uint32(damage), SPELL_DIRECT_DAMAGE);
+    damage = m_caster->SpellDamageBonusDone(unitTarget, m_spellSchoolMask, m_spellInfo, eff_idx, uint32(damage), SPELL_DIRECT_DAMAGE);
+    damage = unitTarget->SpellDamageBonusTaken(m_caster, m_spellSchoolMask, m_spellInfo, eff_idx, uint32(damage), SPELL_DIRECT_DAMAGE);
 
     uint32 power = damage;
 
@@ -5105,7 +5065,7 @@ void Spell::EffectPowerBurn(SpellEffectIndex eff_idx)
 
     new_damage = int32(new_damage * multiplier);
 
-    m_damagePerEffect[eff_idx] = CalculateSpellEffectDamage(unitTarget, new_damage, m_damageDoneMultiplier[eff_idx]);
+    m_damagePerEffect[eff_idx] = CalculateSpellEffectDamage(unitTarget, new_damage, m_damageDoneMultiplier[eff_idx], eff_idx);
     m_spellLog.AddLog(uint32(SPELL_EFFECT_POWER_BURN), unitTarget->GetPackGUID(), new_damage, uint32(powertype), multiplier);
 }
 
@@ -5229,9 +5189,9 @@ void Spell::EffectHeal(SpellEffectIndex eff_idx)
             }
         }
 
-        addhealth = caster->SpellHealingBonusDone(unitTarget, m_spellInfo, addhealth, HEAL);
+        addhealth = caster->SpellHealingBonusDone(unitTarget, m_spellInfo, eff_idx, addhealth, HEAL);
         addhealth *= m_damageDoneMultiplier[eff_idx];
-        addhealth = unitTarget->SpellHealingBonusTaken(caster, m_spellInfo, addhealth, HEAL);
+        addhealth = unitTarget->SpellHealingBonusTaken(caster, m_spellInfo, eff_idx, addhealth, HEAL);
 
         m_healingPerEffect[eff_idx] = addhealth;
     }
@@ -5248,8 +5208,8 @@ void Spell::EffectHealPct(SpellEffectIndex eff_idx)
 
         uint32 addhealth = unitTarget->GetMaxHealth() * damage / 100;
 
-        addhealth = caster->SpellHealingBonusDone(unitTarget, m_spellInfo, addhealth, HEAL);
-        addhealth = unitTarget->SpellHealingBonusTaken(caster, m_spellInfo, addhealth, HEAL);
+        addhealth = caster->SpellHealingBonusDone(unitTarget, m_spellInfo, eff_idx, addhealth, HEAL);
+        addhealth = unitTarget->SpellHealingBonusTaken(caster, m_spellInfo, eff_idx, addhealth, HEAL);
 
         uint32 absorb = 0;
         unitTarget->CalculateHealAbsorb(addhealth, &absorb);
@@ -5268,8 +5228,8 @@ void Spell::EffectHealMechanical(SpellEffectIndex eff_idx)
         if (!caster)
             return;
 
-        uint32 addhealth = caster->SpellHealingBonusDone(unitTarget, m_spellInfo, damage, HEAL);
-        addhealth = unitTarget->SpellHealingBonusTaken(caster, m_spellInfo, addhealth, HEAL);
+        uint32 addhealth = caster->SpellHealingBonusDone(unitTarget, m_spellInfo, eff_idx, damage, HEAL);
+        addhealth = unitTarget->SpellHealingBonusTaken(caster, m_spellInfo, eff_idx, addhealth, HEAL);
 
         uint32 absorb = 0;
         unitTarget->CalculateHealAbsorb(addhealth, &absorb);
@@ -5303,7 +5263,7 @@ void Spell::EffectHealthLeech(SpellEffectIndex eff_idx)
     int32 heal = int32(damage * multiplier);
     if (m_caster->IsAlive())
     {
-        heal = m_caster->SpellHealingBonusTaken(m_caster, m_spellInfo, heal, HEAL);
+        heal = m_caster->SpellHealingBonusTaken(m_caster, m_spellInfo, eff_idx, heal, HEAL);
 
         uint32 absorb = 0;
         m_caster->CalculateHealAbsorb(heal, &absorb);
@@ -5920,22 +5880,21 @@ void Spell::EffectSummonType(SpellEffectIndex eff_idx)
 
     // Expected Level
     WorldObject* petInvoker = responsibleCaster ? responsibleCaster : m_trueCaster;
-    uint32 level = 0;
     // Everything considered as guardian or critter pets uses its creature template level by default (may change depending on SpellEffect params)
     if (summon_prop->Title == UNITNAME_SUMMON_TITLE_COMPANION || m_ignoreOwnerLevel || summon_prop->Flags & SUMMON_PROP_FLAG_USE_CREATURE_LEVEL)
     {
         if (CreatureInfo const* cInfo = ObjectMgr::GetCreatureTemplate(m_spellInfo->EffectMiscValue[eff_idx]))
-            level = urand(cInfo->MinLevel, cInfo->MaxLevel);
+            creatureLevel = urand(cInfo->MinLevel, cInfo->MaxLevel);
         else
         {
             sLog.outError("Spell Effect EFFECT_SUMMON (%u) - no creature template found for summoned NPC %u (spell id %u, effIndex %u)", m_spellInfo->Effect[eff_idx], m_spellInfo->EffectMiscValue[eff_idx], m_spellInfo->Id, eff_idx);
             return;
         }
     }
-    else    // Use invoker level in all other cases (to be confirmed)
+    else if (summon_prop->Title != UNITNAME_SUMMON_TITLE_NONE && summon_prop->Group != SUMMON_PROP_GROUP_WILD) // use invoker level for other cases than wild
     {
         if (CreatureInfo const* cInfo = ObjectMgr::GetCreatureTemplate(m_spellInfo->EffectMiscValue[eff_idx]))
-            level = std::max(std::min(petInvoker->GetLevel(), cInfo->MaxLevel), cInfo->MinLevel);
+            creatureLevel = std::max(std::min(petInvoker->GetLevel(), cInfo->MaxLevel), cInfo->MinLevel);
         else
         {
             sLog.outError("Spell Effect EFFECT_SUMMON (%u) - no creature template found for summoned NPC %u (spell id %u, effIndex %u)", m_spellInfo->Effect[eff_idx], m_spellInfo->EffectMiscValue[eff_idx], m_spellInfo->Id, eff_idx);
@@ -5948,11 +5907,11 @@ void Spell::EffectSummonType(SpellEffectIndex eff_idx)
         // If EffectMultipleValue <= 0, pets have their calculated level modified by EffectMultipleValue
         if (m_spellInfo->EffectMultipleValue[eff_idx] <= 0) // TODO: Check if instead of using level variable, should not use 0 in this check
         {
-            uint32 resultLevel = std::max(level + m_spellInfo->EffectMultipleValue[eff_idx], 0.0f);
+            uint32 resultLevel = std::max(creatureLevel + m_spellInfo->EffectMultipleValue[eff_idx], 0.0f);
 
             // Result level should be a valid level for creatures
             if (resultLevel > 0 && resultLevel <= DEFAULT_MAX_CREATURE_LEVEL)
-                level = resultLevel;
+                creatureLevel = resultLevel;
         }
 	}
     // engineering trinkets do not scale with skill in wotlk
@@ -6010,10 +5969,10 @@ void Spell::EffectSummonType(SpellEffectIndex eff_idx)
                         switch (m_spellInfo->Id) // unable to distinguish based on prop_id, therefore spell by spell override
                         {
                             case 38544: // summon marmot, gives control of marmot pet
-                                summonResult = DoSummonPossessed(summonPositions, summon_prop, eff_idx, level);
+                                summonResult = DoSummonPossessed(summonPositions, summon_prop, eff_idx, creatureLevel);
                                 break;
                             default:
-                                summonResult = DoSummonWild(summonPositions, summon_prop, eff_idx, level);
+                                summonResult = DoSummonWild(summonPositions, summon_prop, eff_idx, creatureLevel);
                                 break;
                         }
                     }
@@ -6022,7 +5981,7 @@ void Spell::EffectSummonType(SpellEffectIndex eff_idx)
                 case UNITNAME_SUMMON_TITLE_PET:
                 case UNITNAME_SUMMON_TITLE_MINION:
                 case UNITNAME_SUMMON_TITLE_RUNEBLADE:
-                    summonResult = DoSummonGuardian(summonPositions, summon_prop, eff_idx, level);
+                    summonResult = DoSummonGuardian(summonPositions, summon_prop, eff_idx, creatureLevel);
                     break;
                 case UNITNAME_SUMMON_TITLE_GUARDIAN:
                 {
@@ -6041,15 +6000,15 @@ void Spell::EffectSummonType(SpellEffectIndex eff_idx)
                             return;
                     }
 
-                    summonResult = DoSummonGuardian(summonPositions, summon_prop, eff_idx, level);
+                    summonResult = DoSummonGuardian(summonPositions, summon_prop, eff_idx, creatureLevel);
                     break;
                 }
                 case UNITNAME_SUMMON_TITLE_CONSTRUCT:
                 {
                     if (prop_id == 2913)                    // Scrapbot
-                        summonResult = DoSummonWild(summonPositions, summon_prop, eff_idx, level);
+                        summonResult = DoSummonWild(summonPositions, summon_prop, eff_idx, creatureLevel);
                     else
-                        summonResult = DoSummonGuardian(summonPositions, summon_prop, eff_idx, level);
+                        summonResult = DoSummonGuardian(summonPositions, summon_prop, eff_idx, creatureLevel);
                     break;
                 }
                 case UNITNAME_SUMMON_TITLE_TOTEM:
@@ -6058,16 +6017,16 @@ void Spell::EffectSummonType(SpellEffectIndex eff_idx)
                 case UNITNAME_SUMMON_TITLE_COMPANION:
                     // slot 6 set for critters that can help to player in fighting
                     if (summon_prop->Slot == SUMMON_PROP_SLOT_QUEST_PLAYERS_ONLY)
-                        summonResult = DoSummonGuardian(summonPositions, summon_prop, eff_idx, level);
+                        summonResult = DoSummonGuardian(summonPositions, summon_prop, eff_idx, creatureLevel);
                     else
-                        summonResult = DoSummonCritter(summonPositions, summon_prop, eff_idx, level);
+                        summonResult = DoSummonCritter(summonPositions, summon_prop, eff_idx, creatureLevel);
                     break;
                 case UNITNAME_SUMMON_TITLE_OPPONENT:
                 case UNITNAME_SUMMON_TITLE_VEHICLE:
                 case UNITNAME_SUMMON_TITLE_MOUNT:
                 case UNITNAME_SUMMON_TITLE_LIGHTWELL:
                 case UNITNAME_SUMMON_TITLE_BUTLER:
-                    summonResult = DoSummonWild(summonPositions, summon_prop, eff_idx, level);
+                    summonResult = DoSummonWild(summonPositions, summon_prop, eff_idx, creatureLevel);
                     break;
                 default:
                     sLog.outError("EffectSummonType: Unhandled summon title %u", summon_prop->Title);
@@ -6077,18 +6036,18 @@ void Spell::EffectSummonType(SpellEffectIndex eff_idx)
         }
         case SUMMON_PROP_GROUP_PETS:
         {
-            summonResult = DoSummonGuardian(summonPositions, summon_prop, eff_idx, level);
+            summonResult = DoSummonGuardian(summonPositions, summon_prop, eff_idx, creatureLevel);
             break;
         }
         case SUMMON_PROP_GROUP_CONTROLLABLE:
         {
-            summonResult = DoSummonPossessed(summonPositions, summon_prop, eff_idx, level);
+            summonResult = DoSummonPossessed(summonPositions, summon_prop, eff_idx, creatureLevel);
             break;
         }
         case SUMMON_PROP_GROUP_VEHICLE:
         case SUMMON_PROP_GROUP_UNCONTROLLABLE_VEHICLE:
         {
-            summonResult = DoSummonVehicle(summonPositions, summon_prop, eff_idx, level, seatNumber, rideSpell);
+            summonResult = DoSummonVehicle(summonPositions, summon_prop, eff_idx, creatureLevel, seatNumber, rideSpell);
             break;
         }
         default:
@@ -7930,7 +7889,7 @@ void Spell::EffectWeaponDmg(SpellEffectIndex eff_idx)
     bonus = int32(bonus * totalDamagePercentMod);
 
     // prevent negative damage
-    m_damagePerEffect[eff_idx] = CalculateSpellEffectDamage(unitTarget, bonus, m_damageDoneMultiplier[eff_idx]);
+    m_damagePerEffect[eff_idx] = CalculateSpellEffectDamage(unitTarget, bonus, m_damageDoneMultiplier[eff_idx], eff_idx);
 
     // Hemorrhage
     if (m_spellInfo->SpellFamilyName == SPELLFAMILY_ROGUE && (m_spellInfo->SpellFamilyFlags & uint64(0x2000000)))
