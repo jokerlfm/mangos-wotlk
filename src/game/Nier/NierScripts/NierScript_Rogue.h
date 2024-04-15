@@ -16,9 +16,8 @@ public:
 
     bool Tank(Unit* pTarget);
     bool Heal(Unit* pTarget);
-    bool DPS(Unit* pTarget, Unit* pTank, bool pRushing);
+    bool DPS(Unit* pTarget, Unit* pTank, Unit* pHealer);
     bool PVP(Unit* pTarget);
-    bool Interrupt(Unit* pTarget);
     bool Buff();
     bool Cure();
     bool Revive();

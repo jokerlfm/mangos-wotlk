@@ -97,9 +97,9 @@ bool NierScript_Paladin::Heal(Unit* pTarget)
     return NierScript_Base::Tank(pTarget);
 }
 
-bool NierScript_Paladin::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
+bool NierScript_Paladin::DPS(Unit* pTarget, Unit* pTank, Unit* pHealer)
 {
-    return NierScript_Base::DPS(pTarget, pTank, pRushing);
+    return NierScript_Base::DPS(pTarget, pTank, pHealer);
 }
 
 bool NierScript_Paladin::Buff()

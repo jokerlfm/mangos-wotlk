@@ -3,9 +3,6 @@
 
 NierScript_Priest::NierScript_Priest(Player* pMe) :NierScript_Base(pMe)
 {
-	dpsDistance = TRADE_DISTANCE;
-	followDistance = TRADE_DISTANCE;
-
 	spell_Shoot = 0;
 
 	spell_CircleOfHealing = 0;
@@ -60,6 +57,10 @@ NierScript_Priest::NierScript_Priest(Player* pMe) :NierScript_Base(pMe)
 	spell_Prayer_Of_Mending = 0;
 	spell_GuardianSpirit = 0;
 	aura_Surge_of_Light = 0;
+
+	healDistance = 30.0f;
+	followDistance = 20.0f;
+	dpsDistance = 25.0f;
 }
 
 bool NierScript_Priest::Prepare()
@@ -516,112 +517,113 @@ bool NierScript_Priest::Heal(Unit* pTarget)
 		{
 			return true;
 		}
-		float targetDistance = me->GetDistance(pTarget);
-		if (targetDistance > VISIBILITY_DISTANCE_TINY)
-		{
-			return false;
-		}
 		float targetHealthPct = pTarget->GetHealthPercent();
 		if (targetHealthPct > 90.0f)
 		{
 			return false;
 		}
-		if (Player* targetPlayer = (Player*)pTarget)
+		float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
+		targetDistance = sqrtf(targetDistance);
+		float maxDistance = pTarget->GetCombatReach() + me->GetCombatReach() + healDistance + RANGED_FLOATING;
+		if (targetDistance < maxDistance)
 		{
-			if (targetPlayer->groupRole != GroupRole::GroupRole_Tank)
+			if (Player* targetPlayer = (Player*)pTarget)
 			{
-				if (targetHealthPct > 40.0f)
+				if (targetPlayer->groupRole != GroupRole::GroupRole_Tank)
 				{
-					return false;
+					if (targetHealthPct > 40.0f)
+					{
+						return false;
+					}
 				}
 			}
-		}
-		if (aura_Surge_of_Light > 0)
-		{
-			if (me->HasAura(aura_Surge_of_Light))
+			if (aura_Surge_of_Light > 0)
 			{
-				if (CastSpell(pTarget, spell_FlashHeal))
+				if (me->HasAura(aura_Surge_of_Light))
 				{
-					return true;
-				}
-			}
-		}
-		if (targetHealthPct < 30.0f)
-		{
-			if (spell_PowerWord_Shield > 0)
-			{
-				if (!pTarget->HasAura(spell_Weakened_Soul))
-				{
-					if (CastSpell(pTarget, spell_PowerWord_Shield))
+					if (CastSpell(pTarget, spell_FlashHeal))
 					{
 						return true;
 					}
 				}
 			}
-			if (spell_GuardianSpirit > 0)
+			if (targetHealthPct < 30.0f)
 			{
-				if (CastSpell(pTarget, spell_GuardianSpirit))
+				if (spell_PowerWord_Shield > 0)
 				{
-					return true;
+					if (!pTarget->HasAura(spell_Weakened_Soul))
+					{
+						if (CastSpell(pTarget, spell_PowerWord_Shield))
+						{
+							return true;
+						}
+					}
 				}
-			}
-			if (spell_FlashHeal > 0)
-			{
-				if (CastSpell(pTarget, spell_FlashHeal))
+				if (spell_GuardianSpirit > 0)
 				{
-					return true;
+					if (CastSpell(pTarget, spell_GuardianSpirit))
+					{
+						return true;
+					}
 				}
-			}
-		}
-		if (spell_Renew > 0)
-		{
-			if (CastSpell(pTarget, spell_Renew, true, true))
-			{
-				return true;
-			}
-			if (spell_Prayer_Of_Mending > 0)
-			{
-				if (CastSpell(pTarget, spell_Prayer_Of_Mending, true))
+				if (spell_FlashHeal > 0)
 				{
-					return true;
-				}
-			}
-		}
-		if (targetHealthPct < 70.0f)
-		{
-			if (spell_PowerWord_Shield > 0)
-			{
-				if (!pTarget->HasAura(spell_Weakened_Soul))
-				{
-					if (CastSpell(pTarget, spell_PowerWord_Shield))
+					if (CastSpell(pTarget, spell_FlashHeal))
 					{
 						return true;
 					}
 				}
 			}
-			if (spell_GreaterHeal > 0)
+			if (spell_Renew > 0)
 			{
-				if (spell_InnerFocus > 0)
-				{
-					CastSpell(me, spell_InnerFocus);
-				}
-				if (CastSpell(pTarget, spell_GreaterHeal))
+				if (CastSpell(pTarget, spell_Renew, true, true))
 				{
 					return true;
 				}
-			}
-			if (spell_Heal > 0)
-			{
-				if (CastSpell(pTarget, spell_Heal))
+				if (spell_Prayer_Of_Mending > 0)
 				{
-					return true;
+					if (CastSpell(pTarget, spell_Prayer_Of_Mending, true))
+					{
+						return true;
+					}
 				}
 			}
-			if (spell_LesserHeal > 0)
+			if (targetHealthPct < 70.0f)
 			{
-				if (CastSpell(pTarget, spell_LesserHeal))
+				if (spell_PowerWord_Shield > 0)
 				{
-					return true;
+					if (!pTarget->HasAura(spell_Weakened_Soul))
+					{
+						if (CastSpell(pTarget, spell_PowerWord_Shield))
+						{
+							return true;
+						}
+					}
+				}
+				if (spell_GreaterHeal > 0)
+				{
+					if (spell_InnerFocus > 0)
+					{
+						CastSpell(me, spell_InnerFocus);
+					}
+					if (CastSpell(pTarget, spell_GreaterHeal))
+					{
+						return true;
+					}
+				}
+				if (spell_Heal > 0)
+				{
+					if (CastSpell(pTarget, spell_Heal))
+					{
+						return true;
+					}
+				}
+				if (spell_LesserHeal > 0)
+				{
+					if (CastSpell(pTarget, spell_LesserHeal))
+					{
+						return true;
+					}
 				}
 			}
 		}
@@ -630,27 +632,56 @@ bool NierScript_Priest::Heal(Unit* pTarget)
 	return false;
 }
 
-bool NierScript_Priest::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
+bool NierScript_Priest::DPS(Unit* pTarget, Unit* pTank, Unit* pHealer)
 {
-	if (NierScript_Base::DPS(pTarget, pTank, pRushing))
+	if (NierScript_Base::DPS(pTarget, pTank, pHealer))
 	{
-		float targetDistance = me->GetDistance(pTarget);
-		if (targetDistance < dpsDistance)
+		float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
+		targetDistance = sqrtf(targetDistance);
+		float maxDistance = pTarget->GetCombatReach() + me->GetCombatReach() + dpsDistance + RANGED_FLOATING;
+		if (targetDistance < maxDistance)
 		{
-			if (specialty == 1)
+			if (spell_Shoot > 0)
 			{
-				if (spell_Shoot > 0)
+				if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
 				{
-					if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
+					return true;
+				}
+				else
+				{
+					if (CastSpell(pTarget, spell_Shoot))
 					{
 						return true;
 					}
-					else
+				}
+			}
+		}
+		return true;
+	}
+
+	return false;
+}
+
+bool NierScript_Priest::PVP(Unit* pTarget)
+{
+	if (NierScript_Base::PVP(pTarget))
+	{
+		float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
+		targetDistance = sqrtf(targetDistance);
+		float maxDistance = pTarget->GetCombatReach() + me->GetCombatReach() + dpsDistance + RANGED_FLOATING;
+		if (targetDistance < maxDistance)
+		{
+			if (spell_Shoot > 0)
+			{
+				if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
+				{
+					return true;
+				}
+				else
+				{
+					if (CastSpell(pTarget, spell_Shoot))
 					{
-						if (CastSpell(pTarget, spell_Shoot))
-						{
-							return true;
-						}
+						return true;
 					}
 				}
 			}
@@ -665,10 +696,11 @@ bool NierScript_Priest::Cure()
 {
 	if (spell_DispelMagic > 0 || spell_CureDisease > 0)
 	{
-		if (actionDelay > 0)
+		if (cureDelay > 0)
 		{
-			return true;
+			return false;
 		}
+		cureDelay = 2000;
 		if (Group* group = me->GetGroup())
 		{
 			for (GroupReference* groupRef = group->GetFirstMember(); groupRef != nullptr; groupRef = groupRef->next())
@@ -696,15 +728,18 @@ bool NierScript_Priest::Cure()
 								{
 									if (holder->GetAuraDuration() > 20000)
 									{
-										if (const SpellEntry* se = holder->GetSpellProto())
+										if (holder->IsDispellableByMask(dispelMask, holder->GetCaster(), holder->GetSpellProto()))
 										{
-											if (se->Dispel == DispelType::DISPEL_MAGIC)
+											if (const SpellEntry* se = holder->GetSpellProto())
 											{
-												if (CastSpell(member, spell_DispelMagic))
+												if (se->Dispel == DispelType::DISPEL_MAGIC)
 												{
-													return true;
+													if (CastSpell(member, spell_DispelMagic))
+													{
+														return true;
+													}
+													break;
 												}
-												break;
 											}
 										}
 									}
@@ -724,15 +759,18 @@ bool NierScript_Priest::Cure()
 								{
 									if (holder->GetAuraDuration() > 20000)
 									{
-										if (const SpellEntry* se = holder->GetSpellProto())
+										if (holder->IsDispellableByMask(dispelMask, holder->GetCaster(), holder->GetSpellProto()))
 										{
-											if (se->Dispel == DispelType::DISPEL_DISEASE)
+											if (const SpellEntry* se = holder->GetSpellProto())
 											{
-												if (CastSpell(member, spell_CureDisease))
+												if (se->Dispel == DispelType::DISPEL_DISEASE)
 												{
-													return true;
+													if (CastSpell(member, spell_CureDisease))
+													{
+														return true;
+													}
+													break;
 												}
-												break;
 											}
 										}
 									}
@@ -751,15 +789,28 @@ bool NierScript_Priest::Cure()
 				Unit::SpellAuraHolderMap const& auras = me->GetSpellAuraHolderMap();
 				for (Unit::SpellAuraHolderMap::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
 				{
-					SpellAuraHolder* holder = itr->second;
-					// Only return group members with negative magic effect
-					if (!holder->IsPositive())
+					if (SpellAuraHolder* holder = itr->second)
 					{
-						if (CastSpell(me, spell_DispelMagic))
+						if (!holder->IsPositive())
 						{
-							return true;
+							if (holder->GetAuraDuration() > 20000)
+							{
+								if (holder->IsDispellableByMask(dispelMask, holder->GetCaster(), holder->GetSpellProto()))
+								{
+									if (const SpellEntry* se = holder->GetSpellProto())
+									{
+										if (se->Dispel == DispelType::DISPEL_MAGIC)
+										{
+											if (CastSpell(me, spell_DispelMagic))
+											{
+												return true;
+											}
+											break;
+										}
+									}
+								}
+							}
 						}
-						break;
 					}
 				}
 			}
@@ -767,11 +818,30 @@ bool NierScript_Priest::Cure()
 			{
 				uint32 dispelMask = GetDispellMask(DispelType::DISPEL_DISEASE);
 				Unit::SpellAuraHolderMap const& auras = me->GetSpellAuraHolderMap();
-				if (sizeof(auras) > 0)
+				for (Unit::SpellAuraHolderMap::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
 				{
-					if (CastSpell(me, spell_CureDisease))
+					if (SpellAuraHolder* holder = itr->second)
 					{
-						return true;
+						if (!holder->IsPositive())
+						{
+							if (holder->GetAuraDuration() > 20000)
+							{
+								if (holder->IsDispellableByMask(dispelMask, holder->GetCaster(), holder->GetSpellProto()))
+								{
+									if (const SpellEntry* se = holder->GetSpellProto())
+									{
+										if (se->Dispel == DispelType::DISPEL_DISEASE)
+										{
+											if (CastSpell(me, spell_CureDisease))
+											{
+												return true;
+											}
+											break;
+										}
+									}
+								}
+							}
+						}
 					}
 				}
 			}

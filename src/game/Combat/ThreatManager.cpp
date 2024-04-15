@@ -456,6 +456,12 @@ void ThreatManager::addThreat(Unit* victim, float threat, bool crit, SpellSchool
     // players and pets have only InHateListOf
     // HateOfflineList is used co contain unattackable victims (in-flight, in-water, GM etc.)
 
+    // lfm debug 
+    //if (victim->GetTypeId() == TYPEID_PLAYER)
+    //{
+    //    bool breakPoint = true;
+    //}
+
     // not to self
     if (victim == getOwner())
         return;

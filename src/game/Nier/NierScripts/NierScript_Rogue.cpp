@@ -410,11 +410,10 @@ bool NierScript_Rogue::Heal(Unit* pTarget)
 	return NierScript_Base::Tank(pTarget);
 }
 
-bool NierScript_Rogue::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
+bool NierScript_Rogue::DPS(Unit* pTarget, Unit* pTank, Unit* pHealer)
 {
-	if (NierScript_Base::DPS(pTarget, pTank, pRushing))
+	if (NierScript_Base::DPS(pTarget, pTank, pHealer))
 	{
-		float targetDistance = me->GetDistance(pTarget);
 		if (me->CanReachWithMeleeAttack(pTarget))
 		{
 			uint32 myEnergy = me->GetPower(Powers::POWER_ENERGY);
@@ -491,7 +490,7 @@ bool NierScript_Rogue::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 					}
 				}
 			}
-			if (pRushing)
+			if (rushing)
 			{
 				if (spell_BladeFlurry > 0)
 				{
@@ -566,6 +565,7 @@ bool NierScript_Rogue::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 		{
 			if (spell_Sprint > 0)
 			{
+				float targetDistance = me->GetDistance(pTarget);
 				if (targetDistance < INSPECT_DISTANCE)
 				{
 					if (CastSpell(me, spell_Sprint))
@@ -585,7 +585,6 @@ bool NierScript_Rogue::PVP(Unit* pTarget)
 {
 	if (NierScript_Base::PVP(pTarget))
 	{
-		float targetDistance = me->GetDistance(pTarget);
 		if (me->CanReachWithMeleeAttack(pTarget))
 		{
 			uint32 myEnergy = me->GetPower(Powers::POWER_ENERGY);
@@ -713,6 +712,7 @@ bool NierScript_Rogue::PVP(Unit* pTarget)
 		{
 			if (spell_Sprint > 0)
 			{
+				float targetDistance = me->GetDistance(pTarget);
 				if (targetDistance < INSPECT_DISTANCE)
 				{
 					if (CastSpell(me, spell_Sprint))
@@ -723,54 +723,6 @@ bool NierScript_Rogue::PVP(Unit* pTarget)
 			}
 		}
 		return true;
-	}
-
-	return false;
-}
-
-bool NierScript_Rogue::Interrupt(Unit* pTarget)
-{
-	if (actionDelay > 0)
-	{
-		return false;
-	}
-	if (!pTarget)
-	{
-		return false;
-	}
-	else if (!pTarget->IsAlive())
-	{
-		return false;
-	}
-	else if (!me->CanAttack(pTarget))
-	{
-		return false;
-	}
-
-	if (me->CanReachWithMeleeAttack(pTarget))
-	{
-		uint32 myEnergy = me->GetPower(Powers::POWER_ENERGY);
-		if (myEnergy >= 25)
-		{
-			if (spell_Kick > 0)
-			{
-				if (CastSpell(pTarget, spell_Kick))
-				{
-					return true;
-				}
-			}
-			if (spell_KidneyShot > 0)
-			{
-				uint32 comboPoints = me->GetComboPoints();
-				if (comboPoints > 0)
-				{
-					if (CastSpell(pTarget, spell_KidneyShot))
-					{
-						return true;
-					}
-				}
-			}
-		}
 	}
 
 	return false;

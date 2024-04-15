@@ -1220,6 +1220,12 @@ void SpellMgr::LoadSpellThreats()
 
         uint32 entry = fields[0].GetUInt32();
 
+        // lfm spell_threat exceptions 
+        if (entry == 16857)
+        {
+            continue;
+        }
+
         SpellThreatEntry ste;
         ste.threat = fields[1].GetUInt16();
         ste.multiplier = fields[2].GetFloat();

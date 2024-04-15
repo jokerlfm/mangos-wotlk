@@ -16,7 +16,7 @@ NierManager::NierManager()
 	trainerMap.clear();
 
 	nierMap.clear();
-	updateIndex = 0;	
+	updateIndex = 0;
 }
 
 void NierManager::InitializeManager()
@@ -33,16 +33,16 @@ void NierManager::InitializeManager()
 	allianceRaces[CLASS_WARRIOR][allianceRaces[CLASS_WARRIOR].size()] = RACE_NIGHTELF;
 	allianceRaces[CLASS_WARRIOR][allianceRaces[CLASS_WARRIOR].size()] = RACE_GNOME;
 	allianceRaces[CLASS_WARRIOR][allianceRaces[CLASS_WARRIOR].size()] = RACE_DWARF;
+	allianceRaces[CLASS_WARRIOR][allianceRaces[CLASS_WARRIOR].size()] = Races::RACE_DRAENEI;
 	hordeRaces[CLASS_WARRIOR][hordeRaces[CLASS_WARRIOR].size()] = RACE_ORC;
 	hordeRaces[CLASS_WARRIOR][hordeRaces[CLASS_WARRIOR].size()] = Races::RACE_UNDEAD;
 	hordeRaces[CLASS_WARRIOR][hordeRaces[CLASS_WARRIOR].size()] = RACE_TAUREN;
 	hordeRaces[CLASS_WARRIOR][hordeRaces[CLASS_WARRIOR].size()] = RACE_TROLL;
-	hordeRaces[CLASS_WARRIOR][hordeRaces[CLASS_WARRIOR].size()] = Races::RACE_DRAENEI;
 
 	allianceRaces[CLASS_PALADIN][allianceRaces[CLASS_PALADIN].size()] = RACE_HUMAN;
 	allianceRaces[CLASS_PALADIN][allianceRaces[CLASS_PALADIN].size()] = RACE_DWARF;
+	allianceRaces[CLASS_PALADIN][allianceRaces[CLASS_PALADIN].size()] = Races::RACE_DRAENEI;
 	hordeRaces[CLASS_PALADIN][hordeRaces[CLASS_PALADIN].size()] = RACE_BLOODELF;
-	hordeRaces[Classes::CLASS_PALADIN][hordeRaces[Classes::CLASS_PALADIN].size()] = Races::RACE_DRAENEI;
 
 	allianceRaces[CLASS_ROGUE][allianceRaces[CLASS_ROGUE].size()] = RACE_HUMAN;
 	allianceRaces[CLASS_ROGUE][allianceRaces[CLASS_ROGUE].size()] = RACE_DWARF;
@@ -56,16 +56,16 @@ void NierManager::InitializeManager()
 	allianceRaces[CLASS_PRIEST][allianceRaces[CLASS_PRIEST].size()] = RACE_HUMAN;
 	allianceRaces[CLASS_PRIEST][allianceRaces[CLASS_PRIEST].size()] = RACE_DWARF;
 	allianceRaces[CLASS_PRIEST][allianceRaces[CLASS_PRIEST].size()] = RACE_NIGHTELF;
+	allianceRaces[CLASS_PRIEST][allianceRaces[CLASS_PRIEST].size()] = Races::RACE_DRAENEI;
 	hordeRaces[CLASS_PRIEST][hordeRaces[CLASS_PRIEST].size()] = RACE_TROLL;
 	hordeRaces[CLASS_PRIEST][hordeRaces[CLASS_PRIEST].size()] = Races::RACE_UNDEAD;
-	hordeRaces[Classes::CLASS_PRIEST][hordeRaces[Classes::CLASS_PRIEST].size()] = Races::RACE_DRAENEI;
 	hordeRaces[Classes::CLASS_PRIEST][hordeRaces[Classes::CLASS_PRIEST].size()] = Races::RACE_BLOODELF;
 
 	allianceRaces[CLASS_MAGE][allianceRaces[CLASS_MAGE].size()] = RACE_HUMAN;
 	allianceRaces[CLASS_MAGE][allianceRaces[CLASS_MAGE].size()] = RACE_GNOME;
+	allianceRaces[CLASS_MAGE][allianceRaces[CLASS_MAGE].size()] = Races::RACE_DRAENEI;
 	hordeRaces[CLASS_MAGE][hordeRaces[CLASS_MAGE].size()] = Races::RACE_UNDEAD;
 	hordeRaces[CLASS_MAGE][hordeRaces[CLASS_MAGE].size()] = RACE_TROLL;
-	hordeRaces[Classes::CLASS_MAGE][hordeRaces[Classes::CLASS_MAGE].size()] = Races::RACE_DRAENEI;
 	hordeRaces[Classes::CLASS_MAGE][hordeRaces[Classes::CLASS_MAGE].size()] = Races::RACE_BLOODELF;
 
 	allianceRaces[CLASS_WARLOCK][allianceRaces[CLASS_WARLOCK].size()] = RACE_HUMAN;
@@ -78,14 +78,13 @@ void NierManager::InitializeManager()
 	hordeRaces[CLASS_SHAMAN][hordeRaces[CLASS_SHAMAN].size()] = RACE_ORC;
 	hordeRaces[CLASS_SHAMAN][hordeRaces[CLASS_SHAMAN].size()] = RACE_TAUREN;
 	hordeRaces[CLASS_SHAMAN][hordeRaces[CLASS_SHAMAN].size()] = RACE_TROLL;
-	hordeRaces[Classes::CLASS_SHAMAN][hordeRaces[Classes::CLASS_SHAMAN].size()] = Races::RACE_DRAENEI;
 
 	allianceRaces[CLASS_HUNTER][allianceRaces[CLASS_HUNTER].size()] = RACE_DWARF;
 	allianceRaces[CLASS_HUNTER][allianceRaces[CLASS_HUNTER].size()] = RACE_NIGHTELF;
+	allianceRaces[Classes::CLASS_HUNTER][allianceRaces[Classes::CLASS_HUNTER].size()] = Races::RACE_DRAENEI;
 	hordeRaces[CLASS_HUNTER][hordeRaces[CLASS_HUNTER].size()] = RACE_ORC;
 	hordeRaces[CLASS_HUNTER][hordeRaces[CLASS_HUNTER].size()] = RACE_TAUREN;
 	hordeRaces[CLASS_HUNTER][hordeRaces[CLASS_HUNTER].size()] = RACE_TROLL;
-	hordeRaces[Classes::CLASS_HUNTER][hordeRaces[Classes::CLASS_HUNTER].size()] = Races::RACE_DRAENEI;
 	hordeRaces[Classes::CLASS_HUNTER][hordeRaces[Classes::CLASS_HUNTER].size()] = Races::RACE_BLOODELF;
 
 	allianceRaces[CLASS_DRUID][allianceRaces[CLASS_DRUID].size()] = RACE_NIGHTELF;
@@ -173,74 +172,26 @@ void NierManager::LoginNiers(uint32 pMasterId)
 {
 	if (pMasterId > 0)
 	{
-		std::ostringstream nierCountQueryStream;
-		nierCountQueryStream << "SELECT count(*) FROM nier where master_id = " << pMasterId << " and nier_type = 0";
-		auto nierQR = CharacterDatabase.Query(nierCountQueryStream.str().c_str());
-		if (nierQR)
-		{
-			int createCount = sNierConfig.NierCount;
-			do
-			{
-				Field* fields = nierQR->Fetch();
-				uint32 nierCount = fields[0].GetUInt32();
-				std::ostringstream replyStream;
-				replyStream << "Nier count loaded : ";
-				replyStream << nierCount;
-				sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, replyStream.str().c_str());
-				createCount = createCount - nierCount;
-				break;
-			} while (nierQR->NextRow());
-			if (createCount > 0)
-			{
-				int tankCountA = 1;
-				int tankCountH = 1;
-				int healerCountA = 1;
-				int healerCountH = 1;
-				// lfm debug 
-				tankCountA = 0;
-				tankCountH = 0;
-				healerCountA = 1;
-				healerCountH = 0;
-				uint32 career = Classes::CLASS_ROGUE;
-				bool alliance = true;
-				while (createCount > 0)
-				{
-					career = Classes::CLASS_ROGUE;
-					if (alliance)
-					{
-						if (tankCountA > 0)
-						{
-							career = Classes::CLASS_PALADIN;
-							tankCountA--;
-						}
-						else if (healerCountA > 0)
-						{
-							career = Classes::CLASS_PRIEST;
-							healerCountA--;
-						}
-					}
-					else
-					{
-						if (tankCountH > 0)
-						{
-							career = Classes::CLASS_PALADIN;
-							tankCountH--;
-						}
-						else if (healerCountH > 0)
-						{
-							career = Classes::CLASS_PRIEST;
-							healerCountH--;
-						}
-					}
-					AddNier(pMasterId, career, alliance);
-					std::ostringstream replyStream;
-					replyStream << "Nier created : " << pMasterId << "-" << career << "-" << alliance;
-					sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, replyStream.str().c_str());
-					alliance = !alliance;
-					createCount--;
-				}
-			}
-		}
+		CheckNiers(pMasterId, Classes::CLASS_WARRIOR, false, sNierConfig.NierCount_Horde_Warrior);
+		CheckNiers(pMasterId, Classes::CLASS_PALADIN, false, sNierConfig.NierCount_Horde_Paladin);
+		CheckNiers(pMasterId, Classes::CLASS_HUNTER, false, sNierConfig.NierCount_Horde_Hunter);
+		CheckNiers(pMasterId, Classes::CLASS_ROGUE, false, sNierConfig.NierCount_Horde_Rogue);
+		CheckNiers(pMasterId, Classes::CLASS_PRIEST, false, sNierConfig.NierCount_Horde_Priest);
+		CheckNiers(pMasterId, Classes::CLASS_DEATH_KNIGHT, false, sNierConfig.NierCount_Horde_DeathKnight);
+		CheckNiers(pMasterId, Classes::CLASS_SHAMAN, false, sNierConfig.NierCount_Horde_Shaman);
+		CheckNiers(pMasterId, Classes::CLASS_MAGE, false, sNierConfig.NierCount_Horde_Mage);
+		CheckNiers(pMasterId, Classes::CLASS_WARLOCK, false, sNierConfig.NierCount_Horde_Warlock);
+		CheckNiers(pMasterId, Classes::CLASS_DRUID, false, sNierConfig.NierCount_Horde_Druid);
+		CheckNiers(pMasterId, Classes::CLASS_WARRIOR, true, sNierConfig.NierCount_Alliance_Warrior);
+		CheckNiers(pMasterId, Classes::CLASS_PALADIN, true, sNierConfig.NierCount_Alliance_Paladin);
+		CheckNiers(pMasterId, Classes::CLASS_HUNTER, true, sNierConfig.NierCount_Alliancee_Hunter);
+		CheckNiers(pMasterId, Classes::CLASS_ROGUE, true, sNierConfig.NierCount_Alliance_Rogue);
+		CheckNiers(pMasterId, Classes::CLASS_PRIEST, true, sNierConfig.NierCount_Alliance_Priest);
+		CheckNiers(pMasterId, Classes::CLASS_DEATH_KNIGHT, true, sNierConfig.NierCount_Alliance_DeathKnight);
+		CheckNiers(pMasterId, Classes::CLASS_SHAMAN, true, sNierConfig.NierCount_Alliance_Shaman);
+		CheckNiers(pMasterId, Classes::CLASS_MAGE, true, sNierConfig.NierCount_Alliance_Mage);
+		CheckNiers(pMasterId, Classes::CLASS_WARLOCK, true, sNierConfig.NierCount_Alliance_Warlock);
+		CheckNiers(pMasterId, Classes::CLASS_DRUID, true, sNierConfig.NierCount_Alliance_Druid);
 	}
 
 	std::ostringstream nierQueryStream;
@@ -548,7 +499,7 @@ void NierManager::HandleChatCommand(Player* pCommander, std::string pContent, Pl
 						{
 							if (!pTargetPlayer->GetCorpse())
 							{
-								pTargetPlayer->SetBotDeathTimer();
+								//pTargetPlayer->SetBotDeathTimer();
 								pTargetPlayer->BuildPlayerRepop();
 								WorldLocation loc;
 								Corpse* corpse = pTargetPlayer->GetCorpse();
@@ -593,6 +544,23 @@ void NierManager::HandleChatCommand(Player* pCommander, std::string pContent, Pl
 						pTargetPlayer->StopMoving();
 						pTargetPlayer->GetMotionMaster()->Clear(true);
 						pTargetPlayer->Whisper("Freezed", Language::LANG_UNIVERSAL, pCommander->GetObjectGuid());
+					}
+				}
+			}
+		}
+	}
+	else if (commandName == "rush")
+	{
+		if (pTargetPlayer)
+		{
+			if (pTargetPlayer->isNier)
+			{
+				if (pTargetPlayer->IsInWorld())
+				{
+					if (NierScript_Base* nb = pTargetPlayer->_nierScript)
+					{
+						nb->rushing = true;
+						pTargetPlayer->Yell("Rushing", Language::LANG_UNIVERSAL);
 					}
 				}
 			}
@@ -643,9 +611,9 @@ void NierManager::HandleChatCommand(Player* pCommander, std::string pContent, Pl
 							if (formation == "point")
 							{
 								pTargetPlayer->GetMotionMaster()->Clear();
-								nb->destination = pCommander->GetPosition();
+								nb->destination_follow = pCommander->GetPosition();
 								nb->orderDelay = 2000;
-								pTargetPlayer->GetMotionMaster()->MovePoint(0, nb->destination.x, nb->destination.y, nb->destination.z, ForcedMovement::FORCED_MOVEMENT_RUN, true);
+								pTargetPlayer->GetMotionMaster()->MovePoint(0, nb->destination_follow.x, nb->destination_follow.y, nb->destination_follow.z, ForcedMovement::FORCED_MOVEMENT_RUN, true);
 							}
 						}
 					}
@@ -1057,37 +1025,75 @@ void NierManager::RandomTeleport(Player* me, Player* target)
 	me->TeleportTo(me->GetMapId(), nearX, nearY, nearZ, 0);
 }
 
-void NierManager::AddNier(uint32 pMasterId, uint32 pCareer, bool pAlliance, uint32 pNierType)
+void NierManager::CheckNiers(uint32 pMasterId, uint32 pCareer, bool pAlliance, uint32 pNierCount, uint32 pNierType)
 {
-	uint32 race = 0;
-	if (pAlliance)
+	if (pNierCount > 0)
 	{
-		race = sNierManager->allianceRaces[pCareer].size();
-		race = urand(1, race);
-		if (race >= sNierManager->allianceRaces[pCareer].size())
+		int createCount = pNierCount;
+		std::ostringstream nierCountQueryStream;
+		if (pAlliance)
 		{
-			race = sNierManager->allianceRaces[pCareer].size() - 1;
+			nierCountQueryStream << "SELECT count(*) FROM nier where master_id = " << pMasterId << " and nier_type = " << pNierType << " and career = " << pCareer << " and race in(1,3,4,7,11)";
 		}
-		race = sNierManager->allianceRaces[pCareer][race];
-	}
-	else
-	{
-		race = sNierManager->hordeRaces[pCareer].size();
-		race = urand(1, race);
-		if (race >= sNierManager->hordeRaces[pCareer].size())
+		else
 		{
-			race = sNierManager->hordeRaces[pCareer].size() - 1;
+			nierCountQueryStream << "SELECT count(*) FROM nier where master_id = " << pMasterId << " and nier_type = " << pNierType << " and career = " << pCareer << " and race in(2,5,6,8,10)";
 		}
-		race = sNierManager->hordeRaces[pCareer][race];
-	}
+		auto nierQR = CharacterDatabase.Query(nierCountQueryStream.str().c_str());
+		if (nierQR)
+		{
+			do
+			{
+				Field* fields = nierQR->Fetch();
+				uint32 nierCount = fields[0].GetUInt32();
+				std::ostringstream countStream;
+				countStream << "Nier count loaded : ";
+				countStream << nierCount;
+				std::string countStr = countStream.str();
+				sLog.outBasic(countStr.c_str());
+				sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, countStr.c_str());
+				createCount = createCount - nierCount;
+				break;
+			} while (nierQR->NextRow());
+			while (createCount > 0)
+			{
+				uint32 race = 0;
+				if (pAlliance)
+				{
+					race = sNierManager->allianceRaces[pCareer].size();
+					race = urand(1, race);
+					if (race >= sNierManager->allianceRaces[pCareer].size())
+					{
+						race = sNierManager->allianceRaces[pCareer].size() - 1;
+					}
+					race = sNierManager->allianceRaces[pCareer][race];
+				}
+				else
+				{
+					race = sNierManager->hordeRaces[pCareer].size();
+					race = urand(1, race);
+					if (race >= sNierManager->hordeRaces[pCareer].size())
+					{
+						race = sNierManager->hordeRaces[pCareer].size() - 1;
+					}
+					race = sNierManager->hordeRaces[pCareer][race];
+				}
 
-	std::ostringstream nierInsertStream;
-	nierInsertStream << "INSERT INTO `nier` (`master_id`, `account_id`, `character_id`, `account_name`, `race`, `career`, `specialty`, `role`, `nier_type`) VALUES (" << pMasterId << ", 0, 0, '', " << race << ", " << pCareer << ", 1, 1, " << pNierType << ")";
-	CharacterDatabase.DirectExecute(nierInsertStream.str().c_str());
-	sLog.outBasic("nier added : %d, %d", race, pCareer);
+				std::ostringstream nierInsertStream;
+				nierInsertStream << "INSERT INTO `nier` (`master_id`, `account_id`, `character_id`, `account_name`, `race`, `career`, `specialty`, `role`, `nier_type`) VALUES (" << pMasterId << ", 0, 0, '', " << race << ", " << pCareer << ", 1, 1, " << pNierType << ")";
+				CharacterDatabase.DirectExecute(nierInsertStream.str().c_str());
+				std::ostringstream replyStream;
+				replyStream << "Nier created : " << pMasterId << "-" << pCareer << "-" << race;
+				std::string replyStr = replyStream.str();
+				sLog.outBasic(replyStr.c_str());
+				sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, replyStr.c_str());
+				createCount--;
+			}
+		}
+	}
 }
 
-void NierManager::UpdateNierManager(uint32 pDiff)
+void NierManager::UpdateNierManager()
 {
 	if (sNierConfig.Enable == 0)
 	{
@@ -1096,40 +1102,18 @@ void NierManager::UpdateNierManager(uint32 pDiff)
 
 	if (nierMap.size() > 0)
 	{
-		for (std::unordered_map<uint32, NierEntity*>::iterator nierIT = nierMap.begin(); nierIT != nierMap.end(); nierIT++)
+		uint32 updated = 0;
+		while (updated < sNierConfig.UpdateCount)
 		{
-			nierIT->second->Update(pDiff);
-		}
-		int updates = 0;
-		while (true)
-		{
-			if (nierMap.find(updateIndex) == nierMap.end())
+			uint32 targetIndex = updateIndex + updated;
+			if (nierMap.find(targetIndex) == nierMap.end())
 			{
 				updateIndex = 0;
-				break;
+				return;
 			}
-			if (nierMap[updateIndex]->entityState == NierState::NierState_Online)
-			{
-				if (Player* nierPlayer = nierMap[updateIndex]->me)
-				{
-					if (nierPlayer->IsInWorld())
-					{
-						if (!nierPlayer->IsBeingTeleported())
-						{
-							if (NierScript_Base* nierScript = nierPlayer->_nierScript)
-							{
-								nierScript->Update(pDiff);
-								if (updates > sNierConfig.UpdateCount)
-								{
-									updates++;
-									break;
-								}
-							}
-						}
-					}
-				}
-			}
-			updateIndex++;
+			nierMap[targetIndex]->Update();
+			updated++;
 		}
+		updateIndex += updated;
 	}
 }

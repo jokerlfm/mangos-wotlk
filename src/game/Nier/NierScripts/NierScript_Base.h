@@ -1,6 +1,9 @@
 #ifndef NIERSCRIPT_BASE_H
 #define NIERSCRIPT_BASE_H
 
+#define MELEE_FLOATING 0.5f
+#define RANGED_FLOATING 2.0f
+
 enum OrderType :uint32
 {
     OrderType_None = 0,
@@ -22,7 +25,7 @@ public:
 
     virtual bool Tank(Unit* pTarget);
     virtual bool Heal(Unit* pTarget);
-    virtual bool DPS(Unit* pTarget, Unit* pTank, bool pRushing);
+    virtual bool DPS(Unit* pTarget, Unit* pTank, Unit* pHealer);
     virtual bool PVP(Unit* pTarget);
     virtual bool Interrupt(Unit* pTarget);
     virtual bool Buff();
@@ -51,6 +54,10 @@ public:
     void InterruptSpells();
 	bool SpellValid(uint32 pmSpellID);
 
+
+    void Say(std::string pContents);
+    void Yell(std::string pContents);
+    
 public:
 	Player* me;
     uint32 masterId;
@@ -58,8 +65,7 @@ public:
 
     uint32 orderType;
 
-    int updateDelay;
-    int actionDelay;
+    int updateDelay;    
     int prepareDelay;
     int assembleDelay;
     int reviveDelay;
@@ -67,8 +73,11 @@ public:
     int restDelay;
     int drinkDelay;    
     int helpDelay;
+    int cureDelay;
     int orderDelay;
     int interruptDelay;
+
+    int sayDelay;
 
     bool pvp;
     int relocateDelay;
@@ -76,12 +85,14 @@ public:
 
     int combatDuration;
 
+    float healDistance;
     float dpsDistance;
     float followDistance;
     bool chasing;
     bool freezing;
     bool rushing;
 
-    Position destination;
+    Position destination_follow;
+    Position destination_chase;
 };
 #endif

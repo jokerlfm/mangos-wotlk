@@ -4891,6 +4891,8 @@ void Unit::_UpdateAutoRepeatSpell()
     {
         TimePoint expirationTime;
         bool isPermanent;
+
+        // lfm auto repeat prepare 
         if (GetExpireTime(*m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_spellInfo, expirationTime, isPermanent))
         {
             if (GetMap()->GetCurrentClockTime() + std::chrono::milliseconds(500) > expirationTime)
@@ -4900,7 +4902,26 @@ void Unit::_UpdateAutoRepeatSpell()
             }
         }
         else
+        {
             AddCooldown(*m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_spellInfo, nullptr, false, 500);
+        }
+        //uint32 prepareTime = 500;
+        //if (m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->GetCastTime() > 0)
+        //{
+        //    prepareTime = m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->GetCastTime();
+        //}
+        //if (GetExpireTime(*m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_spellInfo, expirationTime, isPermanent))
+        //{
+        //    if (GetMap()->GetCurrentClockTime() + std::chrono::milliseconds(prepareTime) > expirationTime)
+        //    {
+        //        RemoveSpellCooldown(*m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_spellInfo, false);
+        //        AddCooldown(*m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_spellInfo, nullptr, false, prepareTime);
+        //    }
+        //}
+        //else
+        //{
+        //    AddCooldown(*m_currentSpells[CURRENT_AUTOREPEAT_SPELL]->m_spellInfo, nullptr, false, prepareTime);
+        //}
         m_AutoRepeatFirstCast = false;
         return;
     }

@@ -30,7 +30,7 @@ public:
     void LogoutNiers(bool pmInstant = false);
     void LoginNiers(uint32 pMasterId = 0);
     void DeleteNiers();
-    void AddNier(uint32 pMasterId, uint32 pCareer, bool pAlliance, uint32 pNierType = 0);
+    void CheckNiers(uint32 pMasterId, uint32 pCareer, bool pAlliance, uint32 pNierCount, uint32 pNierType = 0);
     bool IsPolymorphed(Unit* pmTarget);
 
     void RandomTeleport(Player* me, Player* target);
@@ -42,7 +42,7 @@ public:
     void HandleChatCommand(Player* pCommander, std::string pContent, Player* pTargetPlayer = nullptr, Group* pTargetGroup = nullptr);
     void HandlePacket(const WorldSession* pmSession, WorldPacket pmPacket);
 
-    void UpdateNierManager(uint32 pDiff);
+    void UpdateNierManager();
 
     static NierManager* instance();
 

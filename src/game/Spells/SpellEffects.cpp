@@ -566,6 +566,13 @@ void Spell::EffectSchoolDMG(SpellEffectIndex eff_idx)
                     damage = unitTarget->GetMaxHealth();
                     break;
                 }
+
+                // lfm Faerie Fire (Feral) 
+                if (m_spellInfo->Id == 60089)
+                {
+                    damage = uint32(m_caster->GetTotalAttackPowerValue(BASE_ATTACK) * 0.15f);
+                    break;
+                }
                 break;
             }
             case SPELLFAMILY_ROGUE:

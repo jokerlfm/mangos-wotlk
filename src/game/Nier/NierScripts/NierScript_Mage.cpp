@@ -9,8 +9,8 @@ NierScript_Mage::NierScript_Mage(Player* pMe) :NierScript_Base(pMe)
 	spell_FireBlast = 0;
 	spell_ArcaneIntellect = 0;
 
-	followDistance = 15.0f;
-	dpsDistance = 15.0f;
+	followDistance = 20.0f;
+	dpsDistance = 25.0f;
 }
 
 bool NierScript_Mage::Prepare()
@@ -231,12 +231,14 @@ bool NierScript_Mage::Heal(Unit* pTarget)
 	return false;
 }
 
-bool NierScript_Mage::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
+bool NierScript_Mage::DPS(Unit* pTarget, Unit* pTank, Unit* pHealer)
 {
-	if (NierScript_Base::DPS(pTarget, pTank, pRushing))
+	if (NierScript_Base::DPS(pTarget, pTank, pHealer))
 	{
-		float targetDistance = me->GetDistance(pTarget);
-		if (targetDistance < dpsDistance)
+		float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
+		targetDistance = sqrtf(targetDistance);
+		float maxDistance = pTarget->GetCombatReach() + me->GetCombatReach() + dpsDistance + RANGED_FLOATING;
+		if (targetDistance < maxDistance)
 		{
 			if (spell_FireBlast > 0)
 			{
@@ -270,8 +272,10 @@ bool NierScript_Mage::PVP(Unit* pTarget)
 {
 	if (NierScript_Base::PVP(pTarget))
 	{
-		float targetDistance = me->GetDistance(pTarget);
-		if (targetDistance < dpsDistance)
+		float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
+		targetDistance = sqrtf(targetDistance);
+		float maxDistance = pTarget->GetCombatReach() + me->GetCombatReach() + dpsDistance + RANGED_FLOATING;
+		if (targetDistance < maxDistance)
 		{
 			if (spell_FireBlast > 0)
 			{

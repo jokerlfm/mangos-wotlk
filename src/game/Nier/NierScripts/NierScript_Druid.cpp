@@ -92,33 +92,23 @@ bool NierScript_Druid::Heal(Unit* pTarget)
 {
     if (NierScript_Base::Heal(pTarget))
     {
-        if (actionDelay > 0)
-        {
-            return true;
-        }
+		return true;
     }
 
     return false;
 }
 
-bool NierScript_Druid::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
+bool NierScript_Druid::DPS(Unit* pTarget, Unit* pTank, Unit* pHealer)
 {
-    if (NierScript_Base::DPS(pTarget, pTank, pRushing))
+    if (NierScript_Base::DPS(pTarget, pTank, pHealer))
     {
-        if (actionDelay > 0)
-        {
-            return true;
-        }
+		return true;
     }
     return false;
 }
 
 bool NierScript_Druid::Buff()
 {
-    if (actionDelay > 0)
-    {
-        return true;
-    }
     return NierScript_Base::Buff();
 }
 

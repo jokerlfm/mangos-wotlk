@@ -3432,7 +3432,20 @@ void Spell::Prepare()
 
         // Execute instant spells immediate
         if (m_timer == 0 && !IsNextMeleeSwingSpell(m_spellInfo) && (!IsAutoRepeat() || m_triggerAutorepeat))
+        {
             cast();
+        }
+        else
+        {
+            // lfm autorepeat spell with cast time 
+            if (m_triggerAutorepeat)
+            {
+                if (!IsNextMeleeSwingSpell(m_spellInfo))
+                {
+                    cast();
+                }
+            }
+        }        
     }
     // execute triggered without cast time explicitly in call point
     else
@@ -4110,15 +4123,15 @@ void Spell::update(uint32 difftime)
 
     // check if the player or unit caster has moved before the spell finished (exclude casting on vehicles)
     if ((m_trueCaster->IsUnit() && m_timer != 0) &&
-            (m_castPositionX != m_trueCaster->GetPositionX() || m_castPositionY != m_trueCaster->GetPositionY() || m_castPositionZ != m_trueCaster->GetPositionZ()) &&
-            (m_spellInfo->Effect[EFFECT_INDEX_0] != SPELL_EFFECT_STUCK || !m_trueCaster->m_movementInfo.HasMovementFlag(MOVEFLAG_FALLINGFAR)))
+        (m_castPositionX != m_trueCaster->GetPositionX() || m_castPositionY != m_trueCaster->GetPositionY() || m_castPositionZ != m_trueCaster->GetPositionZ()) &&
+        (m_spellInfo->Effect[EFFECT_INDEX_0] != SPELL_EFFECT_STUCK || !m_trueCaster->m_movementInfo.HasMovementFlag(MOVEFLAG_FALLINGFAR)))
     {
         // always cancel for channeled spells
         if (m_spellState == SPELL_STATE_CHANNELING)
         {
             if (m_spellInfo->ChannelInterruptFlags & AURA_INTERRUPT_FLAG_MOVING && !m_spellInfo->HasAttribute(SPELL_ATTR_EX5_ALLOW_ACTIONS_DURING_CHANNEL))
                 cancel();
-        }            
+        }
         // don't cancel for melee, autorepeat, triggered and instant spells
         else if (!IsNextMeleeSwingSpell(m_spellInfo) && !IsAutoRepeat() && !m_IsTriggeredSpell && (m_spellInfo->InterruptFlags & SPELL_INTERRUPT_FLAG_MOVEMENT))
             cancel();
@@ -4126,161 +4139,173 @@ void Spell::update(uint32 difftime)
 
     switch (m_spellState)
     {
-        case SPELL_STATE_CASTING:
+    case SPELL_STATE_CASTING:
+    {
+        if (m_timer)
         {
-            if (m_timer)
-            {
-                if (difftime >= m_timer)
-                    m_timer = 0;
-                else
-                    m_timer -= difftime;
-            }
+            if (difftime >= m_timer)
+                m_timer = 0;
+            else
+                m_timer -= difftime;
+        }
 
-            if (m_timer == 0 && !IsNextMeleeSwingSpell(m_spellInfo) && !IsAutoRepeat())
-                cast();
-        } break;
-        case SPELL_STATE_CHANNELING:
+        // lfm debug 
+        if (m_spellInfo->Id == 2010)
         {
-            if (m_timer > 0)
-            {
-                if (m_trueCaster->IsUnit())
-                {
-                    // check if player has jumped before the channeling finished
-                    if (m_caster->m_movementInfo.HasMovementFlag(MOVEFLAG_FALLING))
-                        cancel();
-
-                    // check for incapacitating player states
-                    if (m_caster->IsCrowdControlled())
-                    {
-                        // certain channel spells are not interrupted
-                        if (!m_spellInfo->HasAttribute(SPELL_ATTR_EX_IS_CHANNELED) && !m_spellInfo->HasAttribute(SPELL_ATTR_EX3_IGNORE_CASTER_AND_TARGET_RESTRICTIONS))
-                            cancel();
-                    }
-
-                    if (m_spellInfo->HasAttribute(SPELL_ATTR_EX2_SPECIAL_TAMING_FLAG)) // these fail on lost target attention (aggro)
-                    {
-                        if (Unit* target = dynamic_cast<Unit*>(m_caster->GetChannelObject()))
-                        {
-                            Unit* targetsTarget = target->GetTarget();
-                            if (targetsTarget && targetsTarget != m_caster)
-                                cancel();
-                        }
-                    }
-
-                    if (m_spellInfo->HasAttribute(SPELL_ATTR_EX_TRACK_TARGET_IN_CHANNEL) && m_UniqueTargetInfo.begin() != m_UniqueTargetInfo.end())
-                    {
-                        if (WorldObject* target = m_caster->GetChannelObject())
-                        {
-                            if (target != m_caster)
-                            {
-                                float orientation = m_caster->GetAngle(target);
-                                if (!m_caster->IsClientControlled())
-                                {
-                                    m_caster->SetOrientation(orientation);
-                                    m_caster->SetFacingTo(orientation);
-                                }
-                                m_castOrientation = orientation; // need to update cast orientation due to the attribute
-                            }
-                        }
-                    }
-
-                    // check if player has turned if flag is set
-                    if (m_spellInfo->ChannelInterruptFlags & AURA_INTERRUPT_FLAG_TURNING)
-                    {
-                        switch (m_caster->GetTypeId())
-                        {
-                            case TYPEID_UNIT:
-                                if (m_castOrientation != m_caster->GetOrientation())
-                                    cancel();
-                                break;
-                            case TYPEID_PLAYER:
-                            {
-                                float targetOrientationDiff = 0.10f; // Diff due to client server mismatch
-                                if (m_spellInfo->HasAttribute(SPELL_ATTR_EX_TRACK_TARGET_IN_CHANNEL)) // On start, client turns player to face object, need leeway so that we dont break unnecessarily
-                                    targetOrientationDiff += M_PI_F * (std::max(1200 - (m_duration - int32(m_timer)), 0) / 1200.f);
-                                if ((M_PI_F - std::abs(std::abs(m_castOrientation - m_caster->GetOrientation()) - M_PI_F)) > targetOrientationDiff)
-                                    cancel();
-                            }
-                        }
-                    }
-
-                    // need check distance for channeled target only - but only when its set
-                    if (m_maxRange && !m_caster->HasChannelObject(m_caster->GetObjectGuid()))
-                    {
-                        if (WorldObject* channelTarget = m_caster->GetChannelObject())
-                        {
-                            if (!m_caster->IsWithinCombatDistInMap(channelTarget, m_maxRange * 1.5f))
-                            {
-                                cancel();
-                            }
-                        }
-                    }
-                }
-
-                // check if there are alive targets left
-                if (!IsAliveUnitPresentInTargetList())
-                {
-                    SendChannelUpdate(0);
-                    finish();
-                }
-
-                if (difftime >= m_timer)
-                    m_timer = 0;
-                else
-                    m_timer -= difftime;
-            }
-
             if (m_timer == 0)
             {
-                SendChannelUpdate(0, difftime);
+                bool breakPoint = true;
+            }
+        }
+        bool isNextMeleeSwing = IsNextMeleeSwingSpell(m_spellInfo);
+        bool isAutoRepeat = IsAutoRepeat();
+        if (m_timer == 0 && !isNextMeleeSwing && !isAutoRepeat)
+        {
+            cast();
+        }
+    } break;
+    case SPELL_STATE_CHANNELING:
+    {
+        if (m_timer > 0)
+        {
+            if (m_trueCaster->IsUnit())
+            {
+                // check if player has jumped before the channeling finished
+                if (m_caster->m_movementInfo.HasMovementFlag(MOVEFLAG_FALLING))
+                    cancel();
 
-                // channeled spell processed independently for quest targeting
-                // cast at creature (or GO) quest objectives update at successful cast channel finished
-                // ignore autorepeat/melee casts for speed (not exist quest for spells (hm... )
-                if (!IsAutoRepeat() && !IsNextMeleeSwingSpell(m_spellInfo))
+                // check for incapacitating player states
+                if (m_caster->IsCrowdControlled())
                 {
-                    if (Player* p = m_caster->GetBeneficiaryPlayer())
+                    // certain channel spells are not interrupted
+                    if (!m_spellInfo->HasAttribute(SPELL_ATTR_EX_IS_CHANNELED) && !m_spellInfo->HasAttribute(SPELL_ATTR_EX3_IGNORE_CASTER_AND_TARGET_RESTRICTIONS))
+                        cancel();
+                }
+
+                if (m_spellInfo->HasAttribute(SPELL_ATTR_EX2_SPECIAL_TAMING_FLAG)) // these fail on lost target attention (aggro)
+                {
+                    if (Unit* target = dynamic_cast<Unit*>(m_caster->GetChannelObject()))
                     {
-                        for (TargetList::const_iterator ihit = m_UniqueTargetInfo.begin(); ihit != m_UniqueTargetInfo.end(); ++ihit)
+                        Unit* targetsTarget = target->GetTarget();
+                        if (targetsTarget && targetsTarget != m_caster)
+                            cancel();
+                    }
+                }
+
+                if (m_spellInfo->HasAttribute(SPELL_ATTR_EX_TRACK_TARGET_IN_CHANNEL) && m_UniqueTargetInfo.begin() != m_UniqueTargetInfo.end())
+                {
+                    if (WorldObject* target = m_caster->GetChannelObject())
+                    {
+                        if (target != m_caster)
                         {
-                            TargetInfo const& target = *ihit;
-                            if (!target.targetGUID.IsCreatureOrVehicle())
-                                continue;
-
-                            Unit* unit = m_trueCaster->GetObjectGuid() == target.targetGUID ? m_caster : ObjectAccessor::GetUnit(*m_trueCaster, target.targetGUID);
-                            if (unit == nullptr)
-                                continue;
-
-                            p->RewardPlayerAndGroupAtCast(unit, m_spellInfo->Id);
-                        }
-
-                        for (GOTargetList::const_iterator ihit = m_UniqueGOTargetInfo.begin(); ihit != m_UniqueGOTargetInfo.end(); ++ihit)
-                        {
-                            GOTargetInfo const& target = *ihit;
-
-                            GameObject* go = m_trueCaster->GetMap()->GetGameObject(target.targetGUID);
-                            if (!go)
-                                continue;
-
-                            p->RewardPlayerAndGroupAtCast(go, m_spellInfo->Id);
+                            float orientation = m_caster->GetAngle(target);
+                            if (!m_caster->IsClientControlled())
+                            {
+                                m_caster->SetOrientation(orientation);
+                                m_caster->SetFacingTo(orientation);
+                            }
+                            m_castOrientation = orientation; // need to update cast orientation due to the attribute
                         }
                     }
                 }
 
-                if (GetSpellSpeed() > 0.0f)
+                // check if player has turned if flag is set
+                if (m_spellInfo->ChannelInterruptFlags & AURA_INTERRUPT_FLAG_TURNING)
                 {
-                    // Okay, maps created, now prepare flags
-                    m_spellState = SPELL_STATE_TRAVELING;
-                    SetDelayStart(0);
-                    SetSpellStartTravelling(m_trueCaster->GetMap()->GetCurrentMSTime());
+                    switch (m_caster->GetTypeId())
+                    {
+                    case TYPEID_UNIT:
+                        if (m_castOrientation != m_caster->GetOrientation())
+                            cancel();
+                        break;
+                    case TYPEID_PLAYER:
+                    {
+                        float targetOrientationDiff = 0.10f; // Diff due to client server mismatch
+                        if (m_spellInfo->HasAttribute(SPELL_ATTR_EX_TRACK_TARGET_IN_CHANNEL)) // On start, client turns player to face object, need leeway so that we dont break unnecessarily
+                            targetOrientationDiff += M_PI_F * (std::max(1200 - (m_duration - int32(m_timer)), 0) / 1200.f);
+                        if ((M_PI_F - std::abs(std::abs(m_castOrientation - m_caster->GetOrientation()) - M_PI_F)) > targetOrientationDiff)
+                            cancel();
+                    }
+                    }
                 }
-                else
-                    finish();
+
+                // need check distance for channeled target only - but only when its set
+                if (m_maxRange && !m_caster->HasChannelObject(m_caster->GetObjectGuid()))
+                {
+                    if (WorldObject* channelTarget = m_caster->GetChannelObject())
+                    {
+                        if (!m_caster->IsWithinCombatDistInMap(channelTarget, m_maxRange * 1.5f))
+                        {
+                            cancel();
+                        }
+                    }
+                }
             }
-        } break;
-        default:
+
+            // check if there are alive targets left
+            if (!IsAliveUnitPresentInTargetList())
+            {
+                SendChannelUpdate(0);
+                finish();
+            }
+
+            if (difftime >= m_timer)
+                m_timer = 0;
+            else
+                m_timer -= difftime;
+        }
+
+        if (m_timer == 0)
         {
-        } break;
+            SendChannelUpdate(0, difftime);
+
+            // channeled spell processed independently for quest targeting
+            // cast at creature (or GO) quest objectives update at successful cast channel finished
+            // ignore autorepeat/melee casts for speed (not exist quest for spells (hm... )
+            if (!IsAutoRepeat() && !IsNextMeleeSwingSpell(m_spellInfo))
+            {
+                if (Player* p = m_caster->GetBeneficiaryPlayer())
+                {
+                    for (TargetList::const_iterator ihit = m_UniqueTargetInfo.begin(); ihit != m_UniqueTargetInfo.end(); ++ihit)
+                    {
+                        TargetInfo const& target = *ihit;
+                        if (!target.targetGUID.IsCreatureOrVehicle())
+                            continue;
+
+                        Unit* unit = m_trueCaster->GetObjectGuid() == target.targetGUID ? m_caster : ObjectAccessor::GetUnit(*m_trueCaster, target.targetGUID);
+                        if (unit == nullptr)
+                            continue;
+
+                        p->RewardPlayerAndGroupAtCast(unit, m_spellInfo->Id);
+                    }
+
+                    for (GOTargetList::const_iterator ihit = m_UniqueGOTargetInfo.begin(); ihit != m_UniqueGOTargetInfo.end(); ++ihit)
+                    {
+                        GOTargetInfo const& target = *ihit;
+
+                        GameObject* go = m_trueCaster->GetMap()->GetGameObject(target.targetGUID);
+                        if (!go)
+                            continue;
+
+                        p->RewardPlayerAndGroupAtCast(go, m_spellInfo->Id);
+                    }
+                }
+            }
+
+            if (GetSpellSpeed() > 0.0f)
+            {
+                // Okay, maps created, now prepare flags
+                m_spellState = SPELL_STATE_TRAVELING;
+                SetDelayStart(0);
+                SetSpellStartTravelling(m_trueCaster->GetMap()->GetCurrentMSTime());
+            }
+            else
+                finish();
+        }
+    } break;
+    default:
+    {
+    } break;
     }
 }
 

@@ -26,9 +26,27 @@ public:
     {
         Enable = 0;
         Reset = 0;
-        UpdateDelay = 0;
         UpdateCount = 0;
-        NierCount = 0;
+        NierCount_Horde_Warrior = 0;
+        NierCount_Horde_Paladin = 0;
+        NierCount_Horde_Hunter = 0;
+        NierCount_Horde_Rogue = 0;
+        NierCount_Horde_Priest = 0;
+        NierCount_Horde_DeathKnight = 0;
+        NierCount_Horde_Shaman = 0;
+        NierCount_Horde_Mage = 0;
+        NierCount_Horde_Warlock = 0;
+        NierCount_Horde_Druid = 0;
+        NierCount_Alliance_Warrior = 0;
+        NierCount_Alliance_Paladin = 0;
+        NierCount_Alliancee_Hunter = 0;
+        NierCount_Alliance_Rogue = 0;
+        NierCount_Alliance_Priest = 0;
+        NierCount_Alliance_DeathKnight = 0;
+        NierCount_Alliance_Shaman = 0;
+        NierCount_Alliance_Mage = 0;
+        NierCount_Alliance_Warlock = 0;
+        NierCount_Alliance_Druid = 0;
     }
 
     bool SetSource(const std::string& file);
@@ -48,9 +66,27 @@ public:
     bool Initialize();
     uint32 Enable;
     uint32 Reset;
-    uint32 UpdateDelay;
     uint32 UpdateCount;
-    uint32 NierCount;
+    uint32 NierCount_Horde_Warrior;
+    uint32 NierCount_Horde_Paladin;
+    uint32 NierCount_Horde_Hunter;
+    uint32 NierCount_Horde_Rogue;
+    uint32 NierCount_Horde_Priest;
+    uint32 NierCount_Horde_DeathKnight;
+    uint32 NierCount_Horde_Shaman;
+    uint32 NierCount_Horde_Mage;
+    uint32 NierCount_Horde_Warlock;
+    uint32 NierCount_Horde_Druid;
+    uint32 NierCount_Alliance_Warrior;
+    uint32 NierCount_Alliance_Paladin;
+    uint32 NierCount_Alliancee_Hunter;
+    uint32 NierCount_Alliance_Rogue;
+    uint32 NierCount_Alliance_Priest;
+    uint32 NierCount_Alliance_DeathKnight;
+    uint32 NierCount_Alliance_Shaman;
+    uint32 NierCount_Alliance_Mage;
+    uint32 NierCount_Alliance_Warlock;
+    uint32 NierCount_Alliance_Druid;
 };
 
 #define sNierConfig MaNGOS::Singleton<NierConfig>::Instance()

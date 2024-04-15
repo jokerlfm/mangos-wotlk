@@ -16,8 +16,8 @@ public:
 
     bool Tank(Unit* pTarget);
     bool Heal(Unit* pTarget);
-    bool DPS(Unit* pTarget, Unit* pTank, bool pRushing);
-    bool Interrupt(Unit* pTarget);
+    bool DPS(Unit* pTarget, Unit* pTank, Unit* pHealer);
+    bool PVP(Unit* pTarget);
     bool Buff();
     bool Cure();
     bool Revive();
@@ -32,6 +32,8 @@ public:
     uint32 spell_Revenge;
     uint32 spell_ShieldBlock;
     uint32 spell_DefensiveStance;
+    uint32 spell_BattleStance;
+    uint32 spell_HeroicStrike;
     uint32 spell_Rend;
     uint32 spell_Disarm;
     uint32 spell_LastStand;

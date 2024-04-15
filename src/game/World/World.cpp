@@ -1802,7 +1802,7 @@ void World::Update(uint32 diff)
     sMingManager->UpdateMingManager(diff);
 
     // lfm nier 
-    sNierManager->UpdateNierManager(diff);
+    sNierManager->UpdateNierManager();
 }
 
 namespace MaNGOS

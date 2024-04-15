@@ -30,7 +30,7 @@ class NierEntity
 {
 public:
     NierEntity();
-    virtual void Update(uint32 pDiff);
+    virtual void Update();
 
 public:
     int updateDelay;
@@ -48,5 +48,7 @@ public:
     uint32 target_specialty;
 
     uint32 entityState;
+
+    uint32 gametime;
 };
 #endif

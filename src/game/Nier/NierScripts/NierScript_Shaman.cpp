@@ -103,9 +103,9 @@ bool NierScript_Shaman::Heal(Unit* pTarget)
     return NierScript_Base::Tank(pTarget);
 }
 
-bool NierScript_Shaman::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
+bool NierScript_Shaman::DPS(Unit* pTarget, Unit* pTank, Unit* pHealer)
 {
-    return NierScript_Base::DPS(pTarget, pTank, pRushing);
+    return NierScript_Base::DPS(pTarget, pTank, pHealer);
 }
 
 bool NierScript_Shaman::Buff()

@@ -105,9 +105,27 @@ bool NierConfig::Initialize()
 
 	Enable = GetIntDefault("Enable", 0);
 	Reset = GetIntDefault("Reset", 0);
-	UpdateDelay = GetIntDefault("UpdateDelay", 100);
-	UpdateCount = GetIntDefault("UpdateCount", 10);	
-	NierCount = GetIntDefault("NierCount", 10);
+	UpdateCount = GetIntDefault("UpdateCount", 20);
+	NierCount_Horde_Warrior = GetIntDefault("NierCount_Horde_Warrior", 0);
+	NierCount_Horde_Paladin = GetIntDefault("NierCount_Horde_Paladin", 0);
+	NierCount_Horde_Hunter = GetIntDefault("NierCount_Horde_Hunter", 0);
+	NierCount_Horde_Rogue = GetIntDefault("NierCount_Horde_Rogue", 0);
+	NierCount_Horde_Priest = GetIntDefault("NierCount_Horde_Priest", 0);
+	NierCount_Horde_DeathKnight = GetIntDefault("NierCount_Horde_DeathKnight", 0);
+	NierCount_Horde_Shaman = GetIntDefault("NierCount_Horde_Shaman", 0);
+	NierCount_Horde_Mage = GetIntDefault("NierCount_Horde_Mage", 0);
+	NierCount_Horde_Warlock = GetIntDefault("NierCount_Horde_Warlock", 0);
+	NierCount_Horde_Druid = GetIntDefault("NierCount_Horde_Druid", 0);
+	NierCount_Alliance_Warrior = GetIntDefault("NierCount_Alliance_Warrior", 0);
+	NierCount_Alliance_Paladin = GetIntDefault("NierCount_Alliance_Paladin", 0);
+	NierCount_Alliancee_Hunter = GetIntDefault("NierCount_Alliancee_Hunter", 0);
+	NierCount_Alliance_Rogue = GetIntDefault("NierCount_Alliance_Rogue", 0);
+	NierCount_Alliance_Priest = GetIntDefault("NierCount_Alliance_Priest", 0);
+	NierCount_Alliance_DeathKnight = GetIntDefault("NierCount_Alliance_DeathKnight", 0);
+	NierCount_Alliance_Shaman = GetIntDefault("NierCount_Alliance_Shaman", 0);
+	NierCount_Alliance_Mage = GetIntDefault("NierCount_Alliance_Mage", 0);
+	NierCount_Alliance_Warlock = GetIntDefault("NierCount_Alliance_Warlock", 0);
+	NierCount_Alliance_Druid = GetIntDefault("NierCount_Alliance_Druid", 0);
 
 	if (Enable == 0)
 	{

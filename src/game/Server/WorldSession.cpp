@@ -1351,3 +1351,9 @@ void WorldSession::HandleWardenDataOpcode(WorldPacket& recv_data)
 {
     m_anticheat->WardenPacket(recv_data);
 }
+
+// lfm nier no anticheat 
+void WorldSession::SetNoAnticheat()
+{
+    m_anticheat.reset(new NullSessionAnticheat(this));
+}

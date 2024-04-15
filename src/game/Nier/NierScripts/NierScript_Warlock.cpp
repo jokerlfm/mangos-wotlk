@@ -12,8 +12,8 @@ NierScript_Warlock::NierScript_Warlock(Player* pMe) :NierScript_Base(pMe)
 	spell_RainOfFire = 0;
 	spell_FireShield = 0;
 
-	followDistance = 15.0f;
-	dpsDistance = 15.0f;
+	followDistance = 20.0f;
+	dpsDistance = 25.0f;
 }
 
 bool NierScript_Warlock::Prepare()
@@ -30,7 +30,7 @@ bool NierScript_Warlock::Prepare()
 					if (itr->first == 4511)
 					{
 						myPet->ToggleAutocast(itr->first, false);
-					}					
+					}
 					else
 					{
 						myPet->ToggleAutocast(itr->first, true);
@@ -335,12 +335,14 @@ void NierScript_Warlock::InitializeEquipments(bool pReset)
 	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
 }
 
-bool NierScript_Warlock::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
+bool NierScript_Warlock::DPS(Unit* pTarget, Unit* pTank, Unit* pHealer)
 {
-	if (NierScript_Base::DPS(pTarget, pTank, pRushing))
+	if (NierScript_Base::DPS(pTarget, pTank, pHealer))
 	{
-		float targetDistance = me->GetDistance(pTarget);
-		if (targetDistance < dpsDistance)
+		float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
+		targetDistance = sqrtf(targetDistance);
+		float maxDistance = pTarget->GetCombatReach() + me->GetCombatReach() + dpsDistance + RANGED_FLOATING;
+		if (targetDistance < maxDistance)
 		{
 			if (Pet* myPet = me->GetPet())
 			{
@@ -369,8 +371,7 @@ bool NierScript_Warlock::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 					return true;
 				}
 			}
-			uint32 healthTimes = pTarget->GetMaxHealth() / me->GetMaxHealth();
-			if (healthTimes > 2)
+			if (rushing)
 			{
 				if (spell_Shadowbolt > 0)
 				{
@@ -380,20 +381,17 @@ bool NierScript_Warlock::DPS(Unit* pTarget, Unit* pTank, bool pRushing)
 					}
 				}
 			}
-			else
+			if (spell_Shoot > 0)
 			{
-				if (spell_Shoot > 0)
+				if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
 				{
-					if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
+					return true;
+				}
+				else
+				{
+					if (CastSpell(pTarget, spell_Shoot))
 					{
 						return true;
-					}
-					else
-					{
-						if (CastSpell(pTarget, spell_Shoot))
-						{
-							return true;
-						}
 					}
 				}
 			}
@@ -422,8 +420,10 @@ bool NierScript_Warlock::PVP(Unit* pTarget)
 {
 	if (NierScript_Base::PVP(pTarget))
 	{
-		float targetDistance = me->GetDistance(pTarget);
-		if (targetDistance < dpsDistance)
+		float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
+		targetDistance = sqrtf(targetDistance);
+		float maxDistance = pTarget->GetCombatReach() + me->GetCombatReach() + dpsDistance + RANGED_FLOATING;
+		if (targetDistance < maxDistance)
 		{
 			if (Pet* myPet = me->GetPet())
 			{
@@ -452,48 +452,27 @@ bool NierScript_Warlock::PVP(Unit* pTarget)
 					return true;
 				}
 			}
-			uint32 healthTimes = pTarget->GetMaxHealth() / me->GetMaxHealth();
-			if (healthTimes > 2)
+			if (spell_Shadowbolt > 0)
 			{
-				if (spell_Shadowbolt > 0)
+				if (CastSpell(pTarget, spell_Shadowbolt))
 				{
-					if (CastSpell(pTarget, spell_Shadowbolt))
+					return true;
+				}
+			}
+			if (spell_Shoot > 0)
+			{
+				if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
+				{
+					return true;
+				}
+				else
+				{
+					if (CastSpell(pTarget, spell_Shoot))
 					{
 						return true;
 					}
 				}
 			}
-			else
-			{
-				if (spell_Shoot > 0)
-				{
-					if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
-					{
-						return true;
-					}
-					else
-					{
-						if (CastSpell(pTarget, spell_Shoot))
-						{
-							return true;
-						}
-					}
-				}
-			}
-			//if (spell_Corruption > 0)
-			//{
-			//	if (CastSpell(pTarget, spell_Corruption, true, true))
-			//	{
-			//		return true;
-			//	}
-			//}
-			//if (spell_Curse_Of_Agony > 0)
-			//{
-			//	if (CastSpell(pTarget, spell_Curse_Of_Agony, true, true))
-			//	{
-			//		return true;
-			//	}
-			//}
 		}
 		return true;
 	}

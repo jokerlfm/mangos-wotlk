@@ -323,6 +323,9 @@ class WorldSession
         void SetNoAnticheat();
 #endif
 
+        // lfm nier no anticheat 
+        void SetNoAnticheat();
+
         /// Session in auth.queue currently
         void SetInQueue(bool state) { m_inQueue = state; }
 

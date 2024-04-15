@@ -16,7 +16,7 @@ public:
 
     bool Tank(Unit* pTarget);
     bool Heal(Unit* pTarget);
-    bool DPS(Unit* pTarget, Unit* pTank, bool pRushing);
+    bool DPS(Unit* pTarget, Unit* pTank, Unit* pHealer);
     bool PVP(Unit* pTarget);
     bool Buff();
     bool Cure();
@@ -34,6 +34,10 @@ public:
     uint32 spell_HuntersMark;
     uint32 spell_ConcussiveShot;
     uint32 spell_AspectOfTheHawk;
+
+    uint32 spell_RaptorStrike;
+    uint32 spell_MongooseBite;
+    uint32 spell_WingClip;
     
     std::unordered_set<uint32> growlSet;
     std::unordered_set<uint32> prowlSet;

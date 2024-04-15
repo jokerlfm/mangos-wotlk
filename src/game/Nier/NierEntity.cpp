@@ -28,13 +28,17 @@ NierEntity::NierEntity()
 	target_level = 0;
 	target_specialty = 0;
 	entityState = NierState::NierState_OffLine;
+
+	gametime = 0;
 }
 
-void NierEntity::Update(uint32 pDiff)
+void NierEntity::Update()
 {
+	uint32 diff = WorldTimer::getMSTime() - gametime;
+	gametime = gametime + diff;
 	if (updateDelay > 0)
 	{
-		updateDelay -= pDiff;
+		updateDelay -= diff;
 		return;
 	}
 	switch (entityState)
@@ -399,9 +403,9 @@ void NierEntity::Update(uint32 pDiff)
 			entityState = NierState::NierState_Online;
 			std::ostringstream msgStream;
 			msgStream << me->GetName() << " Equiped all slots";
-			const char* msg = msgStream.str().c_str();
-			sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, msg);
-			sLog.outBasic(msg);
+			std::string msgStr = msgStream.str();
+			sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, msgStr.c_str());
+			sLog.outBasic(msgStr.c_str());
 			break;
 		}
 		break;
@@ -441,22 +445,29 @@ void NierEntity::Update(uint32 pDiff)
 			entityState = NierState::NierState_Online;
 			std::ostringstream msgStream;
 			msgStream << me->GetName() << " upgrade";
-			const char* msg = msgStream.str().c_str();
-			sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, msg);
-			sLog.outBasic(msg);
+			std::string msgStr = msgStream.str();
+			sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, msgStr.c_str());
+			sLog.outBasic(msgStr.c_str());
 			break;
 		}
 		break;
 	}
 	case NierState::NierState_Online:
 	{
-		updateDelay = urand(10000, 30000);
-		ObjectGuid masterGuid = ObjectGuid(HighGuid::HIGHGUID_PLAYER, master_id);
-		if (Player* master = ObjectAccessor::FindPlayer(masterGuid))
+		if (me->IsInWorld())
 		{
-			if (master->GetLevel() != me->GetLevel())
+			if (me->_nierScript)
 			{
-				entityState = NierState::NierState_LevelUp;
+				me->_nierScript->Update(diff);
+			}
+			ObjectGuid masterGuid = ObjectGuid(HighGuid::HIGHGUID_PLAYER, master_id);
+			if (Player* master = ObjectAccessor::FindPlayer(masterGuid))
+			{
+				if (master->GetLevel() != me->GetLevel())
+				{
+					updateDelay = urand(1000, 10000);
+					entityState = NierState::NierState_LevelUp;
+				}
 			}
 		}
 		break;
