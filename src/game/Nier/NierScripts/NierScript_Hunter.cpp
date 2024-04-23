@@ -489,161 +489,181 @@ bool NierScript_Hunter::Heal(Unit* pTarget)
 	return false;
 }
 
-bool NierScript_Hunter::DPS(Unit* pTarget, Unit* pTank, Unit* pHealer)
+bool NierScript_Hunter::DPS(Unit* pTarget)
 {
-	if (NierScript_Base::DPS(pTarget, pTank, pHealer))
+	if (Pet* myPet = me->GetPet())
 	{
-		float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
-		targetDistance = sqrtf(targetDistance);
-		float maxDistance = pTarget->GetCombatReach() + me->GetCombatReach() + dpsDistance + RANGED_FLOATING;
-		if (targetDistance < maxDistance)
+		if (myPet->IsAlive())
 		{
-			if (Pet* myPet = me->GetPet())
+			if (!myPet->GetVictim())
 			{
-				if (myPet->IsAlive())
+				if (UnitAI* pai = myPet->AI())
 				{
-					if (!myPet->GetVictim())
+					pai->AttackStart(pTarget);
+				}
+				if (CharmInfo* ci = myPet->GetCharmInfo())
+				{
+					if (ci->GetCommandState() != CommandStates::COMMAND_ATTACK)
 					{
-						if (UnitAI* pai = myPet->AI())
-						{
-							pai->AttackStart(pTarget);
-						}
-						if (CharmInfo* ci = myPet->GetCharmInfo())
-						{
-							if (ci->GetCommandState() != CommandStates::COMMAND_ATTACK)
-							{
-								ci->SetCommandState(CommandStates::COMMAND_ATTACK);
-							}
-						}
+						ci->SetCommandState(CommandStates::COMMAND_ATTACK);
 					}
 				}
 			}
-			if (me->CanReachWithMeleeAttack(pTarget))
+		}
+	}
+	if (me->CanReachWithMeleeAttack(pTarget))
+	{
+		me->Attack(pTarget, true);
+		if (spell_WingClip > 0)
+		{
+			if (CastSpell(pTarget, spell_WingClip, true))
 			{
-				me->Attack(pTarget, true);
-				if (spell_WingClip > 0)
+				return true;
+			}
+		}
+		if (spell_RaptorStrike > 0)
+		{
+			if (CastSpell(pTarget, spell_RaptorStrike))
+			{
+				return true;
+			}
+		}
+		if (spell_MongooseBite > 0)
+		{
+			if (CastSpell(pTarget, spell_MongooseBite))
+			{
+				return true;
+			}
+		}
+	}
+	else
+	{
+		if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
+		{
+			if (spell_HuntersMark > 0)
+			{
+				if (CastSpell(pTarget, spell_HuntersMark, true))
 				{
-					if (CastSpell(pTarget, spell_WingClip, true))
-					{
-						return true;
-					}
-				}
-				if (spell_RaptorStrike > 0)
-				{
-					if (CastSpell(pTarget, spell_RaptorStrike))
-					{
-						return true;
-					}
-				}
-				if (spell_MongooseBite > 0)
-				{
-					if (CastSpell(pTarget, spell_MongooseBite))
-					{
-						return true;
-					}
+					return true;
 				}
 			}
-			else
+			if (rushing)
 			{
-				if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
+				if (spell_SerpentSting > 0)
 				{
-					if (spell_HuntersMark > 0)
+					if (CastSpell(pTarget, spell_SerpentSting, true, true))
 					{
-						if (CastSpell(pTarget, spell_HuntersMark, true))
-						{
-							return true;
-						}
-					}
-					if (rushing)
-					{
-						if (spell_SerpentSting > 0)
-						{
-							if (CastSpell(pTarget, spell_SerpentSting, true, true))
-							{
-								return true;
-							}
-						}
-						if (spell_ConcussiveShot > 0)
-						{
-							if (CastSpell(pTarget, spell_ConcussiveShot, true))
-							{
-								return true;
-							}
-						}
-						if (spell_ArcaneShot > 0)
-						{
-							if (CastSpell(pTarget, spell_ArcaneShot))
-							{
-								return true;
-							}
-						}
+						return true;
 					}
 				}
-				else
+				if (spell_ConcussiveShot > 0)
 				{
-					if (CastSpell(pTarget, spell_AutoShot))
+					if (CastSpell(pTarget, spell_ConcussiveShot, true))
+					{
+						return true;
+					}
+				}
+				if (spell_ArcaneShot > 0)
+				{
+					if (CastSpell(pTarget, spell_ArcaneShot))
 					{
 						return true;
 					}
 				}
 			}
 		}
-
-		return true;
+		else
+		{
+			if (CastSpell(pTarget, spell_AutoShot))
+			{
+				return true;
+			}
+		}
 	}
 
-	return false;
+	return true;
 }
 
 bool NierScript_Hunter::PVP(Unit* pTarget)
 {
-	if (NierScript_Base::PVP(pTarget))
+	float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
+	targetDistance = sqrtf(targetDistance);
+	float maxDistance = pTarget->GetCombatReach() + me->GetCombatReach() + dpsDistance + RANGED_FLOATING;
+	if (targetDistance < maxDistance)
 	{
-		float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
-		targetDistance = sqrtf(targetDistance);
-		float maxDistance = pTarget->GetCombatReach() + me->GetCombatReach() + dpsDistance + RANGED_FLOATING;
-		if (targetDistance < maxDistance)
+		if (Pet* myPet = me->GetPet())
 		{
-			if (Pet* myPet = me->GetPet())
+			if (myPet->IsAlive())
 			{
-				if (myPet->IsAlive())
+				if (!myPet->GetVictim())
 				{
-					if (!myPet->GetVictim())
+					if (UnitAI* pai = myPet->AI())
 					{
-						if (UnitAI* pai = myPet->AI())
+						pai->AttackStart(pTarget);
+					}
+					if (CharmInfo* ci = myPet->GetCharmInfo())
+					{
+						if (ci->GetCommandState() != CommandStates::COMMAND_ATTACK)
 						{
-							pai->AttackStart(pTarget);
-						}
-						if (CharmInfo* ci = myPet->GetCharmInfo())
-						{
-							if (ci->GetCommandState() != CommandStates::COMMAND_ATTACK)
-							{
-								ci->SetCommandState(CommandStates::COMMAND_ATTACK);
-							}
+							ci->SetCommandState(CommandStates::COMMAND_ATTACK);
 						}
 					}
 				}
 			}
-			if (me->CanReachWithMeleeAttack(pTarget))
+		}
+		if (me->CanReachWithMeleeAttack(pTarget))
+		{
+			me->Attack(pTarget, true);
+			if (spell_WingClip > 0)
 			{
-				me->Attack(pTarget, true);
-				if (spell_WingClip > 0)
+				if (CastSpell(pTarget, spell_WingClip, true))
 				{
-					if (CastSpell(pTarget, spell_WingClip, true))
+					return true;
+				}
+			}
+			if (spell_RaptorStrike > 0)
+			{
+				if (CastSpell(pTarget, spell_RaptorStrike))
+				{
+					return true;
+				}
+			}
+			if (spell_MongooseBite > 0)
+			{
+				if (CastSpell(pTarget, spell_MongooseBite))
+				{
+					return true;
+				}
+			}
+		}
+		else
+		{
+			if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
+			{
+				if (spell_HuntersMark > 0)
+				{
+					if (CastSpell(pTarget, spell_HuntersMark, true))
 					{
 						return true;
 					}
 				}
-				if (spell_RaptorStrike > 0)
+				if (spell_SerpentSting > 0)
 				{
-					if (CastSpell(pTarget, spell_RaptorStrike))
+					if (CastSpell(pTarget, spell_SerpentSting, true, true))
 					{
 						return true;
 					}
 				}
-				if (spell_MongooseBite > 0)
+				if (spell_ConcussiveShot > 0)
 				{
-					if (CastSpell(pTarget, spell_MongooseBite))
+					if (CastSpell(pTarget, spell_ConcussiveShot, true))
+					{
+						return true;
+					}
+				}
+				if (spell_ArcaneShot > 0)
+				{
+					if (CastSpell(pTarget, spell_ArcaneShot))
 					{
 						return true;
 					}
@@ -651,50 +671,15 @@ bool NierScript_Hunter::PVP(Unit* pTarget)
 			}
 			else
 			{
-				if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
+				if (CastSpell(pTarget, spell_AutoShot))
 				{
-					if (spell_HuntersMark > 0)
-					{
-						if (CastSpell(pTarget, spell_HuntersMark, true))
-						{
-							return true;
-						}
-					}
-					if (spell_SerpentSting > 0)
-					{
-						if (CastSpell(pTarget, spell_SerpentSting, true, true))
-						{
-							return true;
-						}
-					}
-					if (spell_ConcussiveShot > 0)
-					{
-						if (CastSpell(pTarget, spell_ConcussiveShot, true))
-						{
-							return true;
-						}
-					}
-					if (spell_ArcaneShot > 0)
-					{
-						if (CastSpell(pTarget, spell_ArcaneShot))
-						{
-							return true;
-						}
-					}
-				}
-				else
-				{
-					if (CastSpell(pTarget, spell_AutoShot))
-					{
-						return true;
-					}
+					return true;
 				}
 			}
 		}
-		return true;
 	}
 
-	return false;
+	return true;
 }
 
 bool NierScript_Hunter::Buff()

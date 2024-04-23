@@ -595,7 +595,7 @@ void NierManager::HandleChatCommand(Player* pCommander, std::string pContent, Pl
 			}
 		}
 	}
-	else if (commandName == "formation")
+	else if (commandName == "overlap")
 	{
 		if (pTargetPlayer)
 		{
@@ -605,17 +605,11 @@ void NierManager::HandleChatCommand(Player* pCommander, std::string pContent, Pl
 				{
 					if (NierScript_Base* nb = pTargetPlayer->_nierScript)
 					{
-						if (commandVector.size() > 1)
-						{
-							std::string formation = commandVector.at(1);
-							if (formation == "point")
-							{
-								pTargetPlayer->GetMotionMaster()->Clear();
-								nb->destination_follow = pCommander->GetPosition();
-								nb->orderDelay = 2000;
-								pTargetPlayer->GetMotionMaster()->MovePoint(0, nb->destination_follow.x, nb->destination_follow.y, nb->destination_follow.z, ForcedMovement::FORCED_MOVEMENT_RUN, true);
-							}
-						}
+						pTargetPlayer->GetMotionMaster()->Clear();
+						nb->destination_follow = pCommander->GetPosition();
+						nb->orderType = OrderType::OrderType_Move;
+						nb->orderDelay = 2000;
+						pTargetPlayer->GetMotionMaster()->MovePoint(0, nb->destination_follow.x, nb->destination_follow.y, nb->destination_follow.z, ForcedMovement::FORCED_MOVEMENT_RUN, true);
 					}
 				}
 			}
@@ -661,24 +655,6 @@ void NierManager::HandleChatCommand(Player* pCommander, std::string pContent, Pl
 								nb->orderDelay = 5000;
 							}
 						}
-					}
-				}
-			}
-		}
-	}
-	else if (commandName == "finish")
-	{
-		if (pTargetPlayer)
-		{
-			if (pTargetPlayer->isNier)
-			{
-				if (pTargetPlayer->IsInWorld())
-				{
-					if (NierScript_Base* nb = pTargetPlayer->_nierScript)
-					{
-						pTargetPlayer->FinishSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL);
-						pTargetPlayer->FinishSpell(CurrentSpellTypes::CURRENT_CHANNELED_SPELL);
-						pTargetPlayer->FinishSpell(CurrentSpellTypes::CURRENT_GENERIC_SPELL);
 					}
 				}
 			}
@@ -820,6 +796,120 @@ void NierManager::HandleChatCommand(Player* pCommander, std::string pContent, Pl
 					unbondStream << "unbond " << unbond << " instances";
 					pTargetPlayer->Whisper(unbondStream.str(), Language::LANG_UNIVERSAL, pCommander->GetObjectGuid());
 				}
+			}
+		}
+	}
+	else if (commandName == "see1")
+	{
+		if (Unit* pTarget = pCommander->GetTarget())
+		{
+			if (pTarget->IsVisibleForOrDetect(pCommander, pCommander, false))
+			{
+				sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, "yes", pCommander);
+			}
+			else
+			{
+				sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, "no", pCommander);
+			}
+		}
+	}
+	else if (commandName == "see2")
+	{
+		if (Unit* pTarget = pCommander->GetTarget())
+		{
+			if (pCommander->IsVisibleForOrDetect(pTarget, pTarget, false))
+			{
+				sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, "yes", pCommander);
+			}
+			else
+			{
+				sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, "no", pCommander);
+			}
+		}
+	}
+	else if (commandName == "detect1")
+	{
+		if (Unit* pTarget = pCommander->GetTarget())
+		{
+			if (pTarget->IsVisibleForOrDetect(pCommander, pCommander, true))
+			{
+				sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, "yes", pCommander);
+			}
+			else
+			{
+				sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, "no", pCommander);
+			}
+		}
+	}
+	else if (commandName == "detect2")
+	{
+		if (Unit* pTarget = pCommander->GetTarget())
+		{
+			if (pCommander->IsVisibleForOrDetect(pTarget, pTarget, true))
+			{
+				sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, "yes", pCommander);
+			}
+			else
+			{
+				sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, "no", pCommander);
+			}
+		}
+	}
+	else if (commandName == "los1")
+	{
+		if (Unit* pTarget = pCommander->GetTarget())
+		{
+			if (pCommander->IsWithinLOSInMap(pTarget))
+			{
+				sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, "yes", pCommander);
+			}
+			else
+			{
+				sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, "no", pCommander);
+			}
+		}
+	}
+	else if (commandName == "los2")
+	{
+		if (Unit* pTarget = pCommander->GetTarget())
+		{
+			if (pTarget->IsWithinLOSInMap(pCommander))
+			{
+				sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, "yes", pCommander);
+			}
+			else
+			{
+				sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, "no", pCommander);
+			}
+		}
+	}
+	else if (commandName == "los3")
+	{
+		if (Unit* pTarget = pCommander->GetTarget())
+		{
+			Position pos = pTarget->GetPosition();
+			if (pCommander->IsWithinLOS(pos.x, pos.y, pos.z + pTarget->GetCollisionHeight()))
+			{
+				sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, "yes", pCommander);
+			}
+			else
+			{
+				sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, "no", pCommander);
+			}
+		}
+	}
+	else if (commandName == "los4")
+	{
+		if (Unit* pTarget = pCommander->GetTarget())
+		{
+			Position pos = pCommander->GetPosition();
+			if (pTarget->IsWithinLOS(pos.x, pos.y, pos.z + pCommander->GetCollisionHeight()))
+			{
+				sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, "yes", pCommander);
+			}
+			else
+			{
+				sWorld.SendServerMessage(ServerMessageType::SERVER_MSG_CUSTOM, "no", pCommander);
 			}
 		}
 	}

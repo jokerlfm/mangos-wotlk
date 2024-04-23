@@ -231,78 +231,58 @@ bool NierScript_Mage::Heal(Unit* pTarget)
 	return false;
 }
 
-bool NierScript_Mage::DPS(Unit* pTarget, Unit* pTank, Unit* pHealer)
+bool NierScript_Mage::DPS(Unit* pTarget)
 {
-	if (NierScript_Base::DPS(pTarget, pTank, pHealer))
+	if (spell_FireBlast > 0)
 	{
-		float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
-		targetDistance = sqrtf(targetDistance);
-		float maxDistance = pTarget->GetCombatReach() + me->GetCombatReach() + dpsDistance + RANGED_FLOATING;
-		if (targetDistance < maxDistance)
+		if (CastSpell(pTarget, spell_FireBlast))
 		{
-			if (spell_FireBlast > 0)
+			return true;
+		}
+	}
+	if (spell_Shoot > 0)
+	{
+		if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
+		{
+			return true;
+		}
+		else
+		{
+			if (CastSpell(pTarget, spell_Shoot))
 			{
-				if (CastSpell(pTarget, spell_FireBlast))
-				{
-					return true;
-				}
-			}
-			if (spell_Shoot > 0)
-			{
-				if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
-				{
-					return true;
-				}
-				else
-				{
-					if (CastSpell(pTarget, spell_Shoot))
-					{
-						return true;
-					}
-				}
+				return true;
 			}
 		}
-		return true;
 	}
 
-	return false;
+	return true;
 }
 
 bool NierScript_Mage::PVP(Unit* pTarget)
 {
-	if (NierScript_Base::PVP(pTarget))
+	if (spell_FireBlast > 0)
 	{
-		float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
-		targetDistance = sqrtf(targetDistance);
-		float maxDistance = pTarget->GetCombatReach() + me->GetCombatReach() + dpsDistance + RANGED_FLOATING;
-		if (targetDistance < maxDistance)
+		if (CastSpell(pTarget, spell_FireBlast))
 		{
-			if (spell_FireBlast > 0)
+			return true;
+		}
+	}
+	if (spell_Shoot > 0)
+	{
+		if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
+		{
+			return true;
+		}
+		else
+		{
+			if (CastSpell(pTarget, spell_Shoot))
 			{
-				if (CastSpell(pTarget, spell_FireBlast))
-				{
-					return true;
-				}
-			}
-			if (spell_Shoot > 0)
-			{
-				if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
-				{
-					return true;
-				}
-				else
-				{
-					if (CastSpell(pTarget, spell_Shoot))
-					{
-						return true;
-					}
-				}
+				return true;
 			}
 		}
-		return true;
 	}
 
-	return false;
+	return true;
 }
 
 bool NierScript_Mage::Buff()

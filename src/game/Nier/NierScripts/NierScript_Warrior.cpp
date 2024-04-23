@@ -350,6 +350,21 @@ void NierScript_Warrior::InitializeEquipments(bool pReset)
 	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
 }
 
+uint32 NierScript_Warrior::Chase(Unit* pTarget)
+{
+	uint32 chaseResult = NierScript_Base::Chase(pTarget);
+	if (chaseResult == ChaseResult::ChaseResult_Moving)
+	{
+		float targetDistance = me->GetDistance(pTarget);
+		if (targetDistance < INSPECT_DISTANCE)
+		{
+
+		}
+	}
+
+	return chaseResult;
+}
+
 bool NierScript_Warrior::Tank(Unit* pTarget)
 {
 	if (NierScript_Base::Tank(pTarget))
@@ -357,145 +372,7 @@ bool NierScript_Warrior::Tank(Unit* pTarget)
 		float targetDistance = me->GetDistance(pTarget);
 		if (me->CanReachWithMeleeAttack(pTarget))
 		{
-			me->Attack(pTarget, true);
-			if (spell_Taunt > 0)
-			{
-				if (!pTarget->GetSelectionGuid().IsEmpty())
-				{
-					if (pTarget->GetSelectionGuid() != me->GetObjectGuid())
-					{
-
-						if (CastSpell(pTarget, spell_Taunt))
-						{
-							return true;
-						}
-					}
-				}
-			}
-			uint32 myRage = me->GetPower(Powers::POWER_RAGE);
-			if (spell_BattleShout > 0)
-			{
-				if (myRage > 100)
-				{
-					if (!me->HasAura(spell_BattleShout))
-					{
-						if (CastSpell(me, spell_BattleShout, true))
-						{
-							return true;
-						}
-					}
-				}
-			}
-
-			if (spell_DemoralizingShout > 0)
-			{
-				if (myRage > 100)
-				{
-					if (CastSpell(pTarget, spell_DemoralizingShout, true))
-					{
-						return true;
-					}
-				}
-			}
-			if (spell_Disarm > 0)
-			{
-				if (myRage > 150)
-				{
-					if (pTarget->GetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID))
-					{
-						if (CastSpell(pTarget, spell_Disarm, true))
-						{
-							return true;
-						}
-					}
-				}
-			}
-			float healthPercent = me->GetHealthPercent();
-			if (spell_LastStand > 0)
-			{
-				if (healthPercent < 25.0f)
-				{
-					if (CastSpell(me, spell_LastStand))
-					{
-						return true;
-					}
-				}
-			}
-			if (spell_ShieldWall > 0)
-			{
-				if (healthPercent < 40.0f)
-				{
-					if (CastSpell(me, spell_ShieldWall))
-					{
-						return true;
-					}
-				}
-			}
-			if (spell_ShieldBlock > 0)
-			{
-				if (healthPercent < 70.0f)
-				{
-					if (CastSpell(me, spell_ShieldBlock))
-					{
-						return true;
-					}
-				}
-			}
-			if (spell_Revenge > 0)
-			{
-				if (myRage > 50)
-				{
-					if (CastSpell(pTarget, spell_Revenge))
-					{
-						return true;
-					}
-				}
-			}
-			if (spell_SunderArmor > 0)
-			{
-				if (myRage > 150)
-				{
-					bool sunder = true;
-					Unit::SpellAuraHolderMap const& auras = pTarget->GetSpellAuraHolderMap();
-					for (Unit::SpellAuraHolderMap::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
-					{
-						if (SpellAuraHolder* holder = itr->second)
-						{
-							if (const SpellEntry* se = holder->GetSpellProto())
-							{
-								if (se->Id == spell_SunderArmorAura)
-								{
-									if (holder->GetStackAmount() >= 5)
-									{
-										if (holder->GetAuraDuration() > 5000)
-										{
-											sunder = false;
-										}
-									}
-									break;
-								}
-							}
-						}
-					}
-					if (sunder)
-					{
-						if (CastSpell(pTarget, spell_SunderArmor))
-						{
-							return true;
-						}
-					}
-				}
-			}
-			if (spell_Rend > 0)
-			{
-				if (myRage > 100)
-				{
-					if (CastSpell(pTarget, spell_Rend, true, true))
-					{
-						return true;
-					}
-				}
-			}
+			
 		}
 
 		return true;
@@ -509,212 +386,196 @@ bool NierScript_Warrior::Heal(Unit* pTarget)
 	return NierScript_Base::Tank(pTarget);
 }
 
-bool NierScript_Warrior::DPS(Unit* pTarget, Unit* pTank, Unit* pHealer)
+bool NierScript_Warrior::DPS(Unit* pTarget)
 {
-	if (NierScript_Base::DPS(pTarget, pTank, pHealer))
+	me->Attack(pTarget, true);
+	uint32 myRage = me->GetPower(Powers::POWER_RAGE);
+	if (spell_BattleShout > 0)
 	{
-		if (me->CanReachWithMeleeAttack(pTarget))
+		if (myRage > 100)
 		{
-			me->Attack(pTarget, true);
-			uint32 myRage = me->GetPower(Powers::POWER_RAGE);
-			if (spell_BattleShout > 0)
+			if (!me->HasAura(spell_BattleShout))
 			{
-				if (myRage > 100)
+				if (CastSpell(me, spell_BattleShout, true))
 				{
-					if (!me->HasAura(spell_BattleShout))
-					{
-						if (CastSpell(me, spell_BattleShout, true))
-						{
-							return true;
-						}
-					}
-				}
-			}
-
-			if (spell_DemoralizingShout > 0)
-			{
-				if (myRage > 100)
-				{
-					if (CastSpell(pTarget, spell_DemoralizingShout, true))
-					{
-						return true;
-					}
-				}
-			}
-			if (spell_Disarm > 0)
-			{
-				if (myRage > 150)
-				{
-					if (pTarget->GetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID))
-					{
-						if (CastSpell(pTarget, spell_Disarm, true))
-						{
-							return true;
-						}
-					}
-				}
-			}
-			float healthPercent = me->GetHealthPercent();
-			if (spell_LastStand > 0)
-			{
-				if (healthPercent < 25.0f)
-				{
-					if (CastSpell(me, spell_LastStand))
-					{
-						return true;
-					}
-				}
-			}
-			if (spell_ShieldWall > 0)
-			{
-				if (healthPercent < 40.0f)
-				{
-					if (CastSpell(me, spell_ShieldWall))
-					{
-						return true;
-					}
-				}
-			}
-			if (spell_ShieldBlock > 0)
-			{
-				if (healthPercent < 70.0f)
-				{
-					if (CastSpell(me, spell_ShieldBlock))
-					{
-						return true;
-					}
-				}
-			}
-			if (spell_Rend > 0)
-			{
-				if (myRage > 100)
-				{
-					if (CastSpell(pTarget, spell_Rend, true, true))
-					{
-						return true;
-					}
-				}
-			}
-			if (spell_HeroicStrike > 0)
-			{
-				if (myRage > 150)
-				{
-					if (CastSpell(pTarget, spell_HeroicStrike))
-					{
-						return true;
-					}
+					return true;
 				}
 			}
 		}
-
-		return true;
 	}
 
-	return false;
+	if (spell_DemoralizingShout > 0)
+	{
+		if (myRage > 100)
+		{
+			if (CastSpell(pTarget, spell_DemoralizingShout, true))
+			{
+				return true;
+			}
+		}
+	}
+	if (spell_Disarm > 0)
+	{
+		if (myRage > 150)
+		{
+			if (pTarget->GetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID))
+			{
+				if (CastSpell(pTarget, spell_Disarm, true))
+				{
+					return true;
+				}
+			}
+		}
+	}
+	float healthPercent = me->GetHealthPercent();
+	if (spell_LastStand > 0)
+	{
+		if (healthPercent < 25.0f)
+		{
+			if (CastSpell(me, spell_LastStand))
+			{
+				return true;
+			}
+		}
+	}
+	if (spell_ShieldWall > 0)
+	{
+		if (healthPercent < 40.0f)
+		{
+			if (CastSpell(me, spell_ShieldWall))
+			{
+				return true;
+			}
+		}
+	}
+	if (spell_ShieldBlock > 0)
+	{
+		if (healthPercent < 70.0f)
+		{
+			if (CastSpell(me, spell_ShieldBlock))
+			{
+				return true;
+			}
+		}
+	}
+	if (spell_Rend > 0)
+	{
+		if (myRage > 100)
+		{
+			if (CastSpell(pTarget, spell_Rend, true, true))
+			{
+				return true;
+			}
+		}
+	}
+	if (spell_HeroicStrike > 0)
+	{
+		if (myRage > 150)
+		{
+			if (CastSpell(pTarget, spell_HeroicStrike))
+			{
+				return true;
+			}
+		}
+	}
+
+	return true;
 }
 
 bool NierScript_Warrior::PVP(Unit* pTarget)
 {
-	if (NierScript_Base::PVP(pTarget))
+	me->Attack(pTarget, true);
+	uint32 myRage = me->GetPower(Powers::POWER_RAGE);
+	if (spell_BattleShout > 0)
 	{
-		if (me->CanReachWithMeleeAttack(pTarget))
+		if (myRage > 100)
 		{
-			me->Attack(pTarget, true);
-			uint32 myRage = me->GetPower(Powers::POWER_RAGE);
-			if (spell_BattleShout > 0)
+			if (!me->HasAura(spell_BattleShout))
 			{
-				if (myRage > 100)
+				if (CastSpell(me, spell_BattleShout, true))
 				{
-					if (!me->HasAura(spell_BattleShout))
-					{
-						if (CastSpell(me, spell_BattleShout, true))
-						{
-							return true;
-						}
-					}
-				}
-			}
-
-			if (spell_DemoralizingShout > 0)
-			{
-				if (myRage > 100)
-				{
-					if (CastSpell(pTarget, spell_DemoralizingShout, true))
-					{
-						return true;
-					}
-				}
-			}
-			if (spell_Disarm > 0)
-			{
-				if (myRage > 150)
-				{
-					if (pTarget->GetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID))
-					{
-						if (CastSpell(pTarget, spell_Disarm, true))
-						{
-							return true;
-						}
-					}
-				}
-			}
-			float healthPercent = me->GetHealthPercent();
-			if (spell_LastStand > 0)
-			{
-				if (healthPercent < 25.0f)
-				{
-					if (CastSpell(me, spell_LastStand))
-					{
-						return true;
-					}
-				}
-			}
-			if (spell_ShieldWall > 0)
-			{
-				if (healthPercent < 40.0f)
-				{
-					if (CastSpell(me, spell_ShieldWall))
-					{
-						return true;
-					}
-				}
-			}
-			if (spell_ShieldBlock > 0)
-			{
-				if (healthPercent < 70.0f)
-				{
-					if (CastSpell(me, spell_ShieldBlock))
-					{
-						return true;
-					}
-				}
-			}
-			if (spell_Rend > 0)
-			{
-				if (myRage > 100)
-				{
-					if (CastSpell(pTarget, spell_Rend, true, true))
-					{
-						return true;
-					}
-				}
-			}
-			if (spell_HeroicStrike > 0)
-			{
-				if (myRage > 150)
-				{
-					if (CastSpell(pTarget, spell_HeroicStrike))
-					{
-						return true;
-					}
+					return true;
 				}
 			}
 		}
-
-		return true;
 	}
 
-	return false;
+	if (spell_DemoralizingShout > 0)
+	{
+		if (myRage > 100)
+		{
+			if (CastSpell(pTarget, spell_DemoralizingShout, true))
+			{
+				return true;
+			}
+		}
+	}
+	if (spell_Disarm > 0)
+	{
+		if (myRage > 150)
+		{
+			if (pTarget->GetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID))
+			{
+				if (CastSpell(pTarget, spell_Disarm, true))
+				{
+					return true;
+				}
+			}
+		}
+	}
+	float healthPercent = me->GetHealthPercent();
+	if (spell_LastStand > 0)
+	{
+		if (healthPercent < 25.0f)
+		{
+			if (CastSpell(me, spell_LastStand))
+			{
+				return true;
+			}
+		}
+	}
+	if (spell_ShieldWall > 0)
+	{
+		if (healthPercent < 40.0f)
+		{
+			if (CastSpell(me, spell_ShieldWall))
+			{
+				return true;
+			}
+		}
+	}
+	if (spell_ShieldBlock > 0)
+	{
+		if (healthPercent < 70.0f)
+		{
+			if (CastSpell(me, spell_ShieldBlock))
+			{
+				return true;
+			}
+		}
+	}
+	if (spell_Rend > 0)
+	{
+		if (myRage > 100)
+		{
+			if (CastSpell(pTarget, spell_Rend, true, true))
+			{
+				return true;
+			}
+		}
+	}
+	if (spell_HeroicStrike > 0)
+	{
+		if (myRage > 150)
+		{
+			if (CastSpell(pTarget, spell_HeroicStrike))
+			{
+				return true;
+			}
+		}
+	}
+
+	return true;
 }
 
 bool NierScript_Warrior::Buff()

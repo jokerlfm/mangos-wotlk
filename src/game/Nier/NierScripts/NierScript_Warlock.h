@@ -13,7 +13,7 @@ public:
     void LearnTalents();
     void InitializeEquipments(bool pReset);
 
-    bool DPS(Unit* pTarget, Unit* pTank, Unit* pHealer);
+    bool DPS(Unit* pTarget);
     bool PVP(Unit* pTarget);
     bool Buff();
 

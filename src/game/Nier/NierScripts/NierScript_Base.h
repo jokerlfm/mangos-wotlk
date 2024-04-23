@@ -13,6 +13,13 @@ enum OrderType :uint32
     OrderType_Move
 };
 
+enum ChaseResult :uint32
+{
+    ChaseResult_Failed = 0,
+    ChaseResult_Moving = 1,
+    ChaseResult_Chased = 2
+};
+
 class NierScript_Base
 {
 public:
@@ -23,9 +30,10 @@ public:
     virtual void LearnTalents();
     virtual void InitializeEquipments(bool pReset = false);
 
+    virtual uint32 Chase(Unit* pTarget);
     virtual bool Tank(Unit* pTarget);
     virtual bool Heal(Unit* pTarget);
-    virtual bool DPS(Unit* pTarget, Unit* pTank, Unit* pHealer);
+    virtual bool DPS(Unit* pTarget);
     virtual bool PVP(Unit* pTarget);
     virtual bool Interrupt(Unit* pTarget);
     virtual bool Buff();
@@ -34,6 +42,7 @@ public:
 
     virtual bool Wander();
 
+    bool Engage(Unit* pTarget);
     bool Follow(Unit* pTarget);
     
     void MoveTo(Position pDestination, Unit* pTarget = nullptr, uint32 pMoveType = 1);

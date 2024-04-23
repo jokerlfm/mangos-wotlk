@@ -98,13 +98,9 @@ bool NierScript_Druid::Heal(Unit* pTarget)
     return false;
 }
 
-bool NierScript_Druid::DPS(Unit* pTarget, Unit* pTank, Unit* pHealer)
+bool NierScript_Druid::DPS(Unit* pTarget)
 {
-    if (NierScript_Base::DPS(pTarget, pTank, pHealer))
-    {
-		return true;
-    }
-    return false;
+	return false;
 }
 
 bool NierScript_Druid::Buff()

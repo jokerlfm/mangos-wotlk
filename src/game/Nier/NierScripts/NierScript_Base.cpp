@@ -110,35 +110,6 @@ void NierScript_Base::Update(uint32 pDiff)
 			prepareDelay = urand(600000, 1200000);
 		}
 	}
-	if (me->IsInCombat())
-	{
-		combatDuration += pDiff;
-		restDelay = 0;
-		drinkDelay = 0;
-	}
-	else
-	{
-		if (combatDuration > 0)
-		{
-			combatDuration = 0;
-			ClearTarget();
-			//me->SetStandState(UnitStandStateType::UNIT_STAND_STATE_SIT);
-			//standDelay = 500;
-		}
-	}
-	if (restDelay > 0)
-	{
-		restDelay -= pDiff;
-		if (drinkDelay > 0)
-		{
-			drinkDelay -= pDiff;
-			if (drinkDelay <= 0)
-			{
-				Drink();
-			}
-		}
-		return;
-	}
 	if (!me->CanFreeMove())
 	{
 		if (me->IsMoving())
@@ -192,11 +163,7 @@ void NierScript_Base::Update(uint32 pDiff)
 		}
 		if (!me->IsAlive())
 		{
-			if (me->IsMoving())
-			{
-				me->StopMoving(true);
-				me->GetMotionMaster()->Clear(true);
-			}
+			ClearTarget();
 			return;
 		}
 		if (orderDelay > 0)
@@ -213,7 +180,7 @@ void NierScript_Base::Update(uint32 pDiff)
 			{
 				bool ordering = false;
 				Unit* skull = ObjectAccessor::GetUnit(*me, myGroup->GetGuidByTargetIcon(7));
-				if (Tank(skull))
+				if (Engage(skull))
 				{
 					ordering = true;
 				}
@@ -274,6 +241,29 @@ void NierScript_Base::Update(uint32 pDiff)
 				}
 			}
 		}
+		if (groupInCombat)
+		{
+			combatDuration += pDiff;
+			restDelay = 0;
+			drinkDelay = 0;
+		}
+		else
+		{
+			combatDuration = 0;
+		}
+		if (restDelay > 0)
+		{
+			restDelay -= pDiff;
+			if (drinkDelay > 0)
+			{
+				drinkDelay -= pDiff;
+				if (drinkDelay <= 0)
+				{
+					Drink();
+				}
+			}
+			return;
+		}
 		Player* leader = ObjectAccessor::FindPlayer(myGroup->GetLeaderGuid());
 		if (groupInCombat)
 		{
@@ -329,7 +319,7 @@ void NierScript_Base::Update(uint32 pDiff)
 				{
 					if (skull->GetSelectionGuid() != me->GetObjectGuid())
 					{
-						if (Tank(skull))
+						if (Engage(skull))
 						{
 							return;
 						}
@@ -341,14 +331,14 @@ void NierScript_Base::Update(uint32 pDiff)
 				{
 					if (eachEnemy->GetSelectionGuid() != me->GetObjectGuid())
 					{
-						if (Tank(eachEnemy))
+						if (Engage(eachEnemy))
 						{
 							return;
 						}
 					}
 				}
 				// tank skull 
-				if (Tank(skull))
+				if (Engage(skull))
 				{
 					return;
 				}
@@ -406,7 +396,7 @@ void NierScript_Base::Update(uint32 pDiff)
 				}
 				if (skull)
 				{
-					if (DPS(skull, tank, healer))
+					if (Engage(skull))
 					{
 						return;
 					}
@@ -425,7 +415,7 @@ void NierScript_Base::Update(uint32 pDiff)
 						}
 						if (tank->CanReachWithMeleeAttack(victim))
 						{
-							if (DPS(victim, tank, healer))
+							if (Engage(victim))
 							{
 								return;
 							}
@@ -455,19 +445,29 @@ void NierScript_Base::Update(uint32 pDiff)
 				return;
 			}
 		}
+
 		Follow(leader);
 		return;
 	}
 	else
 	{
+		if (!me->IsInWorld())
+		{
+			return;
+		}
+		if (Map* myMap = me->GetMap())
+		{
+			if (myMap->Instanceable())
+			{
+				me->TeleportToHomebind();
+				return;
+			}
+		}
+
 		// solo strategy
 		if (!me->IsAlive())
 		{
-			if (me->IsMoving())
-			{
-				me->StopMoving(true);
-				me->GetMotionMaster()->Clear(true);
-			}
+			ClearTarget();
 			if (me->GetCorpse())
 			{
 				if (reviveDelay > 0)
@@ -512,7 +512,18 @@ void NierScript_Base::Update(uint32 pDiff)
 			Relocate();
 			return;
 		}
-		if (me->IsInCombat())
+		bool meInCombat = me->IsInCombat();
+		if (meInCombat)
+		{
+			combatDuration += pDiff;
+			restDelay = 0;
+			drinkDelay = 0;
+		}
+		else
+		{
+			combatDuration = 0;
+		}
+		if (meInCombat)
 		{
 			restDelay = 0;
 			Unit* victim = nullptr;
@@ -533,6 +544,20 @@ void NierScript_Base::Update(uint32 pDiff)
 				else if (!me->CanAttack(victim))
 				{
 					ClearTarget();
+				}
+				else if (!victim->IsVisibleForOrDetect(me, me, true))
+				{
+					ClearTarget();
+				}
+				else
+				{
+					float victimDistance = me->GetDistance(victim, true, DistanceCalculation::DIST_CALC_NONE);
+					victimDistance = sqrtf(victimDistance);
+					if (victimDistance > VISIBILITY_DISTANCE_NORMAL)
+					{
+						ClearTarget();
+						victim = nullptr;
+					}
 				}
 			}
 			// player attackers 
@@ -605,7 +630,7 @@ void NierScript_Base::Update(uint32 pDiff)
 						{
 							if (me->CanAttack(eachEnemy))
 							{
-								if (eachEnemy->IsVisibleForOrDetect(me, me, false))
+								if (eachEnemy->IsVisibleForOrDetect(me, me, true))
 								{
 									float enemyDistance = me->GetDistance(eachEnemy, true, DistanceCalculation::DIST_CALC_NONE);
 									enemyDistance = sqrtf(enemyDistance);
@@ -641,7 +666,7 @@ void NierScript_Base::Update(uint32 pDiff)
 			}
 			if (victim)
 			{
-				if (PVP(victim))
+				if (Engage(victim))
 				{
 					return;
 				}
@@ -676,10 +701,23 @@ void NierScript_Base::Update(uint32 pDiff)
 			}
 			if (victim)
 			{
-				if (!me->CanAttack(victim))
+				if (!victim->IsAlive())
 				{
 					ClearTarget();
-					victim = nullptr;
+				}
+				else if (!me->CanAttack(victim))
+				{
+					ClearTarget();
+				}
+				else
+				{
+					float victimDistance = me->GetDistance(victim, true, DistanceCalculation::DIST_CALC_NONE);
+					victimDistance = sqrtf(victimDistance);
+					if (victimDistance > VISIBILITY_DISTANCE_NORMAL)
+					{
+						ClearTarget();
+						victim = nullptr;
+					}
 				}
 			}
 			if (!victim)
@@ -695,7 +733,7 @@ void NierScript_Base::Update(uint32 pDiff)
 					{
 						if (me->CanAttack(eachEnemy))
 						{
-							if (eachEnemy->IsVisibleForOrDetect(me, me, false))
+							if (eachEnemy->IsVisibleForOrDetect(me, me, true))
 							{
 								if (eachEnemy->GetTypeId() == TypeID::TYPEID_PLAYER)
 								{
@@ -708,7 +746,7 @@ void NierScript_Base::Update(uint32 pDiff)
 				}
 			}
 
-			if (PVP(victim))
+			if (Engage(victim))
 			{
 				return;
 			}
@@ -918,271 +956,181 @@ bool NierScript_Base::EuipRandom(uint32 pmEquipSlot, uint32 pmInventoryType, uin
 	return false;
 }
 
-bool NierScript_Base::Tank(Unit* pTarget)
-{
-	if (!pTarget)
-	{
-		return false;
-	}
-	else if (!pTarget->IsAlive())
-	{
-		return false;
-	}
-	else if (!me->CanAttack(pTarget))
-	{
-		return false;
-	}
-	if (me->CanFreeMove())
-	{
-		float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
-		targetDistance = sqrtf(targetDistance);
-		targetDistance = targetDistance - pTarget->GetCombatReach() - me->GetCombatReach();
-		if (targetDistance > VISIBILITY_DISTANCE_NORMAL)
-		{
-			return false;
-		}
-		ChooseTarget(pTarget);
-		float maxDistance = dpsDistance + RANGED_FLOATING;
-		if (dpsDistance < ATTACK_DISTANCE)
-		{
-			maxDistance = dpsDistance + MELEE_FLOATING;
-		}
-
-		if (targetDistance < dpsDistance)
-		{
-			if (me->IsMoving())
-			{
-				me->StopMoving(true);
-				me->GetMotionMaster()->Clear(true);
-			}
-		}
-		else
-		{
-			// destination_chase check 
-			float destDistance = pTarget->GetDistance(destination_chase.x, destination_chase.y, destination_chase.z, DistanceCalculation::DIST_CALC_NONE);
-			destDistance = sqrtf(destDistance);
-			destDistance = destDistance - pTarget->GetCombatReach() - me->GetCombatReach();
-			if (destDistance < MELEE_FLOATING || destDistance > maxDistance)
-			{
-				float angle = pTarget->GetAngle(me);
-				pTarget->GetNearPoint(pTarget, destination_chase.x, destination_chase.y, destination_chase.z, pTarget->GetObjectBoundingRadius(), MELEE_FLOATING, angle, me->IsInWater());
-				MoveTo(destination_chase, pTarget);
-				return true;
-			}
-			if (!me->IsMoving())
-			{
-				if (targetDistance > maxDistance)
-				{
-					MoveTo(destination_chase, pTarget);
-					return true;
-				}
-			}
-		}
-		if (!me->IsMoving())
-		{
-			if (!me->isInFront(pTarget, VISIBILITY_DISTANCE_LARGE, M_PI / 4))
-			{
-				me->SetFacingToObject(pTarget);
-			}
-		}
-		return true;
-	}
-	else if (me->IsMoving())
-	{
-		me->StopMoving(true);
-		me->GetMotionMaster()->Clear(true);
-	}
-
-	return true;
-}
-
 bool NierScript_Base::Heal(Unit* pTarget)
 {
-	if (!pTarget)
-	{
-		return false;
-	}
-	else if (!pTarget->IsAlive())
-	{
-		return false;
-	}
-
-	return true;
+	return false;
 }
 
-bool NierScript_Base::DPS(Unit* pTarget, Unit* pTank, Unit* pHealer)
+bool NierScript_Base::Tank(Unit* pTarget)
 {
-	if (!pTarget)
-	{
-		return false;
-	}
-	else if (!pTarget->IsAlive())
-	{
-		return false;
-	}
-	else if (!me->CanAttack(pTarget))
-	{
-		return false;
-	}
-	if (me->CanFreeMove())
-	{
-		float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
-		targetDistance = sqrtf(targetDistance);
-		targetDistance = targetDistance - pTarget->GetCombatReach() - me->GetCombatReach();
-		if (targetDistance > VISIBILITY_DISTANCE_NORMAL)
-		{
-			return false;
-		}
-		ChooseTarget(pTarget);
-		float maxDistance = dpsDistance + RANGED_FLOATING;
-		if (dpsDistance < ATTACK_DISTANCE)
-		{
-			maxDistance = dpsDistance + MELEE_FLOATING;
-		}
+	return false;
+}
 
-		if (targetDistance < dpsDistance)
-		{
-			if (me->IsMoving())
-			{
-				me->StopMoving(true);
-				me->GetMotionMaster()->Clear(true);
-			}
-		}
-		else
-		{
-			// destination_chase check 
-			float destDistance = pTarget->GetDistance(destination_chase.x, destination_chase.y, destination_chase.z, DistanceCalculation::DIST_CALC_NONE);
-			destDistance = sqrtf(destDistance);
-			destDistance = destDistance - pTarget->GetCombatReach() - me->GetCombatReach();
-			if (destDistance < MELEE_FLOATING || destDistance > maxDistance)
-			{
-				if (dpsDistance < ATTACK_DISTANCE)
-				{
-					float angle = pTarget->GetAngle(me);
-					pTarget->GetNearPoint(pTarget, destination_chase.x, destination_chase.y, destination_chase.z, pTarget->GetObjectBoundingRadius(), MELEE_FLOATING, angle, me->IsInWater());
-				}
-				else
-				{
-					if (pHealer)
-					{
-						destination_chase = pHealer->GetPosition();
-					}
-					else if (pTank)
-					{
-						destination_chase = pTank->GetPosition();
-					}
-					else
-					{
-						float angle = pTarget->GetAngle(me);
-						pTarget->GetNearPoint(pTarget, destination_chase.x, destination_chase.y, destination_chase.z, pTarget->GetObjectBoundingRadius(), MELEE_FLOATING, angle, me->IsInWater());
-					}
-				}
-				MoveTo(destination_chase, pTarget);
-				return true;
-			}
-			if (!me->IsMoving())
-			{
-				if (targetDistance > maxDistance)
-				{
-					MoveTo(destination_chase, pTarget);
-					return true;
-				}
-			}
-		}
-		if (!me->IsMoving())
-		{
-			if (!me->isInFront(pTarget, VISIBILITY_DISTANCE_LARGE, M_PI / 4))
-			{
-				me->SetFacingToObject(pTarget);
-			}
-		}
-		return true;
-	}
-	else if (me->IsMoving())
-	{
-		me->StopMoving(true);
-		me->GetMotionMaster()->Clear(true);
-	}
 
-	return true;
+bool NierScript_Base::DPS(Unit* pTarget)
+{
+	return false;
 }
 
 bool NierScript_Base::PVP(Unit* pTarget)
 {
-	if (!pTarget)
+	return false;
+}
+
+bool NierScript_Base::Engage(Unit* pTarget)
+{
+	uint32 chaseResult = Chase(pTarget);
+	switch (chaseResult)
+	{
+	case ChaseResult_Failed:
 	{
 		return false;
 	}
-	else if (!pTarget->IsAlive())
+	case ChaseResult_Moving:
 	{
-		return false;
+		return true;
 	}
-	else if (!me->CanAttack(pTarget))
+	case ChaseResult_Chased:
 	{
-		return false;
-	}
-	if (me->CanFreeMove())
-	{
-		float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
-		targetDistance = sqrtf(targetDistance);
-		targetDistance = targetDistance - pTarget->GetCombatReach() - me->GetCombatReach();
-		if (targetDistance > VISIBILITY_DISTANCE_NORMAL)
+		if (pTarget->GetTypeId() == TypeID::TYPEID_PLAYER)
+		{
+			return PVP(pTarget);
+		}
+		switch (me->groupRole)
+		{
+		case GroupRole_DPS:
+		{
+			return DPS(pTarget);
+		}
+		case GroupRole_Tank:
+		{
+			return Tank(pTarget);
+		}
+		case GroupRole_Healer:
 		{
 			return false;
 		}
-		ChooseTarget(pTarget);
+		default:
+		{
+			return false;
+		}
+		}
+		break;
+	}
+	default:
+	{
+		break;
+	}
+	}
+
+	return false;
+}
+
+uint32 NierScript_Base::Chase(Unit* pTarget)
+{
+	uint32 result = ChaseResult::ChaseResult_Failed;
+
+	if (!pTarget)
+	{
+		return result;
+	}
+	else if (!pTarget->IsAlive())
+	{
+		return result;
+	}
+	else if (!me->CanAttack(pTarget))
+	{
+		return result;
+	}
+	else if (!pTarget->IsVisibleForOrDetect(me, me, true))
+	{
+		ClearTarget();
+		return result;
+	}
+	if (!me->CanFreeMove())
+	{
+		if (me->IsMoving())
+		{
+			me->StopMoving(true);
+			me->GetMotionMaster()->Clear(true);
+		}
+		return result;
+	}
+
+	float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
+	targetDistance = sqrtf(targetDistance);
+	targetDistance = targetDistance - pTarget->GetCombatReach() - me->GetCombatReach();
+	if (targetDistance > VISIBILITY_DISTANCE_NORMAL)
+	{
+		return result;
+	}
+	ChooseTarget(pTarget);
+
+	bool arrived = false;
+	if (targetDistance < dpsDistance)
+	{
+		if (me->IsWithinLOSInMap(pTarget))
+		{
+			arrived = true;
+		}
+	}
+	if (!arrived)
+	{
+		if (me->IsMoving())
+		{
+			result = ChaseResult::ChaseResult_Moving;
+		}
+		else
+		{
+			destination_chase = me->GetPosition();
+		}
+		bool destValid = true;
 		float maxDistance = dpsDistance + RANGED_FLOATING;
 		if (dpsDistance < ATTACK_DISTANCE)
 		{
 			maxDistance = dpsDistance + MELEE_FLOATING;
 		}
-
-		if (targetDistance < dpsDistance)
-		{
-			if (me->IsMoving())
-			{
-				me->StopMoving(true);
-				me->GetMotionMaster()->Clear(true);
-			}
-		}
-		else
+		if (targetDistance > maxDistance)
 		{
 			// destination_chase check 
 			float destDistance = pTarget->GetDistance(destination_chase.x, destination_chase.y, destination_chase.z, DistanceCalculation::DIST_CALC_NONE);
 			destDistance = sqrtf(destDistance);
 			destDistance = destDistance - pTarget->GetCombatReach() - me->GetCombatReach();
-			if (destDistance < MELEE_FLOATING || destDistance > maxDistance)
+			if (destDistance > dpsDistance)
 			{
-				float angle = pTarget->GetAngle(me);
-				pTarget->GetNearPoint(pTarget, destination_chase.x, destination_chase.y, destination_chase.z, pTarget->GetObjectBoundingRadius(), MELEE_FLOATING, angle, me->IsInWater());
-				MoveTo(destination_chase, pTarget);
-				return true;
-			}
-			if (!me->IsMoving())
-			{
-				if (targetDistance > maxDistance)
-				{
-					MoveTo(destination_chase, pTarget);
-					return true;
-				}
+				destValid = false;
 			}
 		}
-		if (!me->IsMoving())
+		if (destValid)
 		{
-			if (!me->isInFront(pTarget, VISIBILITY_DISTANCE_LARGE, M_PI / 4))
+			if (!pTarget->IsWithinLOS(destination_chase.x, destination_chase.y, destination_chase.z + me->GetCollisionHeight()))
 			{
-				me->SetFacingToObject(pTarget);
+				destValid = false;
 			}
 		}
-		return true;
+		if (!destValid)
+		{
+			float angle = pTarget->GetAngle(me);
+			pTarget->GetNearPoint(pTarget, destination_chase.x, destination_chase.y, destination_chase.z, pTarget->GetObjectBoundingRadius(), MELEE_FLOATING, angle, me->IsInWater());
+			MoveTo(destination_chase, pTarget);
+			result = ChaseResult::ChaseResult_Moving;
+		}
 	}
-	else if (me->IsMoving())
+	else
 	{
-		me->StopMoving(true);
-		me->GetMotionMaster()->Clear(true);
+		if (me->IsMoving())
+		{
+			me->StopMoving(true);
+			me->GetMotionMaster()->Clear(true);
+		}
+		else if (!me->isInFront(pTarget, VISIBILITY_DISTANCE_LARGE, M_PI / 4))
+		{
+			me->SetFacingToObject(pTarget);
+		}
+		result = ChaseResult::ChaseResult_Chased;
 	}
 
-	return true;
+	return result;
 }
 
 bool NierScript_Base::Interrupt(Unit* pTarget)
@@ -1241,59 +1189,82 @@ bool NierScript_Base::Follow(Unit* pTarget)
 	{
 		return false;
 	}
-	if (me->CanFreeMove())
+
+	if (!me->CanFreeMove())
 	{
-		float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
-		targetDistance = sqrtf(targetDistance);
-		targetDistance = targetDistance - pTarget->GetCombatReach() - me->GetCombatReach();
-		if (targetDistance > VISIBILITY_DISTANCE_LARGE)
+		if (me->IsMoving())
 		{
-			return false;
+			me->StopMoving(true);
+			me->GetMotionMaster()->Clear(true);
 		}
+		return true;
+	}
+
+	float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
+	targetDistance = sqrtf(targetDistance);
+	targetDistance = targetDistance - pTarget->GetCombatReach() - me->GetCombatReach();
+	if (targetDistance > VISIBILITY_DISTANCE_NORMAL)
+	{
+		return false;
+	}
+	ChooseTarget(pTarget);
+
+	bool arrived = false;
+	if (targetDistance < followDistance)
+	{
+		if (me->IsWithinLOSInMap(pTarget))
+		{
+			arrived = true;
+		}
+	}
+	if (!arrived)
+	{
+		bool destValid = true;
 		float maxDistance = followDistance + RANGED_FLOATING;
-		if (targetDistance < followDistance)
+		if (followDistance < ATTACK_DISTANCE)
 		{
-			if (me->IsMoving())
-			{
-				me->StopMoving(true);
-				me->GetMotionMaster()->Clear(true);
-			}
+			maxDistance = followDistance + MELEE_FLOATING;
 		}
-		else
+		if (!me->IsMoving())
+		{
+			destination_follow = me->GetPosition();
+		}
+		if (targetDistance > maxDistance)
 		{
 			// destination_follow check 
 			float destDistance = pTarget->GetDistance(destination_follow.x, destination_follow.y, destination_follow.z, DistanceCalculation::DIST_CALC_NONE);
 			destDistance = sqrtf(destDistance);
 			destDistance = destDistance - pTarget->GetCombatReach() - me->GetCombatReach();
-			if (destDistance > maxDistance)
+			if (destDistance > followDistance)
 			{
-				destination_follow = pTarget->GetPosition();
-				MoveTo(destination_follow, pTarget);
-				return true;
-			}
-			if (!me->IsMoving())
-			{
-				if (targetDistance > maxDistance)
-				{
-					MoveTo(destination_follow, pTarget);
-					return true;
-				}
+				destValid = false;
 			}
 		}
-
-		if (!me->IsMoving())
+		if (destValid)
 		{
-			if (!me->isInFront(pTarget, VISIBILITY_DISTANCE_LARGE, M_PI / 4))
+			if (!pTarget->IsWithinLOS(destination_follow.x, destination_follow.y, destination_follow.z + me->GetCollisionHeight()))
 			{
-				me->SetFacingToObject(pTarget);
+				destValid = false;
 			}
 		}
-		return true;
+		if (!destValid)
+		{
+			float angle = pTarget->GetAngle(me);
+			pTarget->GetNearPoint(pTarget, destination_follow.x, destination_follow.y, destination_follow.z, pTarget->GetObjectBoundingRadius(), MELEE_FLOATING, angle, me->IsInWater());
+			MoveTo(destination_follow, pTarget);
+		}
 	}
-	else if (me->IsMoving())
+	else
 	{
-		me->StopMoving(true);
-		me->GetMotionMaster()->Clear(true);
+		if (me->IsMoving())
+		{
+			me->StopMoving(true);
+			me->GetMotionMaster()->Clear(true);
+		}
+		else if (!me->isInFront(pTarget, VISIBILITY_DISTANCE_LARGE, M_PI / 4))
+		{
+			me->SetFacingToObject(pTarget);
+		}
 	}
 
 	return true;
@@ -1455,11 +1426,10 @@ bool NierScript_Base::CastSpell(Unit* pmTarget, uint32 pmSpellId, bool pmCheckAu
 					return false;
 				}
 			}
-			if (!me->isInFront(pmTarget, VISIBILITY_DISTANCE_NORMAL, M_PI / 2))
+			if (!me->isInFront(pmTarget, VISIBILITY_DISTANCE_NORMAL, M_PI / 4))
 			{
 				me->GetMotionMaster()->Clear(true);
 				me->SetFacingToObject(pmTarget);
-				return true;
 			}
 			if (me->GetSelectionGuid() != pmTarget->GetObjectGuid())
 			{
@@ -1537,9 +1507,14 @@ bool NierScript_Base::Rest(bool pForce)
 	{
 		return false;
 	}
+	else if (me->IsInWater())
+	{
+		return false;
+	}
+
 	float hpPercent = me->GetHealthPercent();
 	float manaPercent = me->GetPower(Powers::POWER_MANA) * 100.0f / me->GetMaxPower(Powers::POWER_MANA);
-	if (hpPercent < 60.0f || manaPercent < 60.0f || pForce)
+	if (hpPercent < 40.0f || manaPercent < 30.0f || pForce)
 	{
 		uint32 foodEntry = 0;
 		uint32 myLevel = me->GetLevel();
@@ -1684,20 +1659,27 @@ void NierScript_Base::ClearTarget()
 {
 	if (me)
 	{
-		me->AttackStop(true, true, true, true);
-		//me->CastStop();
-		InterruptSpells();
-		me->SetSelectionGuid(ObjectGuid());
-		me->SetTarget(nullptr);
-		if (Pet* myPet = me->GetPet())
+		if (me->GetTarget())
 		{
-			myPet->AttackStop(true, true, true, true);
-			if (CharmInfo* pci = myPet->GetCharmInfo())
+			me->AttackStop(true, true, true, true);
+			//me->CastStop();
+			InterruptSpells();
+			me->SetSelectionGuid(ObjectGuid());
+			me->SetTarget(nullptr);
+			if (Pet* myPet = me->GetPet())
 			{
-				pci->SetCommandState(COMMAND_FOLLOW);
+				myPet->AttackStop(true, true, true, true);
+				if (CharmInfo* pci = myPet->GetCharmInfo())
+				{
+					pci->SetCommandState(COMMAND_FOLLOW);
+				}
 			}
 		}
-		me->GetMotionMaster()->Clear(true);
+		if (me->IsMoving())
+		{
+			me->StopMoving(true);
+			me->GetMotionMaster()->Clear(true);
+		}
 	}
 }
 

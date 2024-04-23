@@ -14,9 +14,10 @@ public:
     void LearnTalents();
     void InitializeEquipments(bool pReset);
 
+    uint32 Chase(Unit* pTarget);
     bool Tank(Unit* pTarget);
     bool Heal(Unit* pTarget);
-    bool DPS(Unit* pTarget, Unit* pTank, Unit* pHealer);
+    bool DPS(Unit* pTarget);
     bool PVP(Unit* pTarget);
     bool Buff();
     bool Cure();

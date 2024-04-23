@@ -400,6 +400,27 @@ void NierScript_Rogue::InitializeEquipments(bool pReset)
 	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
 }
 
+uint32 NierScript_Rogue::Chase(Unit* pTarget)
+{
+	uint32 chaseResult = NierScript_Base::Chase(pTarget);
+	if (chaseResult == ChaseResult::ChaseResult_Moving)
+	{
+		if (spell_Sprint > 0)
+		{
+			float targetDistance = me->GetDistance(pTarget);
+			if (targetDistance < INSPECT_DISTANCE)
+			{
+				if (CastSpell(me, spell_Sprint))
+				{
+					return true;
+				}
+			}
+		}
+	}
+
+	return chaseResult;
+}
+
 bool NierScript_Rogue::Tank(Unit* pTarget)
 {
 	return NierScript_Base::Tank(pTarget);
@@ -410,185 +431,24 @@ bool NierScript_Rogue::Heal(Unit* pTarget)
 	return NierScript_Base::Tank(pTarget);
 }
 
-bool NierScript_Rogue::DPS(Unit* pTarget, Unit* pTank, Unit* pHealer)
+bool NierScript_Rogue::DPS(Unit* pTarget)
 {
-	if (NierScript_Base::DPS(pTarget, pTank, pHealer))
+	uint32 myEnergy = me->GetPower(Powers::POWER_ENERGY);
+	if (pTarget->GetSelectionGuid() == me->GetObjectGuid())
 	{
-		if (me->CanReachWithMeleeAttack(pTarget))
+		if (pTarget->GetTypeId() != TypeID::TYPEID_PLAYER)
 		{
-			uint32 myEnergy = me->GetPower(Powers::POWER_ENERGY);
-			if (pTarget->GetSelectionGuid() == me->GetObjectGuid())
+			me->AttackStop();
+			if (spell_Feint > 0)
 			{
-				if (pTarget->GetTypeId() != TypeID::TYPEID_PLAYER)
+				if (myEnergy >= 20)
 				{
-					me->AttackStop();
-					if (spell_Feint > 0)
-					{
-						if (myEnergy >= 20)
-						{
-							if (CastSpell(pTarget, spell_Feint))
-							{
-								return true;
-							}
-						}
-					}
-					if (spell_Evasion > 0)
-					{
-						if (CastSpell(me, spell_Evasion))
-						{
-							return true;
-						}
-					}
-					return true;
-				}
-			}
-			me->Attack(pTarget, true);
-			if (spell_Dismantle > 0)
-			{
-				if (pTarget->GetTypeId() != TypeID::TYPEID_PLAYER)
-				{
-					if (pTarget->GetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID))
-					{
-						if (CastSpell(pTarget, spell_Dismantle, true))
-						{
-							return true;
-						}
-					}
-				}
-				else
-				{
-					if (pTarget->hasWeaponForAttack(WeaponAttackType::BASE_ATTACK))
-					{
-						if (CastSpell(pTarget, spell_Dismantle, true))
-						{
-							return true;
-						}
-					}
-				}
-			}
-			uint32 comboPoints = me->GetComboPoints();
-			if (myEnergy >= 25)
-			{
-				if (pTarget->IsNonMeleeSpellCasted(true, false, true))
-				{
-					if (spell_Kick > 0)
-					{
-						if (CastSpell(pTarget, spell_Kick))
-						{
-							return true;
-						}
-					}
-					if (spell_KidneyShot > 0)
-					{
-						if (comboPoints > 0)
-						{
-							if (CastSpell(pTarget, spell_KidneyShot))
-							{
-								return true;
-							}
-						}
-					}
-				}
-			}
-			if (rushing)
-			{
-				if (spell_BladeFlurry > 0)
-				{
-					if (myEnergy >= 25)
-					{
-						if (CastSpell(me, spell_BladeFlurry))
-						{
-							return true;
-						}
-					}
-				}
-				if (spell_KillingSpree > 0)
-				{
-					if (CastSpell(pTarget, spell_KillingSpree))
-					{
-						return true;
-					}
-				}
-				if (spell_AdrenalineRush > 0)
-				{
-					if (CastSpell(me, spell_AdrenalineRush))
+					if (CastSpell(pTarget, spell_Feint))
 					{
 						return true;
 					}
 				}
 			}
-			if (spell_SliceandDice > 0)
-			{
-				if (myEnergy >= 25)
-				{
-					if (!me->HasAura(spell_SliceandDice))
-					{
-						if (comboPoints > 1)
-						{
-							if (CastSpell(pTarget, spell_SliceandDice))
-							{
-								return true;
-							}
-						}
-					}
-				}
-			}
-			if (spell_Eviscerate > 0)
-			{
-				if (myEnergy > 35)
-				{
-					if (comboPoints > 0)
-					{
-						uint32 finishRate = urand(1, 4);
-						if (comboPoints > finishRate)
-						{
-							if (CastSpell(pTarget, spell_Eviscerate))
-							{
-								return true;
-							}
-						}
-					}
-				}
-			}
-			if (spell_SinisterStrike > 0)
-			{
-				if (myEnergy >= 45)
-				{
-					if (CastSpell(pTarget, spell_SinisterStrike))
-					{
-						return true;
-					}
-				}
-			}
-		}
-		else
-		{
-			if (spell_Sprint > 0)
-			{
-				float targetDistance = me->GetDistance(pTarget);
-				if (targetDistance < INSPECT_DISTANCE)
-				{
-					if (CastSpell(me, spell_Sprint))
-					{
-						return true;
-					}
-				}
-			}
-		}
-		return true;
-	}
-
-	return false;
-}
-
-bool NierScript_Rogue::PVP(Unit* pTarget)
-{
-	if (NierScript_Base::PVP(pTarget))
-	{
-		if (me->CanReachWithMeleeAttack(pTarget))
-		{
-			uint32 myEnergy = me->GetPower(Powers::POWER_ENERGY);
-			me->Attack(pTarget, true);
 			if (spell_Evasion > 0)
 			{
 				if (CastSpell(me, spell_Evasion))
@@ -596,136 +456,261 @@ bool NierScript_Rogue::PVP(Unit* pTarget)
 					return true;
 				}
 			}
-			uint32 comboPoints = me->GetComboPoints();
-			if (spell_BladeFlurry > 0)
+			return true;
+		}
+	}
+	me->Attack(pTarget, true);
+	if (spell_Dismantle > 0)
+	{
+		if (pTarget->GetTypeId() != TypeID::TYPEID_PLAYER)
+		{
+			if (pTarget->GetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID))
 			{
-				if (myEnergy >= 25)
-				{
-					if (CastSpell(me, spell_BladeFlurry))
-					{
-						return true;
-					}
-				}
-			}
-			if (spell_KillingSpree > 0)
-			{
-				if (CastSpell(pTarget, spell_KillingSpree))
+				if (CastSpell(pTarget, spell_Dismantle, true))
 				{
 					return true;
-				}
-			}
-			if (spell_AdrenalineRush > 0)
-			{
-				if (CastSpell(me, spell_AdrenalineRush))
-				{
-					return true;
-				}
-			}
-			if (myEnergy >= 25)
-			{
-				if (pTarget->IsNonMeleeSpellCasted(false, false, true))
-				{
-					if (spell_Kick > 0)
-					{
-						if (CastSpell(pTarget, spell_Kick))
-						{
-							return true;
-						}
-					}
-					if (spell_KidneyShot > 0)
-					{
-						if (comboPoints > 0)
-						{
-							if (CastSpell(pTarget, spell_KidneyShot))
-							{
-								return true;
-							}
-						}
-					}
-				}
-			}
-			if (myEnergy >= 25)
-			{
-				if (spell_SliceandDice > 0)
-				{
-					if (!me->HasAura(spell_SliceandDice))
-					{
-						if (comboPoints > 1)
-						{
-							if (CastSpell(pTarget, spell_SliceandDice))
-							{
-								return true;
-							}
-						}
-					}
-				}
-				if (spell_Eviscerate > 0)
-				{
-					if (comboPoints > 0)
-					{
-						uint32 finishRate = urand(1, 4);
-						if (comboPoints > finishRate)
-						{
-							if (CastSpell(pTarget, spell_Eviscerate))
-							{
-								return true;
-							}
-						}
-					}
-				}
-				if (spell_Dismantle > 0)
-				{
-					if (pTarget->GetTypeId() != TypeID::TYPEID_PLAYER)
-					{
-						if (pTarget->GetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID))
-						{
-							if (CastSpell(pTarget, spell_Dismantle, true))
-							{
-								return true;
-							}
-						}
-					}
-					else
-					{
-						if (pTarget->hasWeaponForAttack(WeaponAttackType::BASE_ATTACK))
-						{
-							if (CastSpell(pTarget, spell_Dismantle, true))
-							{
-								return true;
-							}
-						}
-					}
-				}
-			}
-			if (spell_SinisterStrike > 0)
-			{
-				if (myEnergy >= 45)
-				{
-					if (CastSpell(pTarget, spell_SinisterStrike))
-					{
-						return true;
-					}
 				}
 			}
 		}
 		else
 		{
-			if (spell_Sprint > 0)
+			if (pTarget->hasWeaponForAttack(WeaponAttackType::BASE_ATTACK))
 			{
-				float targetDistance = me->GetDistance(pTarget);
-				if (targetDistance < INSPECT_DISTANCE)
+				if (CastSpell(pTarget, spell_Dismantle, true))
 				{
-					if (CastSpell(me, spell_Sprint))
+					return true;
+				}
+			}
+		}
+	}
+	uint32 comboPoints = me->GetComboPoints();
+	if (myEnergy >= 25)
+	{
+		if (pTarget->IsNonMeleeSpellCasted(true, false, true))
+		{
+			if (spell_Kick > 0)
+			{
+				if (CastSpell(pTarget, spell_Kick))
+				{
+					return true;
+				}
+			}
+			if (spell_KidneyShot > 0)
+			{
+				if (comboPoints > 0)
+				{
+					if (CastSpell(pTarget, spell_KidneyShot))
 					{
 						return true;
 					}
 				}
 			}
 		}
-		return true;
+	}
+	if (rushing)
+	{
+		if (spell_BladeFlurry > 0)
+		{
+			if (myEnergy >= 25)
+			{
+				if (CastSpell(me, spell_BladeFlurry))
+				{
+					return true;
+				}
+			}
+		}
+		if (spell_KillingSpree > 0)
+		{
+			if (CastSpell(pTarget, spell_KillingSpree))
+			{
+				return true;
+			}
+		}
+		if (spell_AdrenalineRush > 0)
+		{
+			if (CastSpell(me, spell_AdrenalineRush))
+			{
+				return true;
+			}
+		}
+	}
+	if (spell_SliceandDice > 0)
+	{
+		if (myEnergy >= 25)
+		{
+			if (!me->HasAura(spell_SliceandDice))
+			{
+				if (comboPoints > 1)
+				{
+					if (CastSpell(pTarget, spell_SliceandDice))
+					{
+						return true;
+					}
+				}
+			}
+		}
+	}
+	if (spell_Eviscerate > 0)
+	{
+		if (myEnergy > 35)
+		{
+			if (comboPoints > 0)
+			{
+				uint32 finishRate = urand(1, 4);
+				if (comboPoints > finishRate)
+				{
+					if (CastSpell(pTarget, spell_Eviscerate))
+					{
+						return true;
+					}
+				}
+			}
+		}
+	}
+	if (spell_SinisterStrike > 0)
+	{
+		if (myEnergy >= 45)
+		{
+			if (CastSpell(pTarget, spell_SinisterStrike))
+			{
+				return true;
+			}
+		}
 	}
 
-	return false;
+	return true;
+}
+
+bool NierScript_Rogue::PVP(Unit* pTarget)
+{
+	me->Attack(pTarget, true);
+	if (pTarget->GetSelectionGuid() == me->GetObjectGuid())
+	{
+		if (spell_Evasion > 0)
+		{
+			if (CastSpell(me, spell_Evasion))
+			{
+				return true;
+			}
+		}
+	}
+	uint32 myEnergy = me->GetPower(Powers::POWER_ENERGY);
+	if (spell_Dismantle > 0)
+	{
+		if (pTarget->GetTypeId() != TypeID::TYPEID_PLAYER)
+		{
+			if (pTarget->GetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID))
+			{
+				if (CastSpell(pTarget, spell_Dismantle, true))
+				{
+					return true;
+				}
+			}
+		}
+		else
+		{
+			if (pTarget->hasWeaponForAttack(WeaponAttackType::BASE_ATTACK))
+			{
+				if (CastSpell(pTarget, spell_Dismantle, true))
+				{
+					return true;
+				}
+			}
+		}
+	}
+	uint32 comboPoints = me->GetComboPoints();
+	if (myEnergy >= 25)
+	{
+		if (pTarget->IsNonMeleeSpellCasted(true, false, true))
+		{
+			if (spell_Kick > 0)
+			{
+				if (CastSpell(pTarget, spell_Kick))
+				{
+					return true;
+				}
+			}
+			if (spell_KidneyShot > 0)
+			{
+				if (comboPoints > 0)
+				{
+					if (CastSpell(pTarget, spell_KidneyShot))
+					{
+						return true;
+					}
+				}
+			}
+		}
+	}
+	if (spell_BladeFlurry > 0)
+	{
+		if (myEnergy >= 25)
+		{
+			if (CastSpell(me, spell_BladeFlurry))
+			{
+				return true;
+			}
+		}
+	}
+	if (spell_KillingSpree > 0)
+	{
+		if (CastSpell(pTarget, spell_KillingSpree))
+		{
+			return true;
+		}
+	}
+	if (spell_AdrenalineRush > 0)
+	{
+		if (CastSpell(me, spell_AdrenalineRush))
+		{
+			return true;
+		}
+	}
+	if (spell_SliceandDice > 0)
+	{
+		if (myEnergy >= 25)
+		{
+			if (!me->HasAura(spell_SliceandDice))
+			{
+				if (comboPoints > 1)
+				{
+					if (CastSpell(pTarget, spell_SliceandDice))
+					{
+						return true;
+					}
+				}
+			}
+		}
+	}
+	if (spell_Eviscerate > 0)
+	{
+		if (myEnergy > 35)
+		{
+			if (comboPoints > 0)
+			{
+				uint32 finishRate = urand(1, 4);
+				if (comboPoints > finishRate)
+				{
+					if (CastSpell(pTarget, spell_Eviscerate))
+					{
+						return true;
+					}
+				}
+			}
+		}
+	}
+	if (spell_SinisterStrike > 0)
+	{
+		if (myEnergy >= 45)
+		{
+			if (CastSpell(pTarget, spell_SinisterStrike))
+			{
+				return true;
+			}
+		}
+	}
+
+	return true;
 }
 
 bool NierScript_Rogue::Buff()

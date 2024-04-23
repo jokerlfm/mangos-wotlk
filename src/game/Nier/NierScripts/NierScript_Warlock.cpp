@@ -335,149 +335,143 @@ void NierScript_Warlock::InitializeEquipments(bool pReset)
 	EuipRandom(equipSlot, inventoryType, itemClass, itemSubClass, requiredLevel);
 }
 
-bool NierScript_Warlock::DPS(Unit* pTarget, Unit* pTank, Unit* pHealer)
+bool NierScript_Warlock::DPS(Unit* pTarget)
 {
-	if (NierScript_Base::DPS(pTarget, pTank, pHealer))
+	if (Pet* myPet = me->GetPet())
 	{
-		float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
-		targetDistance = sqrtf(targetDistance);
-		float maxDistance = pTarget->GetCombatReach() + me->GetCombatReach() + dpsDistance + RANGED_FLOATING;
-		if (targetDistance < maxDistance)
+		if (myPet->IsAlive())
 		{
-			if (Pet* myPet = me->GetPet())
+			if (!myPet->GetVictim())
 			{
-				if (myPet->IsAlive())
+				if (UnitAI* pai = myPet->AI())
 				{
-					if (!myPet->GetVictim())
+					pai->AttackStart(pTarget);
+				}
+				if (CharmInfo* ci = myPet->GetCharmInfo())
+				{
+					if (ci->GetCommandState() != CommandStates::COMMAND_ATTACK)
 					{
-						if (UnitAI* pai = myPet->AI())
-						{
-							pai->AttackStart(pTarget);
-						}
-						if (CharmInfo* ci = myPet->GetCharmInfo())
-						{
-							if (ci->GetCommandState() != CommandStates::COMMAND_ATTACK)
-							{
-								ci->SetCommandState(CommandStates::COMMAND_ATTACK);
-							}
-						}
+						ci->SetCommandState(CommandStates::COMMAND_ATTACK);
 					}
 				}
 			}
-			if (spell_Immolate > 0)
-			{
-				if (CastSpell(pTarget, spell_Immolate, true, true))
-				{
-					return true;
-				}
-			}
-			if (rushing)
-			{
-				if (spell_Shadowbolt > 0)
-				{
-					if (CastSpell(pTarget, spell_Shadowbolt))
-					{
-						return true;
-					}
-				}
-			}
-			if (spell_Shoot > 0)
-			{
-				if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
-				{
-					return true;
-				}
-				else
-				{
-					if (CastSpell(pTarget, spell_Shoot))
-					{
-						return true;
-					}
-				}
-			}
-			//if (spell_Corruption > 0)
-			//{
-			//	if (CastSpell(pTarget, spell_Corruption, true, true))
-			//	{
-			//		return true;
-			//	}
-			//}
-			//if (spell_Curse_Of_Agony > 0)
-			//{
-			//	if (CastSpell(pTarget, spell_Curse_Of_Agony, true, true))
-			//	{
-			//		return true;
-			//	}
-			//}
 		}
-		return true;
 	}
+	if (spell_Immolate > 0)
+	{
+		if (CastSpell(pTarget, spell_Immolate, true, true))
+		{
+			return true;
+		}
+	}
+	if (rushing)
+	{
+		if (spell_Shadowbolt > 0)
+		{
+			if (CastSpell(pTarget, spell_Shadowbolt))
+			{
+				return true;
+			}
+		}
+	}
+	if (spell_Shoot > 0)
+	{
+		if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
+		{
+			return true;
+		}
+		else
+		{
+			if (CastSpell(pTarget, spell_Shoot))
+			{
+				return true;
+			}
+		}
+	}
+	//if (spell_Corruption > 0)
+	//{
+	//	if (CastSpell(pTarget, spell_Corruption, true, true))
+	//	{
+	//		return true;
+	//	}
+	//}
+	//if (spell_Curse_Of_Agony > 0)
+	//{
+	//	if (CastSpell(pTarget, spell_Curse_Of_Agony, true, true))
+	//	{
+	//		return true;
+	//	}
+	//}
 
-	return false;
+	return true;
 }
 
 bool NierScript_Warlock::PVP(Unit* pTarget)
 {
-	if (NierScript_Base::PVP(pTarget))
+	if (Pet* myPet = me->GetPet())
 	{
-		float targetDistance = me->GetDistance(pTarget, true, DistanceCalculation::DIST_CALC_NONE);
-		targetDistance = sqrtf(targetDistance);
-		float maxDistance = pTarget->GetCombatReach() + me->GetCombatReach() + dpsDistance + RANGED_FLOATING;
-		if (targetDistance < maxDistance)
+		if (myPet->IsAlive())
 		{
-			if (Pet* myPet = me->GetPet())
+			if (!myPet->GetVictim())
 			{
-				if (myPet->IsAlive())
+				if (UnitAI* pai = myPet->AI())
 				{
-					if (!myPet->GetVictim())
+					pai->AttackStart(pTarget);
+				}
+				if (CharmInfo* ci = myPet->GetCharmInfo())
+				{
+					if (ci->GetCommandState() != CommandStates::COMMAND_ATTACK)
 					{
-						if (UnitAI* pai = myPet->AI())
-						{
-							pai->AttackStart(pTarget);
-						}
-						if (CharmInfo* ci = myPet->GetCharmInfo())
-						{
-							if (ci->GetCommandState() != CommandStates::COMMAND_ATTACK)
-							{
-								ci->SetCommandState(CommandStates::COMMAND_ATTACK);
-							}
-						}
-					}
-				}
-			}
-			if (spell_Immolate > 0)
-			{
-				if (CastSpell(pTarget, spell_Immolate, true, true))
-				{
-					return true;
-				}
-			}
-			if (spell_Shadowbolt > 0)
-			{
-				if (CastSpell(pTarget, spell_Shadowbolt))
-				{
-					return true;
-				}
-			}
-			if (spell_Shoot > 0)
-			{
-				if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
-				{
-					return true;
-				}
-				else
-				{
-					if (CastSpell(pTarget, spell_Shoot))
-					{
-						return true;
+						ci->SetCommandState(CommandStates::COMMAND_ATTACK);
 					}
 				}
 			}
 		}
-		return true;
 	}
+	if (spell_Immolate > 0)
+	{
+		if (CastSpell(pTarget, spell_Immolate, true, true))
+		{
+			return true;
+		}
+	}
+	if (spell_Shadowbolt > 0)
+	{
+		if (CastSpell(pTarget, spell_Shadowbolt))
+		{
+			return true;
+		}
+	}
+	if (spell_Shoot > 0)
+	{
+		if (Spell* shooting = me->GetCurrentSpell(CurrentSpellTypes::CURRENT_AUTOREPEAT_SPELL))
+		{
+			return true;
+		}
+		else
+		{
+			if (CastSpell(pTarget, spell_Shoot))
+			{
+				return true;
+			}
+		}
+	}
+	//if (spell_Corruption > 0)
+	//{
+	//	if (CastSpell(pTarget, spell_Corruption, true, true))
+	//	{
+	//		return true;
+	//	}
+	//}
+	//if (spell_Curse_Of_Agony > 0)
+	//{
+	//	if (CastSpell(pTarget, spell_Curse_Of_Agony, true, true))
+	//	{
+	//		return true;
+	//	}
+	//}
 
-	return false;
+	return true;
 }
 
 bool NierScript_Warlock::Buff()
