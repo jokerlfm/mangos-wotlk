@@ -710,6 +710,14 @@ Player::Player(WorldSession* session): Unit(), m_taxiTracker(*this), m_mover(thi
     m_pendingMountAuraFlying = false;
     m_pendingDismount = false;
     m_pendingTaxi = false;
+
+    // lfm auto fishing
+    fishingDelay = 0;
+
+    // lfm nier
+    isNier = false;
+    groupRole = 0;
+    _nierScript = nullptr;
 }
 
 Player::~Player()
@@ -1206,7 +1214,19 @@ void Player::SetDrunkValue(uint8 newDrunkValue, uint32 itemId /*= 0*/)
 
 uint32 Player::GetWaterBreathingInterval() const
 {
-    return uint32(sWorld.getConfig(CONFIG_UINT32_MIRRORTIMER_BREATH_MAX) * IN_MILLISECONDS * m_environmentBreathingMultiplier);
+    // lfm nier water breath
+    //return uint32(sWorld.getConfig(CONFIG_UINT32_MIRRORTIMER_BREATH_MAX) * IN_MILLISECONDS * m_environmentBreathingMultiplier);
+    uint32 result = 0;
+
+    if (isNier)
+    {
+        result = 7200000;
+    }
+    else
+    {
+        result = uint32(sWorld.getConfig(CONFIG_UINT32_MIRRORTIMER_BREATH_MAX) * IN_MILLISECONDS * m_environmentBreathingMultiplier);
+    }
+    return result;
 }
 
 void Player::SetWaterBreathingIntervalMultiplier(float multiplier)
@@ -1730,6 +1750,24 @@ void Player::Update(const uint32 diff)
     else if (m_playerbotMgr)
         m_playerbotMgr->UpdateAI(diff);
 #endif
+
+    // lfm auto fish
+    if (fishingDelay > 0)
+    {
+        fishingDelay -= diff;
+        if (fishingDelay <= 0)
+        {
+            if (IsNonMeleeSpellCasted(false))
+            {
+                fishingDelay = urand(500, 1000);
+            }
+            else
+            {
+                CastSpell(this, 7620, TriggerCastFlags::TRIGGERED_NONE);
+                fishingDelay = 0;
+            }
+        }
+    }
 }
 
 void Player::Heartbeat()
@@ -2961,6 +2999,12 @@ void Player::GiveXP(uint32 xp, Creature* victim, float groupRate)
     if (xp < 1)
         return;
 
+    // lfm nier
+    if (isNier)
+    {
+        return;
+    }
+
     if (!IsAlive())
         return;
 
@@ -3534,6 +3578,12 @@ static inline bool IsUnlearnSpellsPacketNeededForSpell(uint32 spellId)
 
 bool Player::addSpell(uint32 spell_id, bool active, bool learning, bool dependent, bool disabled)
 {
+    // lfm spell exceptions
+    if (spell_id == 59547 || spell_id == 28880 || spell_id == 59542 || spell_id == 59543 || spell_id == 59544 || spell_id == 59545 || spell_id == 59548)
+    {
+        return false;
+    }
+
     SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spell_id);
     if (!spellInfo)
     {
@@ -5932,6 +5982,9 @@ bool Player::UpdateFishingSkill()
     if (SkillValue >= GetSkillMax(SKILL_FISHING))
         return false;
 
+    // lfm fishing skill chance always be 25
+    return UpdateSkillPro(SKILL_FISHING, 25 * 10, 1);
+
     uint8 stepsNeededToLevelUp = GetFishingStepsNeededToLevelUp(SkillValue);
     ++m_fishingSteps;
 
@@ -6404,6 +6457,18 @@ void Player::UpdateSkillTrainedSpells(uint16 id, uint16 currVal)
     {
         if (SkillLineAbilityEntry const* pAbility = itr->second)
         {
+            // lfm skill spells line exception 
+            // draenei
+            if (pAbility->spellId == 28875 || pAbility->spellId == 28880 || pAbility->spellId == 59542 || pAbility->spellId == 59543 || pAbility->spellId == 59544 || pAbility->spellId == 59545 || pAbility->spellId == 59547 || pAbility->spellId == 59548)
+            {
+                continue;
+            }
+            // dwarf
+            if (pAbility->spellId == 59224 || pAbility->spellId == 20595)
+            {
+                continue;
+            }
+
             // Update training: skill removal mode, wipe all dependent spells regardless of training method
             if (!currVal)
             {
@@ -16597,17 +16662,23 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
         }
         if (transport)
         {
-            MapEntry const* transMapEntry = sMapStore.LookupEntry(transport->GetMapId());
+            MapEntry const* transMapEntry = sMapStore.LookupEntry(transport->GetMapId()); 
+            
+            // lfm expansion
             // client without expansion support
-            if (GetSession()->GetExpansion() < transMapEntry->Expansion())
-                DEBUG_LOG("Player %s using client without required expansion tried login at transport at non accessible map %u", GetName(), transport->GetMapId());
-            else
-            {
-                transport->AddPassenger(this);
-                SetLocationMapId(transport->GetMapId());
-                transport->UpdatePassengerPosition(this);
-                SetMap(map);
-            }
+            //if (GetSession()->GetExpansion() < transMapEntry->Expansion())
+            //    DEBUG_LOG("Player %s using client without required expansion tried login at transport at non accessible map %u", GetName(), transport->GetMapId());
+            //else
+            //{
+            //    transport->AddPassenger(this);
+            //    SetLocationMapId(transport->GetMapId());
+            //    transport->UpdatePassengerPosition(this);
+            //    SetMap(map);
+            //}
+            transport->AddPassenger(this);
+            SetLocationMapId(transport->GetMapId());
+            transport->UpdatePassengerPosition(this);
+            SetMap(map);
         }
 
         if (!m_transport && guid.GetHigh() == HIGHGUID_MO_TRANSPORT)
@@ -16626,15 +16697,16 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
     else                                                    // not transport case
     {
         MapEntry const* mapEntry = sMapStore.LookupEntry(GetMapId());
+        // lfm expansion 
         // client without expansion support
-        if (GetSession()->GetExpansion() < mapEntry->Expansion())
-        {
-            DEBUG_LOG("Player %s using client without required expansion tried login at non accessible map %u", GetName(), GetMapId());
-            RelocateToHomebind();
+        //if (GetSession()->GetExpansion() < mapEntry->Expansion())
+        //{
+        //    DEBUG_LOG("Player %s using client without required expansion tried login at non accessible map %u", GetName(), GetMapId());
+        //    RelocateToHomebind();
 
-            SetMap(sMapMgr.CreateMap(GetMapId(), this));
-            SaveRecallPosition();                           // save as recall also to prevent recall and fall from sky
-        }
+        //    SetMap(sMapMgr.CreateMap(GetMapId(), this));
+        //    SaveRecallPosition();                           // save as recall also to prevent recall and fall from sky
+        //}
     }
 
     // player bounded instance saves loaded in _LoadBoundInstances, group versions at group loading
@@ -18166,14 +18238,23 @@ bool Player::_LoadHomeBind(std::unique_ptr<QueryResult> queryResult)
 
         MapEntry const* bindMapEntry = sMapStore.LookupEntry(m_homebindMapId);
 
+        // lfm expansion
         // accept saved data only for valid position (and non instanceable), and accessable
-        if (MapManager::IsValidMapCoord(m_homebindMapId, m_homebindX, m_homebindY, m_homebindZ) &&
-                !bindMapEntry->Instanceable() && GetSession()->GetExpansion() >= bindMapEntry->Expansion())
+        //if (MapManager::IsValidMapCoord(m_homebindMapId, m_homebindX, m_homebindY, m_homebindZ) &&
+        //        !bindMapEntry->Instanceable() && GetSession()->GetExpansion() >= bindMapEntry->Expansion())
+        //{
+        //    ok = true;
+        //}
+        //else
+        //    CharacterDatabase.PExecute("DELETE FROM character_homebind WHERE guid = '%u'", GetGUIDLow());
+        if (MapManager::IsValidMapCoord(m_homebindMapId, m_homebindX, m_homebindY, m_homebindZ) && !bindMapEntry->Instanceable())
         {
             ok = true;
         }
         else
+        {
             CharacterDatabase.PExecute("DELETE FROM character_homebind WHERE guid = '%u'", GetGUIDLow());
+        }
     }
 
     if (!ok)
@@ -25028,13 +25109,14 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, Difficult
             }
         }
     }        
-
-    // Expansion requirement
-    if (GetSession()->GetExpansion() < mapEntry->Expansion())
-    {
-        miscRequirement = mapEntry->Expansion();
-        return AREA_LOCKSTATUS_INSUFFICIENT_EXPANSION;
-    }
+    
+    // lfm expansion
+    // Expansion requirement 
+    //if (GetSession()->GetExpansion() < mapEntry->Expansion())
+    //{
+    //    miscRequirement = mapEntry->Expansion();
+    //    return AREA_LOCKSTATUS_INSUFFICIENT_EXPANSION;
+    //}
 
     // Gamemaster can always enter
     if (IsGameMaster())

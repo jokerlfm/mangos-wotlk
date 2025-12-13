@@ -3027,12 +3027,19 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(const Unit* pVictim, WeaponAttackT
     {
         if (pVictim->CanReactInCombat())
         {
-            if (pVictim->CanDodgeInCombat(this))
-                die.set(UNIT_COMBAT_DIE_DODGE, pVictim->CalculateEffectiveDodgeChance(this, attType));
-            if (pVictim->CanParryInCombat(this))
-                die.set(UNIT_COMBAT_DIE_PARRY, pVictim->CalculateEffectiveParryChance(this, attType));
-            if (pVictim->CanBlockInCombat(this, schoolMask))
-                die.set(UNIT_COMBAT_DIE_BLOCK, pVictim->CalculateEffectiveBlockChance(this, attType));
+            // lfm dodge parry block can not occur when in back or stun
+            if (!pVictim->IsStunned())
+            {
+                if (pVictim->isInFront(this, ATTACK_DISTANCE))
+                {
+                    if (pVictim->CanDodgeInCombat(this))
+                        die.set(UNIT_COMBAT_DIE_DODGE, pVictim->CalculateEffectiveDodgeChance(this, attType));
+                    if (pVictim->CanParryInCombat(this))
+                        die.set(UNIT_COMBAT_DIE_PARRY, pVictim->CalculateEffectiveParryChance(this, attType));
+                    if (pVictim->CanBlockInCombat(this, schoolMask))
+                        die.set(UNIT_COMBAT_DIE_BLOCK, pVictim->CalculateEffectiveBlockChance(this, attType));
+                }
+            }
         }
         if (CanGlanceInCombat(pVictim))
             die.set(UNIT_COMBAT_DIE_GLANCE, CalculateEffectiveGlanceChance(pVictim, attType));
@@ -13529,6 +13536,10 @@ float Unit::OCTRegenMPPerSpirit() const
     // Formula get from PaperDollFrame script
     float spirit = GetStat(STAT_SPIRIT);
     float regen = spirit * moreRatio->ratio;
+
+    // lfm regen is spirit for 5 seconds
+    regen = spirit / 5;
+
     return regen;
 }
 

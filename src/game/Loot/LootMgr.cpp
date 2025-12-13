@@ -179,6 +179,31 @@ void LootStore::LoadLootTable()
             if (!IsValidItemTemplate(entry, item, group, mincountOrRef, chanceOrQuestChance, maxcount))
                 continue;
 
+            // lfm creature loot template white equip rate
+            if (group == 0)
+            {
+                if (ItemPrototype const* proto = ObjectMgr::GetItemPrototype(item))
+                {
+                    if (proto->Class == ItemClass::ITEM_CLASS_ARMOR || proto->Class == ItemClass::ITEM_CLASS_WEAPON)
+                    {
+                        if (proto->Quality == ItemQualities::ITEM_QUALITY_NORMAL || proto->Quality == ItemQualities::ITEM_QUALITY_POOR)
+                        {
+                            if (conditionId == 0)
+                            {
+                                if (chanceOrQuestChance > 10.0f && chanceOrQuestChance < 97.9f)
+                                {
+                                    std::string tableNameStr = std::string(m_name);
+                                    if (tableNameStr == "creature_loot_template")
+                                    {
+                                        chanceOrQuestChance = 1.0f;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Add the item to the loot store
             ++validItems[entry];
             m_LootTemplates[entry].AddEntry(LootStoreItem(validItems[entry], item, chanceOrQuestChance, group, conditionId, mincountOrRef, maxcount));

@@ -251,6 +251,9 @@ class WorldSession
         WorldSession(uint32 id, WorldSocket* sock, AccountTypes sec, uint8 expansion, time_t mute_time, LocaleConstant locale, std::string accountName, uint32 accountFlags, uint32 recruitingFriend, bool isARecruiter);
         ~WorldSession();
 
+        // lfm nier
+        bool isNier;
+
         // Set this session have no attached socket but keep it alive for short period of time to permit a possible reconnection
         void SetOffline();
         void SetOnline();
@@ -320,6 +323,9 @@ class WorldSession
 #if defined(BUILD_DEPRECATED_PLAYERBOT) || defined(ENABLE_PLAYERBOTS)
         void SetNoAnticheat();
 #endif
+
+        // lfm nier no anticheat
+        void SetNoAnticheat();
 
         /// Session in auth.queue currently
         void SetInQueue(bool state) { m_inQueue = state; }

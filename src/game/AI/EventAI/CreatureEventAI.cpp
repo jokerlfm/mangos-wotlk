@@ -1313,6 +1313,13 @@ bool CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
                     sLog.outErrorEventAI("Event %d attempt to attack nullptr target. Creature %d", eventId, m_creature->GetEntry());
                 return false;
             }
+
+            // lfm attack assist
+            if (m_creature->IsFriend(target))
+            {
+                target = target->GetVictim();
+            }
+
             AttackStart(target);
             break;
         }

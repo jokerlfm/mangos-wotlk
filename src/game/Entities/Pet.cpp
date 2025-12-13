@@ -715,6 +715,16 @@ void Pet::RegenerateAll(uint32 diff)
 
 void Pet::LooseHappiness()
 {
+    // lfm nier pet happiness
+    if (Player* master = (Player*)GetMaster())
+    {
+        if (master->isNier)
+        {
+            ModifyPower(POWER_HAPPINESS, HAPPINESS_LEVEL_SIZE * 2);
+            return;
+        }
+    }
+
     uint32 curValue = GetPower(POWER_HAPPINESS);
     if (curValue <= 0)
         return;

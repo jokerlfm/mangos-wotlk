@@ -397,13 +397,14 @@ void WorldSession::HandleSetSelectionOpcode(WorldPacket& recv_data)
         if (mover != _player)
             mover->SetSelectionGuid(guid);
 
-    // update reputation list if need
-    Unit* unit = ObjectAccessor::GetUnit(*_player, guid);   // can select group members at diff maps
-    if (!unit)
-        return;
+    // lfm reputation list 
+    //// update reputation list if need
+    //Unit* unit = ObjectAccessor::GetUnit(*_player, guid);   // can select group members at diff maps
+    //if (!unit)
+    //    return;
 
-    if (FactionTemplateEntry const* factionTemplateEntry = sFactionTemplateStore.LookupEntry(unit->GetFaction()))
-        _player->GetReputationMgr().SetVisible(factionTemplateEntry);
+    //if (FactionTemplateEntry const* factionTemplateEntry = sFactionTemplateStore.LookupEntry(unit->GetFaction()))
+    //    _player->GetReputationMgr().SetVisible(factionTemplateEntry);
 }
 
 void WorldSession::HandleStandStateChangeOpcode(WorldPacket& recv_data)

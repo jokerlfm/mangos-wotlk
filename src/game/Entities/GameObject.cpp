@@ -269,7 +269,9 @@ bool GameObject::Create(uint32 dbGuid, uint32 guidlow, uint32 name_id, Map* map,
         case GAMEOBJECT_TYPE_SPELL_FOCUS:
         case GAMEOBJECT_TYPE_GOOBER:
         case GAMEOBJECT_TYPE_CHEST:
-            SetUInt32Value(GAMEOBJECT_DYNAMIC, GO_DYNFLAG_LO_ACTIVATE | GO_DYNFLAG_LO_SPARKLE);
+            // lfm no sparkle 
+            //SetUInt32Value(GAMEOBJECT_DYNAMIC, GO_DYNFLAG_LO_ACTIVATE | GO_DYNFLAG_LO_SPARKLE);
+            SetUInt32Value(GAMEOBJECT_DYNAMIC, GO_DYNFLAG_LO_ACTIVATE);
             break;
         case GAMEOBJECT_TYPE_QUESTGIVER:
             SetUInt32Value(GAMEOBJECT_DYNAMIC, GO_DYNFLAG_LO_ACTIVATE);
@@ -388,8 +390,7 @@ void GameObject::Update(const uint32 diff)
             }
             break;
         }
-        case GO_READY:
-        {
+        case GO_READY: {
             if (m_respawnTime > 0)                          // timer on
             {
                 if (m_respawnTime <= time(nullptr))            // timer expired
@@ -438,6 +439,15 @@ void GameObject::Update(const uint32 diff)
                             GetMap()->Add(this);
                             AIM_Initialize();
                             break;
+                    }
+                }
+                else
+                {
+                    // lfm auto fish
+                    if (GetGoType() == GAMEOBJECT_TYPE_FISHINGNODE)
+                    {
+                        Unit* caster = GetOwner();
+                        Use(caster);
                     }
                 }
             }
@@ -1789,6 +1799,16 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                     if (!zone_skill)
                         zone_skill = sObjectMgr.GetFishingBaseSkillLevel(zone);
 
+                    // lfm zone fishing skill will be higher
+                    if (zone_skill < 25)
+                    {
+                        zone_skill = 25;
+                    }
+                    else if (zone_skill < 50)
+                    {
+                        zone_skill = 50;
+                    }
+
                     // provide error, no fishable zone or area should be 0
                     if (!zone_skill)
                         sLog.outErrorDb("Fishable areaId %u are not properly defined in `skill_fishing_base_level`.", subzone);
@@ -1802,6 +1822,21 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                     // normal chance
                     bool success = skill >= zone_skill && chance >= roll;
                     GameObject* fishingHole = nullptr;
+
+                    // lfm fish chance will not be lower
+                    if (skill < zone_skill)
+                    {
+                        chance = urand(1, 5);
+                    }
+                    else
+                    {
+                        chance = skill + 10 - zone_skill;
+                    }
+                    if (chance > 50)
+                    {
+                        chance = 50;
+                    }
+                    success = chance >= roll;
 
                     // overwrite fail in case fishhole if allowed (after 3.3.0)
                     if (!success)
@@ -1838,6 +1873,11 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                             delete m_loot;
                             m_loot = new Loot(player, this, success ? LOOT_FISHING : LOOT_FISHING_FAIL);
                             m_loot->ShowContentTo(player);
+
+                            // lfm auto fishing
+                            m_loot->AutoStore(player);
+                            player->FinishSpell(CURRENT_CHANNELED_SPELL);
+                            player->fishingDelay = urand(500, 1000);
                         }
                     }
                     else
@@ -2017,6 +2057,11 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
             delete m_loot;
             m_loot = new Loot(player, this, LOOT_FISHINGHOLE);
             m_loot->ShowContentTo(player);
+
+            // lfm auto fishing
+            m_loot->AutoStore(player);
+            player->FinishSpell(CURRENT_CHANNELED_SPELL);
+            player->fishingDelay = urand(500, 1000);
 
             player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_FISH_IN_GAMEOBJECT, GetGOInfo()->id);
             return;

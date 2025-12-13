@@ -92,6 +92,10 @@
 #include <algorithm>
 #include <mutex>
 
+// lfm nier
+#include "Nier/NierConfig.h"
+#include "Nier/NierManager.h"
+
 INSTANTIATE_SINGLETON_1(World);
 
 volatile bool World::m_stopEvent = false;
@@ -321,7 +325,11 @@ void World::AddQueuedSession(WorldSession* sess)
     packet << uint32(0);                                    // BillingTimeRemaining
     packet << uint8(0);                                     // BillingPlanFlags
     packet << uint32(0);                                    // BillingTimeRested
-    packet << uint8(sess->GetExpansion());                     // 0 - normal, 1 - TBC, must be set in database manually for each account
+
+    // lfm expansion
+    //packet << uint8(sess->GetExpansion());                     // 0 - normal, 1 - TBC, must be set in database manually for each account
+    packet << uint8(2);
+
     packet << uint32(GetQueuedSessionPos(sess));            // position in queue
     packet << uint8(0);                                     // unk 3.3.0
     sess->SendPacket(packet);
@@ -1601,6 +1609,9 @@ void World::SetInitialWorldSettings()
 #endif
 #endif
 
+    // lfm nier
+    sNierManager->InitializeManager();
+    
     sLog.outString("---------------------------------------");
     sLog.outString("      CMANGOS: World initialized       ");
     sLog.outString("---------------------------------------");
@@ -1876,6 +1887,9 @@ void World::Update(uint32 diff)
     meas.add_field("singletons", std::to_string(singletons));
     meas.add_field("cleanup", std::to_string(cleanup));
 #endif
+
+    // lfm nier
+    sNierManager->UpdateNierManager();
 }
 
 namespace MaNGOS

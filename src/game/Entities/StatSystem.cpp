@@ -767,6 +767,10 @@ void Player::UpdateManaRegen()
     // Apply PCT bonus from SPELL_AURA_MOD_POWER_REGEN_PERCENT aura on spirit base regen
     power_regen *= GetTotalAuraMultiplierByMiscValue(SPELL_AURA_MOD_POWER_REGEN_PERCENT, POWER_MANA);
 
+    // lfm mana regen, only spirit with 5 seconds
+    power_regen = GetStat(STAT_SPIRIT);
+    power_regen = power_regen / 5;
+
     // Mana regen from SPELL_AURA_MOD_POWER_REGEN aura
     float power_regen_mp5 = (GetTotalAuraModifierByMiscValue(SPELL_AURA_MOD_POWER_REGEN, POWER_MANA) + m_baseManaRegen) / 5.0f;
 
@@ -1010,6 +1014,23 @@ void Creature::UpdateDamagePhysical(WeaponAttackType attType)
     float conditionalMod = GetConditionalTotalPhysicalDamageModifier(attType);
     mindamage *= conditionalMod;
     maxdamage *= conditionalMod;
+
+    // lfm creature min damage
+    if (mindamage < 3.0f)
+    {
+        mindamage = 3.0f;
+    }
+    if (maxdamage < 5.0f)
+    {
+        maxdamage = 5.0f;
+    }
+
+    // lfm disarm will has not weapon damage for creature
+    if (hasWeapon(attType) && !hasWeaponForAttack(attType))
+    {
+        weapon_mindamage = 0;
+        weapon_maxdamage = 0;
+    }
 
     uint16 fieldmin, fieldmax;
 

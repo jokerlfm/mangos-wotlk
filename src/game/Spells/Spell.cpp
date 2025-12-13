@@ -1433,6 +1433,25 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
 
         unitTarget->CalculateAbsorbResistBlock(affectiveCaster, &spellDamageInfo, m_spellInfo);
 
+        // lfm Righteousness mana cost
+        if (spellDamageInfo.SpellID == 25742)
+        {
+            uint32 realDamage = spellDamageInfo.damage;
+            uint32 remainPower = m_caster->GetPower(Powers::POWER_MANA);
+            if (remainPower < realDamage)
+            {
+                realDamage = remainPower;
+            }
+            if (realDamage < 1)
+            {
+                realDamage = 1;
+                spellDamageInfo.damage = realDamage;
+            }
+            int eachCost = 0 - (realDamage * 1);
+            m_caster->ModifyPower(Powers::POWER_MANA, eachCost);
+            m_caster->SetLastManaUse();
+        }
+
         Unit::DealDamageMods(affectiveCaster, spellDamageInfo.target, spellDamageInfo.damage, &spellDamageInfo.absorb, SPELL_DIRECT_DAMAGE, m_spellInfo);
 
         m_absorb = spellDamageInfo.absorb;
@@ -3414,7 +3433,20 @@ void Spell::Prepare()
 
         // Execute instant spells immediate
         if (m_timer == 0 && !IsNextMeleeSwingSpell(m_spellInfo) && (!IsAutoRepeat() || m_triggerAutorepeat))
+        {
             cast();
+        }
+        else
+        {
+            // lfm autorepeat spell with cast time
+            if (m_triggerAutorepeat)
+            {
+                if (!IsNextMeleeSwingSpell(m_spellInfo))
+                {
+                    cast();
+                }
+            }
+        }
     }
     // execute triggered without cast time explicitly in call point
     else
@@ -3665,8 +3697,9 @@ SpellCastResult Spell::cast(bool skipCheck)
             // Hand of Reckoning
             else if (m_spellInfo->Id == 62124)
             {
-                if (!m_targets.getUnitTarget() || !m_targets.getUnitTarget()->HasTarget(m_caster->GetObjectGuid()))
-                    AddPrecastSpell(67485);                 // Hand of Rekoning (no typos in name ;) )
+                // lfm hand of reckoning no damage 
+                //if (!m_targets.getUnitTarget() || !m_targets.getUnitTarget()->HasTarget(m_caster->GetObjectGuid()))
+                //    AddPrecastSpell(67485);                 // Hand of Rekoning (no typos in name ;) )
             }
             // Divine Shield, Divine Protection or Hand of Protection
             else if (m_spellInfo->SpellFamilyFlags & uint64(0x0000000000400080))
@@ -4981,6 +5014,19 @@ void Spell::SendChannelStart(uint32 duration)
                 break;
             }
         }
+
+        // lfm self channel cast if no target
+        //if (!target)
+        //{
+        //    for (TargetList::const_iterator itr = m_UniqueTargetInfo.begin(); itr != m_UniqueTargetInfo.end(); ++itr)
+        //    {
+        //        if (itr->targetGUID == m_caster->GetObjectGuid())
+        //        {
+        //            target = m_caster;
+        //            break;
+        //        }
+        //    }
+        //}
     }
     else if (!m_UniqueGOTargetInfo.empty())
     {
@@ -7084,6 +7130,21 @@ SpellCastResult Spell::CheckCast(bool strict)
                             return SPELL_FAILED_TARGET_NO_WEAPONS;
                     }
                 }
+                else
+                {
+                    // lfm not expected target also should check has weapon
+                    if (target)
+                    {
+                        if (!target->hasMainhandWeapon())
+                        {
+                            SpellCastResult result = partialApplication(i);
+                            if (result != SPELL_CAST_OK)
+                            {
+                                return SPELL_FAILED_TARGET_NO_WEAPONS;
+                            }
+                        }
+                    }
+                }
                 break;
             }
             default:
@@ -7127,6 +7188,30 @@ SpellCastResult Spell::CheckCast(bool strict)
         {
             player->SendPetTameFailure(PETTAME_ANOTHERSUMMONACTIVE);
             return SPELL_FAILED_DONT_REPORT;
+        }
+    }
+
+    // lfm disarm
+    // Not allow disarm unarmed player
+    if (m_spellInfo->Mechanic == MECHANIC_DISARM)
+    {
+        if (target->IsPlayer())
+        {
+            if (Player const* player = static_cast<Player*>(target))
+            {
+                if (!player->GetWeaponForAttack(WeaponAttackType::BASE_ATTACK))
+                {
+                    return SPELL_FAILED_TARGET_NO_WEAPONS;
+                }
+            }
+        }
+        else
+        {
+            uint32 creatureWeapon = target->GetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID);
+            if (creatureWeapon == 0)
+            {
+                return SPELL_FAILED_TARGET_NO_WEAPONS;
+            }
         }
     }
 
@@ -8226,6 +8311,9 @@ void Spell::Delayed()
     delayReduce += m_caster->GetTotalAuraModifier(SPELL_AURA_REDUCE_PUSHBACK) - 100;
     if (delayReduce >= 100)
         return;
+
+    // lfm spell delay start from 1000
+    delaytime = 1000;
 
     delaytime = delaytime * (100 - delayReduce) / 100;
 

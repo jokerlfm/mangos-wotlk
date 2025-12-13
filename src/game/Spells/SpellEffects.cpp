@@ -723,6 +723,23 @@ void Spell::EffectSchoolDMG(SpellEffectIndex eff_idx)
                     // [1 + 0.25 * SPH + 0.16 * AP]
                     damage += int32(m_caster->GetTotalAttackPowerValue(BASE_ATTACK) * 0.16f);
                 }
+
+                // lfm judgement mana cost
+                if (m_spellInfo->Id == 20187 || m_spellInfo->Id == 53733 || m_spellInfo->Id == 31804)
+                {
+                    uint32 remainPower = m_caster->GetPower(Powers::POWER_MANA);
+                    if (remainPower < damage)
+                    {
+                        damage = remainPower;
+                    }
+                    if (damage < 1)
+                    {
+                        damage = 1;
+                    }
+                    int eachCost = 0 - damage;
+                    m_caster->ModifyPower(Powers::POWER_MANA, eachCost);
+                    m_caster->SetLastManaUse();
+                }
                 break;
             }
         }

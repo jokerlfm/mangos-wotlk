@@ -502,6 +502,12 @@ bool Unit::CanAssist(const Unit* unit, bool ignoreFlags) const
 {
     MANGOS_ASSERT(unit)
 
+    // lfm stun assist
+    if (HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_STUNNED))
+    {
+        return false;
+    }
+
     // Original logic
 
     // We can't assist unselectable unit

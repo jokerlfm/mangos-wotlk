@@ -1917,6 +1917,17 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
                                 m_script->id, m_script->removeFlag.fieldId, pSourceOrItem->GetValuesCount(), pSourceOrItem->GetGuidStr().c_str());
                 break;
             }
+
+            // lfm command script do source if target is null
+            //if (pTarget)
+            //{
+            //    pTarget->RemoveFlag(m_script->removeFlag.fieldId, m_script->removeFlag.fieldValue);
+            //}
+            //else
+            //{
+            //    pSourceOrItem->RemoveFlag(m_script->removeFlag.fieldId, m_script->removeFlag.fieldValue);
+            //}
+
             pSourceOrItem->RemoveFlag(m_script->removeFlag.fieldId, m_script->removeFlag.fieldValue);
             break;
         case SCRIPT_COMMAND_TELEPORT_TO:                    // 6
@@ -2066,6 +2077,17 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
                 sLog.outErrorDb(" DB-SCRIPTS: Process table `%s` id %u, command %u failed for creature (entry: %u).", m_table, m_script->id, m_script->command, m_script->summonCreature.creatureEntry);
                 break;
             }
+
+            // lfm summoned creature default waypoint
+            if (pCreature->GetDefaultMovementType() != MovementGeneratorType::WAYPOINT_MOTION_TYPE)
+            {
+                if (sWaypointMgr.GetDefaultPath(pCreature->GetEntry(), pCreature->GetGUIDLow()))
+                {
+                    pCreature->SetDefaultMovementType(MovementGeneratorType::WAYPOINT_MOTION_TYPE);
+                    pCreature->GetMotionMaster()->MoveWaypoint(pCreature->GetMotionMaster()->GetPathId());
+                }
+            }
+
             break;
         }
         case SCRIPT_COMMAND_OPEN_DOOR:                      // 11

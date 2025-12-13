@@ -66,6 +66,9 @@ struct FactionTemplateEntry;
 #include "PlayerBot/Base/PlayerbotAI.h"
 #endif
 
+// lfm nier
+#include "Nier/NierScripts/NierScript_Base.h"
+
 #ifdef ENABLE_PLAYERBOTS
 class PlayerbotAI;
 class PlayerbotMgr;
@@ -1082,6 +1085,14 @@ class Player : public Unit
     public:
         explicit Player(WorldSession* session);
         ~Player();
+
+        // lfm auto fish
+        int fishingDelay;
+
+        // lfm nier
+        bool isNier;
+        uint32 groupRole;
+        NierScript_Base* _nierScript;
 
         void CleanupsBeforeDelete() override;
 

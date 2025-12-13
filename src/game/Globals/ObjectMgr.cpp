@@ -60,6 +60,9 @@
 #include <cstdarg>
 #include <cstring>
 
+// lfm nier
+#include "Nier/NierManager.h"
+
 INSTANTIATE_SINGLETON_1(ObjectMgr);
 
 bool normalizePlayerName(std::string& name, size_t max_len)
@@ -470,6 +473,9 @@ void ObjectMgr::LoadCreatureTemplates()
     std::set<uint32> difficultyEntries[MAX_DIFFICULTY - 1]; // already loaded difficulty 1 value in creatures
     std::set<uint32> hasDifficultyEntries[MAX_DIFFICULTY - 1]; // already loaded creatures with difficulty 1  values
 
+    // lfm tamable beasts
+    sNierManager->tamableBeastMap.clear();
+
     // check data correctness
     for (uint32 i = 1; i < sCreatureStorage.GetMaxEntry(); ++i)
     {
@@ -765,6 +771,43 @@ void ObjectMgr::LoadCreatureTemplates()
         }
         if (cInfo->StaticFlags || cInfo->StaticFlags2 || cInfo->StaticFlags3 || cInfo->StaticFlags4)
             const_cast<CreatureInfo*>(cInfo)->TypeFlags = GetTypeFlagsFromStaticFlags(CreatureTypeFlags(cInfo->TypeFlags), cInfo->StaticFlags, cInfo->StaticFlags2, cInfo->StaticFlags3, cInfo->StaticFlags4);
+
+        // lfm creature templates
+        if (cInfo->Rank == CreatureEliteType::CREATURE_ELITE_NORMAL)
+        {
+            if (cInfo->DamageMultiplier < 1.5f)
+            {
+                const_cast<CreatureInfo*>(cInfo)->DamageMultiplier = 1.5f;
+            }
+            if (cInfo->HealthMultiplier < 1.5f)
+            {
+                const_cast<CreatureInfo*>(cInfo)->HealthMultiplier = 1.5f;
+            }
+        }
+
+        // lfm force gossip
+        if (cInfo->GossipMenuId > 0)
+        {
+            const_cast<CreatureInfo*>(cInfo)->NpcFlags = (cInfo->NpcFlags | NPCFlags::UNIT_NPC_FLAG_GOSSIP);
+            const_cast<CreatureInfo*>(cInfo)->TypeFlags = (cInfo->TypeFlags | (uint32)CreatureTypeFlags::FORCE_GOSSIP);
+        }
+        else
+        {
+            if ((cInfo->NpcFlags & NPCFlags::UNIT_NPC_FLAG_GOSSIP) == NPCFlags::UNIT_NPC_FLAG_GOSSIP)
+            {
+                const_cast<CreatureInfo*>(cInfo)->NpcFlags = (cInfo->NpcFlags - NPCFlags::UNIT_NPC_FLAG_GOSSIP);
+            }
+            if ((cInfo->TypeFlags & (uint32)CreatureTypeFlags::FORCE_GOSSIP) == (uint32)CreatureTypeFlags::FORCE_GOSSIP)
+            {
+                const_cast<CreatureInfo*>(cInfo)->TypeFlags = (cInfo->TypeFlags - (uint32)CreatureTypeFlags::FORCE_GOSSIP);
+            }
+        }
+
+        // lfm tabmable beasts
+        if (cInfo->isTameable(false))
+        {
+            sNierManager->tamableBeastMap[sNierManager->tamableBeastMap.size()] = cInfo->Entry;
+        }
     }
 
     sLog.outString(">> Loaded %u creature definitions", sCreatureStorage.GetRecordCount());
@@ -4657,6 +4700,13 @@ void ObjectMgr::LoadPlayerInfo()
                 }
                 continue;
             }
+
+            // lfm player level xp
+            if (current_level >= 20)
+            {
+                current_xp = current_xp * 3 / 2;
+            }
+
             // PlayerXPperLevel
             mPlayerXPperLevel[current_level] = current_xp;
             bar.step();
@@ -9804,7 +9854,10 @@ void ObjectMgr::LoadMailLevelRewards()
     m_mailLevelRewardMap.clear();                           // for reload case
 
     uint32 count = 0;
-    auto queryResult = WorldDatabase.Query("SELECT level, raceMask, mailTemplateId, senderEntry FROM mail_level_reward");
+
+    // lfm mail level will be 80 only
+    //auto queryResult = WorldDatabase.Query("SELECT level, raceMask, mailTemplateId, senderEntry FROM mail_level_reward");
+    auto queryResult = WorldDatabase.Query("SELECT level, raceMask, mailTemplateId, senderEntry FROM mail_level_reward where level >= 80");    
 
     if (!queryResult)
     {
@@ -9897,6 +9950,13 @@ void ObjectMgr::LoadTrainers(char const* tableName, bool isTemplates)
 
         uint32 entry  = fields[0].GetUInt32();
         uint32 spell  = fields[1].GetUInt32();
+
+        // lfm trainer exception
+        // Aquatic Form
+        if (spell == 1066)
+        {
+            continue;
+        }
 
         SpellEntry const* spellinfo = sSpellTemplate.LookupEntry<SpellEntry>(spell);
         if (!spellinfo)

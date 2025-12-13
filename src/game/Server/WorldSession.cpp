@@ -58,6 +58,9 @@
 #include "playerbot/playerbot.h"
 #endif
 
+// lfm nier
+#include "Nier/NierManager.h"
+
 // select opcodes appropriate for processing in Map::Update context for current session state
 static bool MapSessionFilterHelper(WorldSession* session, OpcodeHandler const& opHandle)
 {
@@ -105,7 +108,11 @@ WorldSession::WorldSession(uint32 id, WorldSocket* sock, AccountTypes sec, uint8
     m_sessionDbcLocale(sWorld.GetAvailableDbcLocale(locale)), m_sessionDbLocaleIndex(sObjectMgr.GetStorageLocaleIndexFor(locale)),
     m_latency(0), m_clientTimeDelay(0), m_tutorialState(TUTORIALDATA_UNCHANGED), m_sessionState(WORLD_SESSION_STATE_CREATED),
     m_timeSyncClockDeltaQueue(6), m_timeSyncClockDelta(0), m_pendingTimeSyncRequests(), m_timeSyncNextCounter(0),
-    m_requestSocket(nullptr), m_recruitingFriendId(recruitingFriend), m_isRecruiter(isARecruiter) {}
+    m_requestSocket(nullptr), m_recruitingFriendId(recruitingFriend), m_isRecruiter(isARecruiter) 
+{
+    // lfm nier
+    isNier = false;
+}
 
 /// WorldSession destructor
 WorldSession::~WorldSession()
@@ -204,6 +211,13 @@ void WorldSession::SetExpansion(uint8 expansion)
 /// Send a packet to the client
 void WorldSession::SendPacket(WorldPacket const& packet) const
 {
+    // lfm nier
+    if (isNier)
+    {
+        sNierManager->HandlePacket(this, packet);
+        return;
+    }
+
 #if defined(BUILD_DEPRECATED_PLAYERBOT) || defined(ENABLE_PLAYERBOTS)
     // Send packet to bot AI
     if (GetPlayer())
@@ -357,6 +371,27 @@ void WorldSession::ProcessByteBufferException(WorldPacket const& packet)
 /// Update the WorldSession (triggered by World update)
 bool WorldSession::Update(uint32 /*diff*/)
 {
+    // lfm nier
+    if (isNier)
+    {
+        if (_player)
+        {
+            if (_player->IsBeingTeleportedNear())
+            {
+                WorldPacket pkt(MSG_MOVE_TELEPORT_ACK, 20);
+                pkt << _player->GetPackGUID();
+                pkt << uint32(0); // flags
+                pkt << uint32(0); // time
+                HandleMoveTeleportAckOpcode(pkt);
+            }
+            else if (_player->IsBeingTeleportedFar())
+            {
+                HandleMoveWorldportAckOpcode();
+            }
+        }
+        return true;
+    }
+
     GetMessager().Execute(this);
 
     std::deque<std::unique_ptr<WorldPacket>> recvQueueCopy;
@@ -1299,7 +1334,11 @@ void WorldSession::SendAuthOk() const
     packet << uint32(0);                                    // BillingTimeRemaining
     packet << uint8(0);                                     // BillingPlanFlags
     packet << uint32(0);                                    // BillingTimeRested
-    packet << uint8(GetExpansion());                        // 0 - normal, 1 - TBC, 2 - WotLK. Must be set in database manually for each account.
+
+    // lfm expansion
+    //packet << uint8(GetExpansion()); // 0 - normal, 1 - TBC, 2 - WotLK. Must be set in database manually for each account.
+    packet << uint8(2);
+    
     SendPacket(packet);
 }
 
@@ -1360,6 +1399,13 @@ void WorldSession::HandleWardenDataOpcode(WorldPacket& recv_data)
 {
     m_anticheat->WardenPacket(recv_data);
 }
+
+// lfm nier no anticheat
+void WorldSession::SetNoAnticheat()
+{
+    m_anticheat.reset(new NullSessionAnticheat(this));
+}
+
 #ifdef ENABLE_PLAYERBOTS
 void WorldSession::SetNoAnticheat()
 {

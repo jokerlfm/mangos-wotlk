@@ -184,6 +184,12 @@ Quest::Quest(Field* questRecord)
         if (i)
             ++m_rewchoiceitemscount;
     }
+
+    // lfm quest reward
+    if (QuestId == 31 || QuestId == 5061)
+    {
+        RewSpellCast = 1446;
+    }
 }
 
 uint32 Quest::GetXPReward(Player* pPlayer) const

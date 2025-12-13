@@ -2371,7 +2371,7 @@ bool Creature::CanAssistTo(const Unit* u, const Unit* enemy, bool checkfaction /
     if (GetMasterGuid())
         return false;
 
-    // only from same creature faction
+    // only from same creature faction 
     if (checkfaction)
     {
         if (GetFaction() != u->GetFaction())
@@ -2383,9 +2383,20 @@ bool Creature::CanAssistTo(const Unit* u, const Unit* enemy, bool checkfaction /
             return false;
     }
 
+    // lfm neutral units will do assist
+    if (enemy && CanAttack(enemy))
+    {
+        if ((GetReactionTo(enemy) > REP_NEUTRAL))
+        {
+            return false;
+        }
+        return true;
+    }
     // skip non hostile to caster enemy creatures
-    if (enemy && CanAttack(enemy) && !IsEnemy(enemy))
-        return false;
+    //if (enemy && CanAttack(enemy) && !IsEnemy(enemy))
+    //{
+    //    return false;
+    //}
 
     return true;
 }
