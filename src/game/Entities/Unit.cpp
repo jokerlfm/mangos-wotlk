@@ -1303,6 +1303,29 @@ void Unit::HandleDamageDealt(Unit* dealer, Unit* victim, uint32& damage, CleanDa
         if (victim->CanAttack(dealer) && (!spellInfo || !spellInfo->HasAttribute(SPELL_ATTR_EX_NO_THREAT)) && dealer->CanEnterCombat() && victim->CanEnterCombat())
         {
             float threat = damage * sSpellMgr.GetSpellThreatMultiplier(spellInfo);
+
+            // lfm shaman rockbiter              
+            if (damagetype == DIRECT_DAMAGE)
+            {
+                if (dealer->GetTypeId() == TypeID::TYPEID_PLAYER)
+                {
+                    if (Player* pDealer = (Player*)dealer)
+                    {
+                        if (pDealer->getClass() == Classes::CLASS_SHAMAN)
+                        {
+                            if (Item* weapon = pDealer->GetWeaponForAttack(WeaponAttackType::BASE_ATTACK))
+                            {
+                                uint32 checkRockbiter = weapon->GetEnchantmentId(EnchantmentSlot::TEMP_ENCHANTMENT_SLOT);
+                                if (checkRockbiter == 29)
+                                {
+                                    threat = threat * 2.0f;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             victim->AddThreat(dealer, threat, (cleanDamage && cleanDamage->hitOutCome == MELEE_HIT_CRIT), damageSchoolMask, spellInfo);
             if (damagetype != DOT && damagetype != SPELL_DAMAGE_SHIELD) // DOTs dont put in combat but still cause threat
             {

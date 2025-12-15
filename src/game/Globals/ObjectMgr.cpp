@@ -9957,6 +9957,16 @@ void ObjectMgr::LoadTrainers(char const* tableName, bool isTemplates)
         {
             continue;
         }
+        // Rockbiter Weapon
+        if (spell == 8018 || spell == 8019 || spell == 10399)
+        {            
+            continue;
+        }
+        // Lightning Shield
+        if (spell == 325 || spell == 905 || spell == 945 || spell == 8134 || spell == 10431 || spell == 10432 || spell == 25469 || spell == 25472 || spell == 49280 || spell == 49281)
+        {
+            continue;
+        }
 
         SpellEntry const* spellinfo = sSpellTemplate.LookupEntry<SpellEntry>(spell);
         if (!spellinfo)
