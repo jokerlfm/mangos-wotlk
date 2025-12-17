@@ -953,18 +953,18 @@ bool NierScript_Base::EuipRandom(uint32 pmEquipSlot, uint32 pmInventoryType, uin
 
 bool NierScript_Base::Heal(Unit* pTarget)
 {
-	return false;
+	return true;
 }
 
 bool NierScript_Base::Tank(Unit* pTarget)
 {
-	return false;
+	return true;
 }
 
 
 bool NierScript_Base::DPS(Unit* pTarget)
 {
-	return false;
+	return true;
 }
 
 bool NierScript_Base::PVP(Unit* pTarget)

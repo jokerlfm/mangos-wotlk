@@ -1433,25 +1433,6 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
 
         unitTarget->CalculateAbsorbResistBlock(affectiveCaster, &spellDamageInfo, m_spellInfo);
 
-        // lfm Righteousness mana cost
-        if (spellDamageInfo.SpellID == 25742)
-        {
-            uint32 realDamage = spellDamageInfo.damage;
-            uint32 remainPower = m_caster->GetPower(Powers::POWER_MANA);
-            if (remainPower < realDamage)
-            {
-                realDamage = remainPower;
-            }
-            if (realDamage < 1)
-            {
-                realDamage = 1;
-                spellDamageInfo.damage = realDamage;
-            }
-            int eachCost = 0 - (realDamage * 1);
-            m_caster->ModifyPower(Powers::POWER_MANA, eachCost);
-            m_caster->SetLastManaUse();
-        }
-
         Unit::DealDamageMods(affectiveCaster, spellDamageInfo.target, spellDamageInfo.damage, &spellDamageInfo.absorb, SPELL_DIRECT_DAMAGE, m_spellInfo);
 
         m_absorb = spellDamageInfo.absorb;
@@ -3529,6 +3510,12 @@ void Spell::cancel()
 
 SpellCastResult Spell::cast(bool skipCheck)
 {
+    // lfm spell cast debug
+    //if (this->m_spellInfo->Id == 57339)
+    //{
+    //    bool breakPoint = true;
+    //}
+
     SetExecutedCurrently(true);
     SpellModRAII spellModController(this, m_trueCaster->GetSpellModOwner());
 

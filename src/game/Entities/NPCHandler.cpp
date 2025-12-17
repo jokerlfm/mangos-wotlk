@@ -203,6 +203,10 @@ void WorldSession::SendTrainerList(ObjectGuid guid) const
             reqLevel = tSpell->isProvidedReqLevel ? tSpell->reqLevel : std::max(reqLevel, tSpell->reqLevel);
 
             TrainerSpellState state = _player->GetTrainerSpellState(tSpell, reqLevel);
+            if (state == TrainerSpellState::TRAINER_SPELL_GRAY)
+            {
+                continue;
+            }
 
             SendTrainerSpellHelper(data, tSpell, state, fDiscountMod, can_learn_primary_prof, reqLevel);
 
@@ -226,7 +230,10 @@ void WorldSession::SendTrainerList(ObjectGuid guid) const
             reqLevel = tSpell->isProvidedReqLevel ? tSpell->reqLevel : std::max(reqLevel, tSpell->reqLevel);
 
             TrainerSpellState state = _player->GetTrainerSpellState(tSpell, reqLevel);
-
+            if (state == TrainerSpellState::TRAINER_SPELL_GRAY)
+            {
+                continue;
+            }
             SendTrainerSpellHelper(data, tSpell, state, fDiscountMod, can_learn_primary_prof, reqLevel);
 
             ++count;

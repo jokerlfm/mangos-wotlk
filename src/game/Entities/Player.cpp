@@ -3578,11 +3578,56 @@ static inline bool IsUnlearnSpellsPacketNeededForSpell(uint32 spellId)
 
 bool Player::addSpell(uint32 spell_id, bool active, bool learning, bool dependent, bool disabled)
 {
-    // lfm spell exceptions
+    // lfm spell exceptions 
+    // draenei 
     if (spell_id == 59547 || spell_id == 28880 || spell_id == 59542 || spell_id == 59543 || spell_id == 59544 || spell_id == 59545 || spell_id == 59548)
     {
         return false;
     }
+    if (spell_id == 28875)
+    {
+        return false;
+    }
+    // blood elf
+    if (spell_id == 28877)
+    {
+        return false;
+    }
+    // dwarf
+    if (spell_id == 20595 || spell_id == 59224)
+    {
+        return false;
+    }
+    // gnome
+    if (spell_id == 20593 || spell_id == 20591)
+    {
+        return false;
+    }
+    // human
+    if (spell_id == 20864 || spell_id == 20597 || spell_id == 20598)
+    {
+        return false;
+    }
+    // night elf
+    if (spell_id == 58984)
+    {
+        return false;
+    }
+    // orc
+    if (spell_id == 20574 || spell_id == 20575 || spell_id == 20576 || spell_id == 21563 || spell_id == 54562 || spell_id == 65222)
+    {
+        return false;
+    }
+    // tauren
+    if (spell_id == 20552)
+    {
+        return false;
+    }
+    // troll
+    if (spell_id == 20557 || spell_id == 26290 || spell_id == 20558)
+    {
+        return false;
+    }    
 
     SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spell_id);
     if (!spellInfo)

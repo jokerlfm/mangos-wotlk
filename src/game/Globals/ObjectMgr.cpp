@@ -9967,6 +9967,11 @@ void ObjectMgr::LoadTrainers(char const* tableName, bool isTemplates)
         {
             continue;
         }
+        // Faerie Fire (Feral)
+        if (spell == 16857)
+        {            
+            continue;
+        }
 
         SpellEntry const* spellinfo = sSpellTemplate.LookupEntry<SpellEntry>(spell);
         if (!spellinfo)
@@ -9981,15 +9986,16 @@ void ObjectMgr::LoadTrainers(char const* tableName, bool isTemplates)
             continue;
         }
 
-        if (GetTalentSpellCost(spell))
-        {
-            if (talentIds.find(spell) == talentIds.end())
-            {
-                sLog.outErrorDb("Table `%s` has talent as learning spell %u, ignore", tableName, spell);
-                talentIds.insert(spell);
-            }
-            continue;
-        }
+        // lfm trainer spell talents check not necessary 
+        //if (GetTalentSpellCost(spell))
+        //{
+        //    if (talentIds.find(spell) == talentIds.end())
+        //    {
+        //        sLog.outErrorDb("Table `%s` has talent as learning spell %u, ignore", tableName, spell);
+        //        talentIds.insert(spell);
+        //    }
+        //    continue;
+        //}
 
         if (!isTemplates)
         {
